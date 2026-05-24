@@ -1,9 +1,13 @@
 'use strict';
 const vscode = require('vscode');
 const https = require('https');
+const cp = require('child_process');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const { parseTables } = require('./lib/parseTables');
-const { createSheet, writeValues, publishSheet, colToLetter } = require('./lib/sheetsApi');
-const { applyOatFormat } = require('./lib/oatFormat');
+const { createSheet, writeValues, publishSheet } = require('./lib/sheetsApi');
+const { getServiceAccountToken } = require('./lib/serviceAccountAuth');
 const { ImagePanelProvider } = require('./views/imagePanelProvider');
 
 function activate(context) {
@@ -37,18 +41,13 @@ async function promoteAllTables() {
     return;
   }
 
-  const token = process.env.GOOGLE_OAUTH_TOKEN ||
-    vscode.workspace.getConfiguration('oat').get('googleOAuthToken', '');
-  if (!token) {
-    vscode.window.showErrorMessage(
-      'OAT: Google OAuth token not set. ' +
-      'Set GOOGLE_OAUTH_TOKEN env var or oat.googleOAuthToken in VS Code settings.'
-    );
+  let token;
+  try {
+    token = await getServiceAccountToken();
+  } catch (err) {
+    vscode.window.showErrorMessage(`OAT: Failed to get Google credentials — ${err.message}`);
     return;
   }
-
-  const gasUrl = process.env.GAS_WEB_APP_URL ||
-    vscode.workspace.getConfiguration('oat').get('gasWebAppUrl', '');
 
   const partNum = await vscode.window.showInputBox({
     prompt: 'Part number (e.g. 09)',
@@ -99,28 +98,22 @@ async function promoteAllTables() {
         const title = `part${partNum.trim()}-table-${descriptor}`;
 
         try {
-          const { spreadsheetId, sheetId } = await createSheet(title, token);
+          const { spreadsheetId } = await createSheet(title, token);
           await writeValues(spreadsheetId, [table.headers, ...table.rows], token);
-
-          if (gasUrl) {
-            await callGasWebApp(gasUrl, spreadsheetId);
-          } else {
-            await applyOatFormat(spreadsheetId, sheetId, table.headers.length, table.rows.length + 1, token);
-          }
-
           await publishSheet(spreadsheetId, token);
 
-          const endCol = colToLetter(table.headers.length);
-          const rowCount = table.rows.length + 1;
-          const range = `Sheet1!A1:${endCol}${rowCount}`;
-          const pngUrl =
-            `https://docs.google.com/spreadsheets/d/${spreadsheetId}` +
-            `/export?format=png&range=${encodeURIComponent(range)}&gid=${sheetId}&fitw=true`;
+          const pngUrl = await renderLocalPng(
+            title, table.headers, table.rows,
+            partNum.trim(), series.trim()
+          );
           const sheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}`;
+          const imgWidth = Math.max(400, table.headers.length * 140);
 
           const embed =
-            `[![${descriptor} data table](${pngUrl})](${sheetUrl})\n` +
-            `*Tap or click to view full accessible data.*`;
+            `<figure>\n` +
+            `  <img width="${imgWidth}" src="${pngUrl}" alt="${descriptor} data table">\n` +
+            `  <figcaption><a href="${sheetUrl}">View full data table</a></figcaption>\n` +
+            `</figure>`;
 
           replacements.push({ startLine: table.startLine, endLine: table.endLine, embed });
         } catch (err) {
@@ -147,7 +140,7 @@ async function promoteAllTables() {
 
   if (succeeded) {
     vscode.window.showInformationMessage(
-      `OAT: ${replacements.length}/${tables.length} table${replacements.length === 1 ? '' : 's'} promoted to Google Sheets.`
+      `OAT: ${replacements.length}/${tables.length} table${replacements.length === 1 ? '' : 's'} promoted.`
     );
   } else {
     vscode.window.showErrorMessage('OAT: Edit failed — document may have changed during processing.');
@@ -166,30 +159,73 @@ function generateDescriptor(headers) {
     .join('');
 }
 
-function callGasWebApp(url, spreadsheetId) {
+// ── Local render pipeline ────────────────────────────────────────────────────
+
+function execCmd(cmd) {
   return new Promise((resolve, reject) => {
-    const target = new URL(url);
-    target.searchParams.set('spreadsheetId', spreadsheetId);
-    const options = {
-      hostname: target.hostname,
-      path: target.pathname + target.search,
-      method: 'POST',
-      headers: { 'Content-Length': '0' }
-    };
-    const req = https.request(options, res => {
-      if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location) {
-        return callGasWebApp(res.headers.location, spreadsheetId).then(resolve).catch(reject);
-      }
-      let body = '';
-      res.on('data', c => body += c);
-      res.on('end', () => {
-        if (res.statusCode >= 200 && res.statusCode < 300) resolve();
-        else reject(new Error(`GAS returned HTTP ${res.statusCode}: ${body}`));
-      });
+    cp.exec(cmd, (err, stdout, stderr) => {
+      if (err) reject(new Error(stderr.trim() || err.message));
+      else resolve(stdout);
     });
-    req.on('error', reject);
-    req.end();
   });
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function renderOatHtml(headers, rows) {
+  const ths = headers.map(h => `<th>${escapeHtml(h)}</th>`).join('');
+  const trs = rows.map((row, i) => {
+    const isLast = i === rows.length - 1;
+    const cls = isLast ? 'total' : (i % 2 === 0 ? 'even' : 'odd');
+    const tds = headers.map((_, j) => `<td>${escapeHtml(row[j] ?? '')}</td>`).join('');
+    return `<tr class="${cls}">${tds}</tr>`;
+  }).join('');
+  return `<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<style>
+  body{margin:0;padding:16px;background:#fff;font-family:Arial,sans-serif;}
+  table{border-collapse:collapse;width:100%;}
+  th{background:#005f73;color:#fff;font-size:11px;font-weight:bold;padding:0 12px;height:43px;vertical-align:middle;text-align:left;border-right:1px solid #94d2bd;white-space:nowrap;}
+  th:last-child{border-right:none;}
+  thead tr{border-bottom:2px solid #94d2bd;}
+  td{font-size:10px;padding:0 12px;height:43px;vertical-align:middle;border-right:1px solid #94d2bd;color:#000;white-space:nowrap;}
+  td:last-child{border-right:none;}
+  tr.even td{background:#f0f7f8;}
+  tr.odd td{background:#fff;}
+  tr.total td{font-weight:bold;background:#e8f4f5;border-top:2px solid #94d2bd;}
+</style></head>
+<body><table><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table></body></html>`;
+}
+
+async function renderLocalPng(title, headers, rows, partNum, series) {
+  const html = renderOatHtml(headers, rows);
+  const tmpHtml = path.join(os.tmpdir(), `${title}.html`);
+  fs.writeFileSync(tmpHtml, html, 'utf8');
+
+  const imagesRepo = path.join(os.homedir(), 'dev', 'images');
+  const outDir = path.join(imagesRepo, 'generated', series, `part-${partNum}`);
+  fs.mkdirSync(outDir, { recursive: true });
+  const outPng = path.join(outDir, `${title}.png`);
+
+  const script = path.join(os.homedir(), 'dev', 'wraith', 'scripts', 'screenshot-html.sh');
+  await execCmd(`bash "${script}" "${tmpHtml}" "${outPng}" 700`);
+
+  const relPath = `generated/${series}/part-${partNum}/${title}.png`;
+  await execCmd(`git -C "${imagesRepo}" add "${relPath}"`);
+  try {
+    await execCmd(`git -C "${imagesRepo}" commit -m "Add ${title}.png"`);
+    await execCmd(`git -C "${imagesRepo}" push`);
+  } catch (e) {
+    if (!e.message.includes('nothing to commit')) throw e;
+  }
+
+  return `https://raw.githubusercontent.com/owencorpening/images/main/${relPath}`;
 }
 
 function deactivate() {}
