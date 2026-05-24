@@ -43,10 +43,10 @@
           "default": "",
           "description": "Google OAuth access token (Drive + Sheets scopes). Fallback if no service account file."
         },
-        "oat.gasWebAppUrl": {
+        "oat.workerUrl": {
           "type": "string",
           "default": "",
-          "description": "Deployed Apps Script web app URL for OAT table styling. If blank, formatting applied via Sheets API."
+          "description": "Cloudflare Worker URL for OAT table promotion (creates Google Sheet, returns embed data)."
         },
         "oat.imageStagingSheetId": {
           "type": "string",

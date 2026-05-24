@@ -39,10 +39,10 @@ async function promoteAllTables() {
     return;
   }
 
-  const gasUrl = vscode.workspace.getConfiguration('oat').get('gasWebAppUrl', '');
-  if (!gasUrl) {
+  const workerUrl = vscode.workspace.getConfiguration('oat').get('workerUrl', '');
+  if (!workerUrl) {
     vscode.window.showErrorMessage(
-      'OAT: GAS web app URL not set. Add oat.gasWebAppUrl to VS Code settings.'
+      'OAT: Worker URL not set. Add oat.workerUrl to VS Code settings.'
     );
     return;
   }
@@ -96,7 +96,7 @@ async function promoteAllTables() {
         const title = `part${partNum.trim()}-table-${descriptor}`;
 
         try {
-          const { spreadsheetId, sheetUrl } = await callGas(gasUrl, {
+          const { spreadsheetId, sheetUrl } = await callWorker(workerUrl, {
             title,
             headers: table.headers,
             rows: table.rows
@@ -158,54 +158,39 @@ function generateDescriptor(headers) {
     .join('');
 }
 
-// ── GAS web app call ─────────────────────────────────────────────────────────
+// ── Cloudflare Worker call ────────────────────────────────────────────────────
 
-function callGas(url, payload) {
+function callWorker(url, payload) {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify(payload);
     const urlObj = new URL(url);
-    const options = {
+    const req = https.request({
       hostname: urlObj.hostname,
       path: urlObj.pathname + urlObj.search,
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(body)
-      }
-    };
-
-    function doRequest(opts, postBody) {
-      const req = https.request({ ...opts, timeout: 30000 }, res => {
-        if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location) {
-          // GAS redirects the POST to an echo endpoint that only accepts GET
-          const loc = new URL(res.headers.location);
-          return doRequest({
-            hostname: loc.hostname,
-            path: loc.pathname + loc.search,
-            method: 'GET',
-            headers: {}
-          }, null);
+      },
+      timeout: 30000
+    }, res => {
+      let data = '';
+      res.on('data', c => data += c);
+      res.on('end', () => {
+        try {
+          const r = JSON.parse(data);
+          if (r.error) reject(new Error(r.error));
+          else if (!r.spreadsheetId) reject(new Error(`Unexpected Worker response: ${data}`));
+          else resolve(r);
+        } catch {
+          reject(new Error(`Worker returned non-JSON: ${data.slice(0, 200)}`));
         }
-        let data = '';
-        res.on('data', c => data += c);
-        res.on('end', () => {
-          try {
-            const r = JSON.parse(data);
-            if (r.error) reject(new Error(r.error));
-            else if (!r.spreadsheetId) reject(new Error(`Unexpected GAS response: ${data}`));
-            else resolve(r);
-          } catch {
-            reject(new Error(`GAS returned non-JSON: ${data.slice(0, 200)}`));
-          }
-        });
       });
-      req.on('error', reject);
-      req.on('timeout', () => req.destroy(new Error('GAS request timeout (30s)')));
-      if (postBody) req.write(postBody);
-      req.end();
-    }
-
-    doRequest(options, body);
+    });
+    req.on('error', reject);
+    req.on('timeout', () => req.destroy(new Error('Worker request timeout (30s)')));
+    req.write(body);
+    req.end();
   });
 }
 
