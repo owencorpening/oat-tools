@@ -222,6 +222,7 @@ function execCmd(cmd) {
 
 function escapeHtml(s) {
   return String(s)
+    .replace(/\\(.)/g, '$1')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
