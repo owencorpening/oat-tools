@@ -242,10 +242,10 @@ function renderOatHtml(headers, rows) {
 <style>
   body{margin:0;padding:16px;background:#fff;font-family:Arial,sans-serif;}
   table{border-collapse:collapse;width:100%;}
-  th{background:#005f73;color:#fff;font-size:14px;font-weight:bold;padding:0 16px;height:48px;vertical-align:middle;text-align:left;border-right:1px solid #94d2bd;white-space:nowrap;}
+  th{background:#005f73;color:#fff;font-size:16px;font-weight:bold;padding:0 12px;height:40px;vertical-align:middle;text-align:left;border-right:1px solid #94d2bd;white-space:nowrap;}
   th:last-child{border-right:none;}
   thead tr{border-bottom:2px solid #94d2bd;}
-  td{font-size:13px;padding:0 16px;height:48px;vertical-align:middle;border-right:1px solid #94d2bd;color:#000;white-space:nowrap;}
+  td{font-size:15px;padding:0 12px;height:40px;vertical-align:middle;border-right:1px solid #94d2bd;color:#000;white-space:nowrap;}
   td:last-child{border-right:none;}
   tr.even td{background:#f0f7f8;}
   tr.odd td{background:#fff;}
