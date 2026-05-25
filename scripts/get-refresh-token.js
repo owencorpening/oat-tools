@@ -6,6 +6,8 @@
 const http     = require('http');
 const https    = require('https');
 const readline = require('readline');
+const cp       = require('child_process');
+const path     = require('path');
 
 const SCOPES = [
   'https://www.googleapis.com/auth/spreadsheets',
@@ -86,13 +88,26 @@ async function main() {
     process.exit(1);
   }
 
-  console.log('\n✓ Success! Run these three commands:\n');
-  console.log(`wrangler secret put GOOGLE_CLIENT_ID`);
-  console.log(`  → paste: ${clientId}\n`);
-  console.log(`wrangler secret put GOOGLE_CLIENT_SECRET`);
-  console.log(`  → paste: ${clientSecret}\n`);
-  console.log(`wrangler secret put GOOGLE_REFRESH_TOKEN`);
-  console.log(`  → paste: ${tokens.refresh_token}\n`);
+  console.log('\n✓ Got refresh token. Setting Worker secrets automatically...\n');
+
+  const secrets = {
+    GOOGLE_CLIENT_ID:     clientId,
+    GOOGLE_CLIENT_SECRET: clientSecret,
+    GOOGLE_REFRESH_TOKEN: tokens.refresh_token
+  };
+
+  for (const [name, value] of Object.entries(secrets)) {
+    await new Promise((resolve, reject) => {
+      const child = cp.spawn('npx', ['wrangler', 'secret', 'put', name], {
+        cwd: path.join(__dirname, '..', 'worker'),
+        stdio: ['pipe', 'inherit', 'inherit']
+      });
+      child.stdin.end(value);
+      child.on('close', code => code === 0 ? resolve() : reject(new Error(`wrangler exited ${code}`)));
+    });
+  }
+
+  console.log('\n✓ All secrets set. Worker is ready.\n');
 }
 
 main().catch(e => { console.error(e.message); process.exit(1); });
