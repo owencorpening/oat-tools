@@ -6,6 +6,9 @@
   "engines": { "vscode": "^1.75.0" },
   "categories": ["Other"],
   "main": "./extension.js",
+  "scripts": {
+    "test": "node test/parseTables.test.js"
+  },
   "contributes": {
     "viewsContainers": {
       "activitybar": [
@@ -38,11 +41,6 @@
     "configuration": {
       "title": "OAT Tools",
       "properties": {
-        "oat.googleOAuthToken": {
-          "type": "string",
-          "default": "",
-          "description": "Google OAuth access token (Drive + Sheets scopes). Fallback if no service account file."
-        },
         "oat.workerUrl": {
           "type": "string",
           "default": "",
@@ -57,6 +55,11 @@
           "type": "string",
           "default": "",
           "description": "Absolute path to the local images repo. Defaults to ~/dev/images."
+        },
+        "oat.screenshotScriptPath": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to screenshot-html.sh. Defaults to scripts/screenshot-html.sh in this extension if present, then ~/dev/wraith/scripts/screenshot-html.sh."
         },
         "oat.unsplashAccessKey": {
           "type": "string",

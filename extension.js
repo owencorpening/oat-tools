@@ -196,13 +196,28 @@ function callWorker(url, payload) {
 
 // ── Local render pipeline ────────────────────────────────────────────────────
 
-function execCmd(cmd) {
+function execFile(command, args, options = {}) {
   return new Promise((resolve, reject) => {
-    cp.exec(cmd, (err, stdout, stderr) => {
-      if (err) reject(new Error(stderr.trim() || err.message));
+    cp.execFile(command, args, options, (err, stdout, stderr) => {
+      if (err) reject(new Error((stderr || '').trim() || err.message));
       else resolve(stdout);
     });
   });
+}
+
+function imagesRepoPath() {
+  return vscode.workspace.getConfiguration('oat').get('imagesRepoPath', '')
+    || path.join(os.homedir(), 'dev', 'images');
+}
+
+function screenshotScriptPath() {
+  const configured = vscode.workspace.getConfiguration('oat').get('screenshotScriptPath', '');
+  if (configured) return configured;
+
+  const localScript = path.join(__dirname, 'scripts', 'screenshot-html.sh');
+  if (fs.existsSync(localScript)) return localScript;
+
+  return path.join(os.homedir(), 'dev', 'wraith', 'scripts', 'screenshot-html.sh');
 }
 
 function escapeHtml(s) {
@@ -244,19 +259,22 @@ async function renderLocalPng(title, headers, rows, partNum, series) {
   const tmpHtml = path.join(os.tmpdir(), `${title}.html`);
   fs.writeFileSync(tmpHtml, html, 'utf8');
 
-  const imagesRepo = path.join(os.homedir(), 'dev', 'images');
+  const imagesRepo = imagesRepoPath();
   const outDir = path.join(imagesRepo, 'generated', series, `part-${partNum}`);
   fs.mkdirSync(outDir, { recursive: true });
   const outPng = path.join(outDir, `${title}.png`);
 
-  const script = path.join(os.homedir(), 'dev', 'wraith', 'scripts', 'screenshot-html.sh');
-  await execCmd(`bash "${script}" "${tmpHtml}" "${outPng}" 700`);
+  const script = screenshotScriptPath();
+  if (!fs.existsSync(script)) {
+    throw new Error(`Screenshot script not found: ${script}`);
+  }
+  await execFile('bash', [script, tmpHtml, outPng, '700']);
 
   const relPath = `generated/${series}/part-${partNum}/${title}.png`;
-  await execCmd(`git -C "${imagesRepo}" add "${relPath}"`);
+  await execFile('git', ['-C', imagesRepo, 'add', relPath]);
   try {
-    await execCmd(`git -C "${imagesRepo}" commit -m "Add ${title}.png"`);
-    await execCmd(`git -C "${imagesRepo}" push`);
+    await execFile('git', ['-C', imagesRepo, 'commit', '-m', `Add ${title}.png`]);
+    await execFile('git', ['-C', imagesRepo, 'push']);
   } catch (e) {
     if (!e.message.includes('nothing to commit')) throw e;
   }

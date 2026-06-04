@@ -44,6 +44,8 @@ Reload VS Code. Commands appear in the Command Palette.
 | `oat.workerUrl` | Yes | Cloudflare Worker URL for sheet creation |
 | `oat.unsplashAccessKey` | No | Unsplash API key for image panel thumbnails |
 | `oat.imageStagingSheetId` | No | Google Sheet ID for image staging panel |
+| `oat.imagesRepoPath` | No | Local images repo. Defaults to `~/dev/images` |
+| `oat.screenshotScriptPath` | No | Local screenshot script for table PNG rendering |
 
 Set in `settings.json`:
 ```json
@@ -57,43 +59,36 @@ Set in `settings.json`:
 ## Setup: Cloudflare Worker
 
 The Worker lives in `worker/` and is deployed to Cloudflare. It handles Google Sheets
-creation and OAT styling, keeping credentials out of the extension entirely.
+creation and OAT styling, keeping table-promotion credentials out of the extension.
 
-### First-time setup
+### Auth model
 
-**Prerequisites:** Cloudflare account, GCP project with Sheets + Drive APIs enabled.
+Table promotion uses an OAuth refresh token so generated Sheets are created as your
+Google user and use your Drive quota. This is intentional for personal Google Drive
+accounts, where service accounts can authenticate but cannot reliably own new Drive
+files.
 
-**1. Create OAuth credentials** in GCP Console (project: OAT Tools):
-- APIs & Services → Credentials → Create Credentials → OAuth 2.0 Client ID → Desktop App
+Create or use an OAuth 2.0 Client ID, then run:
 
-**2. Run the auth script** — gets a refresh token and sets all three Worker secrets automatically:
 ```bash
 node scripts/get-refresh-token.js
 ```
-Paste the client ID and secret when prompted, authorize in browser. Done.
 
-**3. Deploy the Worker:**
-```bash
-cd worker
-npx wrangler login   # first time only
-npx wrangler deploy
-```
-
-### Re-keying (rotate credentials)
-
-Delete the OAuth client in GCP Console, create a new one, then:
-```bash
-node scripts/get-refresh-token.js
-```
-The script sets the new secrets automatically. No manual wrangler steps needed.
-
-### Worker secrets
+The script asks for `client_id` and `client_secret`, opens a browser consent flow,
+and sets these Worker secrets automatically:
 
 | Secret | Description |
 |--------|-------------|
-| `GOOGLE_CLIENT_ID` | OAuth 2.0 Desktop App client ID |
-| `GOOGLE_CLIENT_SECRET` | OAuth 2.0 client secret |
-| `GOOGLE_REFRESH_TOKEN` | Long-lived refresh token (never expires unless revoked) |
+| `GOOGLE_CLIENT_ID` | OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | OAuth client secret |
+| `GOOGLE_REFRESH_TOKEN` | Refresh token for Sheets/Drive access |
+
+### Deploy
+
+```bash
+cd worker
+npx wrangler deploy
+```
 
 ---
 

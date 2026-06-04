@@ -6,3 +6,6 @@ compatibility_date = "2024-01-01"
 # GOOGLE_CLIENT_ID
 # GOOGLE_CLIENT_SECRET
 # GOOGLE_REFRESH_TOKEN
+
+[observability]
+enabled = true

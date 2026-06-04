@@ -1,0 +1,5 @@
+credentials/
+worker/.wrangler/
+.dev.vars
+.env
+.wrangler/

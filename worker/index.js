@@ -30,6 +30,7 @@ export default {
         sheetUrl: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`
       });
     } catch (e) {
+      console.error('OAT table promotion failed', { message: e.message });
       return json({ error: e.message }, 500);
     }
   }
@@ -38,14 +39,18 @@ export default {
 // ── Auth ─────────────────────────────────────────────────────────────────────
 
 async function getAccessToken(env) {
+  if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET || !env.GOOGLE_REFRESH_TOKEN) {
+    throw new Error('Missing GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, or GOOGLE_REFRESH_TOKEN secret');
+  }
+
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      client_id:     env.GOOGLE_CLIENT_ID,
+      client_id: env.GOOGLE_CLIENT_ID,
       client_secret: env.GOOGLE_CLIENT_SECRET,
       refresh_token: env.GOOGLE_REFRESH_TOKEN,
-      grant_type:    'refresh_token'
+      grant_type: 'refresh_token'
     })
   });
   const data = await res.json();
