@@ -3,8 +3,12 @@
 Plan and implementation notes for splitting the former combined `oat-tools` VS
 Code extension into two separately installable extensions inside this monorepo.
 
-Status: implemented in the monorepo layout. Keep this doc as the migration map
-and follow-up checklist.
+Status: implemented in the monorepo layout on June 6, 2026. Keep this doc as
+the migration map and follow-up checklist.
+
+Implementation note, June 6, 2026: the split was committed as
+`f8d9dd6 Split extensions and tighten table screenshots`. Table promotion was
+verified after the split, including the tightened table screenshot crop.
 
 ## Goal
 
@@ -106,13 +110,14 @@ Completed:
 3. Gave each extension its own `package.json`.
 4. Converted the root `package.json` into monorepo metadata.
 5. Updated the root README to describe both install paths.
+6. Verified Table Tools command registration in VS Code.
+7. Smoke-tested table promotion against live credentials.
 
 Remaining manual validation:
 
 1. Install both extension folders with separate symlinks.
-2. Confirm Table Tools command registration in VS Code.
-3. Confirm Image Staging activity bar registration in VS Code.
-4. Smoke-test table promotion and image placement against live credentials.
+2. Confirm Image Staging activity bar registration in VS Code.
+3. Smoke-test image placement against live credentials.
 
 ## Test Plan
 
