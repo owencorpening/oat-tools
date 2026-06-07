@@ -5,27 +5,59 @@ const path = require('path');
 const https = require('https');
 const cp = require('child_process');
 
-function createPlacedAsset({ repoPath, image, series = 'water-series', partDir, slug }) {
-  const imageDir = path.join(repoPath, series, partDir, slug);
-  fs.mkdirSync(imageDir, { recursive: true });
+function createRepoAsset({
+  repoPath,
+  asset,
+  series = 'water-series',
+  partDir,
+  slug = asset && asset.slug,
+  fileName,
+  rawOwner = 'owencorpening',
+  rawRepo = 'images',
+  rawBranch = 'main'
+}) {
+  requireValue(repoPath, 'repoPath');
+  requireValue(series, 'series');
+  requireValue(partDir, 'partDir');
+  requireValue(slug, 'slug');
 
-  fs.writeFileSync(path.join(imageDir, 'url.txt'), image.sourceUrl || image.url || '');
-  fs.writeFileSync(path.join(imageDir, 'photographer.txt'), image.photographer || '');
-  fs.writeFileSync(path.join(imageDir, 'license.txt'), image.license || '');
+  const assetDir = path.join(repoPath, series, partDir, slug);
+  fs.mkdirSync(assetDir, { recursive: true });
 
-  const downloadSrc = image.imageSrc || image.thumbUrl || image.sourceUrl || image.url;
-  const ext = guessExt(downloadSrc);
-  const fileName = `${slug}${ext}`;
-  const imagePath = path.join(imageDir, fileName);
-  const rawBase = `https://raw.githubusercontent.com/owencorpening/images/main/${series}/${partDir}/${slug}`;
+  writeProvenanceFiles(assetDir, asset || {});
+
+  const downloadSrc = asset && (asset.imageSrc || asset.thumbUrl || asset.sourceUrl || asset.url);
+  const resolvedFileName = fileName || `${slug}${guessExt(downloadSrc)}`;
+  const localPath = path.join(assetDir, resolvedFileName);
+  const relDir = path.posix.join(series, partDir, slug);
+  const rawBase = buildRawGitHubBase({ owner: rawOwner, repo: rawRepo, branch: rawBranch, relDir });
+  const rawAssetUrl = `${rawBase}/${resolvedFileName}`;
 
   return {
-    imageDir,
-    imagePath,
+    assetDir,
+    imageDir: assetDir,
+    localPath,
+    imagePath: localPath,
     downloadSrc,
-    relPath: `${series}/${partDir}/${slug}`,
-    imageUrl: `${rawBase}/${fileName}`
+    fileName: resolvedFileName,
+    relPath: relDir,
+    rawAssetUrl,
+    imageUrl: rawAssetUrl
   };
+}
+
+function createPlacedAsset({ repoPath, image, series = 'water-series', partDir, slug }) {
+  return createRepoAsset({ repoPath, asset: image, series, partDir, slug });
+}
+
+function writeProvenanceFiles(assetDir, asset) {
+  fs.writeFileSync(path.join(assetDir, 'url.txt'), asset.sourceUrl || asset.url || '');
+  fs.writeFileSync(path.join(assetDir, 'photographer.txt'), asset.photographer || '');
+  fs.writeFileSync(path.join(assetDir, 'license.txt'), asset.license || '');
+}
+
+function buildRawGitHubBase({ owner, repo, branch, relDir }) {
+  return `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${relDir}`;
 }
 
 async function downloadAsset({ url, dest }) {
@@ -70,6 +102,12 @@ function guessExt(url) {
   return m ? `.${m[1].toLowerCase().replace('jpeg', 'jpg')}` : '.jpg';
 }
 
+function requireValue(value, name) {
+  if (value === undefined || value === null || value === '') {
+    throw new Error(`imageAssetsRepo requires ${name}`);
+  }
+}
+
 function download(url, dest) {
   return new Promise((resolve, reject) => {
     const file = fs.createWriteStream(dest);
@@ -89,7 +127,10 @@ function download(url, dest) {
 }
 
 module.exports = {
+  createRepoAsset,
   createPlacedAsset,
+  writeProvenanceFiles,
+  buildRawGitHubBase,
   downloadAsset,
   gitPushAsset,
   removePlacedAssetBySourceUrl,
