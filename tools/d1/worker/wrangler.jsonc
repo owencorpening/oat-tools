@@ -1,0 +1,16 @@
+{
+  "$schema": "https://unpkg.com/wrangler/config-schema.json",
+  "name": "oat-publishing-ledger",
+  "main": "index.js",
+  "compatibility_date": "2026-06-07",
+  "observability": {
+    "enabled": true
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "oat-publishing-ledger",
+      "database_id": "00000000-0000-0000-0000-000000000000"
+    }
+  ]
+}
