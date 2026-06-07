@@ -8,7 +8,8 @@ const { registerReviewImageNeedCommand } = require('./lib/reviewImageNeedCommand
 const { registerUrlIntakeCommand } = require('./lib/urlIntakeCommand');
 
 function activate(context) {
-  const imagePanel = new ImagePanelProvider(context);
+  const ledgerWriter = createLedgerWriterFromSettings(vscode);
+  const imagePanel = new ImagePanelProvider(context, { ledgerWriter });
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(ImagePanelProvider.viewId, imagePanel)
@@ -17,8 +18,6 @@ function activate(context) {
   context.subscriptions.push(
     vscode.commands.registerCommand('oatImages.refreshPanel', () => imagePanel.refresh())
   );
-
-  const ledgerWriter = createLedgerWriterFromSettings(vscode);
 
   registerLocalFileIntakeCommand(context, vscode, { ledgerWriter });
   registerReviewImageNeedCommand(context, vscode, { ledgerWriter });

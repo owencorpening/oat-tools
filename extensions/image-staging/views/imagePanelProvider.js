@@ -9,8 +9,9 @@ const { resolveThumbUrl } = require('../lib/thumbResolver');
 class ImagePanelProvider {
   static viewId = 'oatImages.panel';
 
-  constructor(context) {
+  constructor(context, { ledgerWriter } = {}) {
     this._context = context;
+    this._ledgerWriter = ledgerWriter;
     this._view = null;
   }
 
@@ -47,6 +48,26 @@ class ImagePanelProvider {
   // ── Load ──────────────────────────────────────────────────────────────────
 
   async _loadStaged() {
+    if (this._ledgerWriter && this._ledgerWriter.listStagedAssets) {
+      await this._loadD1Staged();
+      return;
+    }
+
+    await this._loadSheetStaged();
+  }
+
+  async _loadD1Staged() {
+    try {
+      const result = await this._ledgerWriter.listStagedAssets();
+      const assets = Array.isArray(result?.assets) ? result.assets : [];
+      const images = assets.map(normalizeD1AssetForPanel);
+      this._send({ type: 'staged', images, source: 'd1' });
+    } catch (err) {
+      this._send({ type: 'error', message: err.message });
+    }
+  }
+
+  async _loadSheetStaged() {
     const sheetId = this._sheetId();
     if (!sheetId) {
       this._send({ type: 'error', message: 'Set oatImages.sheetId in VS Code settings.' });
@@ -70,6 +91,11 @@ class ImagePanelProvider {
   // ── Place ─────────────────────────────────────────────────────────────────
 
   async _handlePlace(image) {
+    if (image && image.source === 'd1') {
+      vscode.window.showInformationMessage('OAT: D1 staged assets are visible; placement saga UI is the next step.');
+      return;
+    }
+
     const target = await vscode.window.showQuickPick(
       ['substack', 'carousel', 'linkedin-post'],
       { placeHolder: 'Publishing target' }
@@ -126,6 +152,11 @@ class ImagePanelProvider {
   // ── Discard ───────────────────────────────────────────────────────────────
 
   async _handleDiscard(image) {
+    if (image && image.source === 'd1') {
+      vscode.window.showInformationMessage('OAT: D1 discard is not wired yet; use the ledger API or wait for the next panel action.');
+      return;
+    }
+
     const isPlaced = image.status === 'placed';
     const msg = isPlaced
       ? `This image is placed in ${image.placed_in}. Remove from article and repo?`
@@ -342,6 +373,32 @@ _timeoutId = setTimeout(() => {
 }
 
 module.exports = { ImagePanelProvider };
+
+function normalizeD1AssetForPanel(asset) {
+  const imageSrc = asset.image_src || asset.imageSrc || asset.raw_asset_url || asset.rawAssetUrl || '';
+  const sourceUrl = asset.source_url || asset.sourceUrl || '';
+  const rawAssetUrl = asset.raw_asset_url || asset.rawAssetUrl || '';
+
+  return {
+    source: 'd1',
+    id: asset.id,
+    status: asset.status,
+    name: asset.slug || asset.display_name || asset.displayName || asset.source_name || asset.sourceName || '',
+    displayName: asset.display_name || asset.displayName || asset.slug || '',
+    photographer: asset.photographer || '',
+    license: asset.license || '',
+    attribution: asset.attribution || '',
+    url: rawAssetUrl || sourceUrl || imageSrc,
+    imageSrc,
+    thumbUrl: rawAssetUrl || imageSrc || sourceUrl,
+    assetPath: asset.asset_path || asset.assetPath || '',
+    rawAssetUrl,
+    contentHash: asset.content_hash || asset.contentHash || '',
+    sourcePath: asset.source_path || asset.sourcePath || '',
+    sourceUrl,
+    sourceName: asset.source_name || asset.sourceName || ''
+  };
+}
 
 function getSetting(key, defaultValue) {
   const imageValue = vscode.workspace.getConfiguration('oatImages').get(key, undefined);
