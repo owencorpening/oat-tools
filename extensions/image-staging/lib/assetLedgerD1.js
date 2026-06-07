@@ -142,6 +142,55 @@ async function markSagaStep(db, sagaId, updates = {}) {
   await updateById(db, 'asset_saga', sagaId, fields);
 }
 
+async function markAssetPublishing(db, assetId) {
+  if (!assetId) throw new Error('markAssetPublishing requires assetId');
+
+  await updateById(db, 'asset', assetId, {
+    status: 'publishing',
+    updated_at: now()
+  });
+}
+
+async function markPlacementPublishing(db, placementId) {
+  if (!placementId) throw new Error('markPlacementPublishing requires placementId');
+
+  await updateById(db, 'asset_placement', placementId, {
+    status: 'publishing',
+    updated_at: now()
+  });
+}
+
+async function updateAssetPublication(db, { assetId, assetPath, rawAssetUrl } = {}) {
+  if (!assetId) throw new Error('updateAssetPublication requires assetId');
+
+  await updateById(db, 'asset', assetId, {
+    asset_path: assetPath,
+    raw_asset_url: rawAssetUrl,
+    updated_at: now()
+  });
+}
+
+async function markAssetPublished(db, { assetId, assetPath, rawAssetUrl } = {}) {
+  if (!assetId) throw new Error('markAssetPublished requires assetId');
+
+  await updateById(db, 'asset', assetId, {
+    status: 'published',
+    asset_path: assetPath,
+    raw_asset_url: rawAssetUrl,
+    updated_at: now()
+  });
+}
+
+async function updatePlacementSnippet(db, { placementId, snippet, snippetFormat } = {}) {
+  if (!placementId) throw new Error('updatePlacementSnippet requires placementId');
+
+  await updateById(db, 'asset_placement', placementId, {
+    snippet,
+    snippet_format: snippetFormat,
+    updated_at: now()
+  });
+}
+
 async function markPlaced(db, { placementId, assetId, publishedUrl } = {}) {
   if (!placementId) throw new Error('markPlaced requires placementId');
 
@@ -272,6 +321,11 @@ module.exports = {
   createImageNeed,
   createSaga,
   markSagaStep,
+  markAssetPublishing,
+  markPlacementPublishing,
+  updateAssetPublication,
+  markAssetPublished,
+  updatePlacementSnippet,
   markPlaced,
   markFailed,
   listOpenNeeds,
