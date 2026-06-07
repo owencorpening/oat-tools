@@ -29,6 +29,10 @@ wrangler d1 migrations apply oat-publishing-ledger --local
 wrangler d1 migrations apply oat-publishing-ledger --remote
 ```
 
+The Worker config lives in `worker/wrangler.jsonc` and points its D1 binding at
+`../migrations`, so the commands can be run from the `worker/` directory once
+the placeholder `database_id` has been replaced.
+
 Do not run these as part of local code review unless you intend to create or
 mutate a real Cloudflare D1 database.
 
