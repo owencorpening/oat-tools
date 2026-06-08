@@ -92,14 +92,19 @@ async function testListRoutes() {
   const env = { DB: new FakeD1() };
   env.DB.insert('asset', { id: 'asset-1', status: 'staged', created_at: '2026-01-01T00:00:00.000Z' });
   env.DB.insert('asset', { id: 'asset-2', status: 'candidate', created_at: '2026-01-02T00:00:00.000Z' });
+  env.DB.insert('asset_placement', { id: 'placement-1', asset_id: 'asset-1', content_draft_id: 'draft-1', target: 'substack', status: 'planned', created_at: '2026-01-01T00:00:00.000Z' });
+  env.DB.insert('asset_saga', { id: 'saga-1', asset_id: 'asset-1', asset_placement_id: 'placement-1', status: 'running', current_step: 1, resolution: 'auto-retry' });
   env.DB.insert('image_need', { id: 'need-1', content_draft_id: 'draft-1', status: 'open', created_at: '2026-01-01T00:00:00.000Z' });
   env.DB.insert('image_need', { id: 'need-2', content_draft_id: 'draft-2', status: 'open', created_at: '2026-01-02T00:00:00.000Z' });
 
   const assets = await (await handleRequest(new Request('https://ledger.test/assets/staged'), env)).json();
   const needs = await (await handleRequest(new Request('https://ledger.test/image-needs/open?contentDraftId=draft-1'), env)).json();
+  const placements = await (await handleRequest(new Request('https://ledger.test/placements/planned?contentDraftId=draft-1'), env)).json();
 
   assert.deepStrictEqual(assets.assets.map(row => row.id), ['asset-1']);
   assert.deepStrictEqual(needs.imageNeeds.map(row => row.id), ['need-1']);
+  assert.deepStrictEqual(placements.placements.map(row => row.placement_id), ['placement-1']);
+  assert.strictEqual(placements.placements[0].saga_id, 'saga-1');
 }
 
 async function testAuthAndErrors() {
@@ -195,7 +200,31 @@ class FakeStatement {
         .sort(byCreatedAt);
       return { results: rows };
     }
-    if (/FROM\s+asset/i.test(this.sql)) {
+    if (/FROM\s+asset_placement\s+p/i.test(this.sql)) {
+      const assets = this.db.tables.get('asset') || [];
+      const sagas = this.db.tables.get('asset_saga') || [];
+      const rows = [...(this.db.tables.get('asset_placement') || [])]
+        .filter(row => row.status === 'planned')
+        .filter(row => !/p\.content_draft_id\s*=\s*\?/i.test(this.sql) || row.content_draft_id === this.values[0])
+        .sort(byCreatedAt)
+        .map(row => {
+          const asset = assets.find(candidate => candidate.id === row.asset_id) || {};
+          const saga = sagas.find(candidate => candidate.asset_placement_id === row.id) || {};
+          return {
+            placement_id: row.id,
+            placement_asset_id: row.asset_id,
+            content_draft_id: row.content_draft_id,
+            target: row.target,
+            placement_status: row.status,
+            asset_id: asset.id,
+            display_name: asset.display_name,
+            saga_id: saga.id,
+            saga_status: saga.status
+          };
+      });
+      return { results: rows };
+    }
+    if (/FROM\s+asset\b/i.test(this.sql)) {
       const rows = [...(this.db.tables.get('asset') || [])]
         .filter(row => row.status === 'staged')
         .sort(byCreatedAt);

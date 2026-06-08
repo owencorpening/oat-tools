@@ -251,6 +251,63 @@ async function listStagedAssets(db) {
   `));
 }
 
+async function listPlannedPlacements(db, { contentDraftId } = {}) {
+  const sql = `
+    SELECT
+      p.id AS placement_id,
+      p.asset_id AS placement_asset_id,
+      p.content_item_id,
+      p.content_draft_id,
+      p.target,
+      p.figure_number,
+      p.draft_location_json,
+      p.snippet,
+      p.snippet_format,
+      p.status AS placement_status,
+      p.published_url,
+      p.created_at AS placement_created_at,
+      p.updated_at AS placement_updated_at,
+      a.id AS asset_id,
+      a.asset_type,
+      a.slug,
+      a.display_name,
+      a.source_name,
+      a.source_path,
+      a.source_url,
+      a.image_src,
+      a.content_hash,
+      a.photographer,
+      a.license,
+      a.attribution,
+      a.intake_section,
+      a.asset_path,
+      a.raw_asset_url,
+      a.status AS asset_status,
+      s.id AS saga_id,
+      s.current_step,
+      s.status AS saga_status,
+      s.resolution,
+      s.compensation,
+      s.last_error,
+      s.retry_count,
+      s.next_retry_at,
+      d.content_repo_path,
+      d.draft_path,
+      d.title AS draft_title,
+      d.heading_anchor
+    FROM asset_placement p
+    JOIN asset a ON a.id = p.asset_id
+    LEFT JOIN asset_saga s ON s.asset_placement_id = p.id
+    LEFT JOIN content_draft d ON d.id = p.content_draft_id
+   WHERE p.status = 'planned'
+     ${contentDraftId ? 'AND p.content_draft_id = ?' : ''}
+   ORDER BY p.created_at ASC
+  `;
+
+  const statement = db.prepare(sql);
+  return all(contentDraftId ? statement.bind(contentDraftId) : statement);
+}
+
 async function insert(db, table, row) {
   const clean = compact(row);
   const columns = Object.keys(clean);
@@ -329,5 +386,6 @@ module.exports = {
   markPlaced,
   markFailed,
   listOpenNeeds,
-  listStagedAssets
+  listStagedAssets,
+  listPlannedPlacements
 };

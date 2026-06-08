@@ -41,6 +41,13 @@ function createLedgerApiClient({ baseUrl, token, request = requestJson } = {}) {
         method: 'GET',
         token
       });
+    },
+    listPlannedPlacements({ contentDraftId } = {}) {
+      const query = contentDraftId ? `?contentDraftId=${encodeURIComponent(contentDraftId)}` : '';
+      return request(`${normalizedBase}/placements/planned${query}`, {
+        method: 'GET',
+        token
+      });
     }
   };
 }

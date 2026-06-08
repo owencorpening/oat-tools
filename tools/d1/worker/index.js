@@ -31,6 +31,9 @@ async function handleRequest(request, env = {}) {
     if (request.method === 'GET' && url.pathname === '/assets/staged') {
       return json({ assets: await ledger.listStagedAssets(env.DB) });
     }
+    if (request.method === 'GET' && url.pathname === '/placements/planned') {
+      return json({ placements: await ledger.listPlannedPlacements(env.DB, { contentDraftId: url.searchParams.get('contentDraftId') || undefined }) });
+    }
 
     return json({ error: 'Not found' }, 404);
   } catch (error) {

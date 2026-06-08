@@ -52,6 +52,7 @@ Endpoints:
 - `POST /placements` with `{ "contentDraft": { ... }, "placement": { ... }, "saga": { ... } }`
 - `GET /image-needs/open`
 - `GET /assets/staged`
+- `GET /placements/planned`
 
 Set `LEDGER_API_TOKEN` as a Worker secret when the API should require bearer
 authorization. Replace the placeholder `database_id` in `worker/wrangler.jsonc`
