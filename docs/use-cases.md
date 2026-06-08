@@ -187,8 +187,10 @@ ledger, especially in `~/Downloads`.
 Common sources:
 
 - Obvious AI-generated files such as `chatgpt*.png`.
-- Downloaded images with useful metadata in the filename, such as date,
-  timestamp, source, or prompt fragments.
+- Downloaded images with useful metadata in the filename, such as tool, date,
+  timestamp, source, prompt fragments, subject, draft context, or style.
+- Spontaneous outputs from another AI image tool, screenshot tool, or design
+  tool that the author used outside the OAT workflow.
 - Local images without provenance.
 - A user-provided image that should be placed spontaneously.
 - A final-review image hunt triggered by a dense passage in the draft.
@@ -197,11 +199,17 @@ Steps:
 
 1. While reviewing the draft, browse for an image and download it to
    `~/Downloads`, or choose another local image file.
-2. Infer a proposed image name and any metadata from the filename.
-3. Ask for missing provenance: source URL, creator or photographer, and license.
-4. Normalize the image into the same record shape as a ledger asset record.
-5. Save the asset to the D1 ledger.
-6. Continue through planned placement and local run preparation.
+2. Filter out unrelated Downloads files such as installers, spreadsheets,
+   markdown drafts, and personal documents.
+3. Infer a proposed image name and proposed metadata from the filename. For
+   example, `ChatGPT Image Jun 2, 2026, 08_40_36 PM.png` suggests tool and
+   timestamp, while `syntheticBiologyTimeline-publisher-gold.svg` suggests
+   subject and style.
+4. Ask for missing provenance: source URL, creator or photographer, tool, and
+   license. Treat filename-derived metadata as a prefilled guess until confirmed.
+5. Normalize the image into the same record shape as a ledger asset record.
+6. Save the asset to the D1 ledger.
+7. Continue through planned placement and local run preparation.
 
 Result:
 

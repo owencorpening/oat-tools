@@ -64,11 +64,28 @@ This remains the browser path for sites that need manual browsing.
 This remains the escape hatch for local files.
 
 - `~/Downloads` is an intake buffer, not long-term storage.
+- Downloads is a mixed inbox. It may contain candidate images, spreadsheets,
+  installers, markdown files, screenshots, certificates, and other unrelated
+  artifacts.
+- Users may spontaneously use another AI image tool, screenshot tool, or design
+  tool outside the OAT workflow. The saved filename often carries provenance or
+  intent hints, such as tool name, date, timestamp, prompt fragment, subject, or
+  style.
+- Filename clues should seed the intake form, not silently prove provenance.
 - The tool should ask for source page, creator, license, and notes when those
   are missing.
 - A downloaded file can be staged, placed, and promoted through the same D1
   placement saga as provider results.
 - Provenance confidence should be visible before the image is placed.
+
+Useful filename clues:
+
+| Example pattern | Possible inference |
+|-----------------|--------------------|
+| `ChatGPT Image Jun 2, 2026, 08_40_36 PM.png` | AI-generated image, likely ChatGPT, creation timestamp. |
+| `syntheticBiologyTimeline-publisher-gold.svg` | Intended subject, draft/project context, style variant. |
+| `photo-...unsplash...jpg` | Possible provider hint; still needs source page confirmation. |
+| `screenshot-2026-06-02.png` | Screenshot, weak provenance unless a source URL is supplied. |
 
 ## Source Resolution Rule
 

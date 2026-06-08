@@ -65,6 +65,9 @@ Frame 2: Add an image to the notebook.
 - For one-click browser capture, click the OAT D1 image capture bookmarklet.
 - For a browsed image downloaded to `~/Downloads`, run
   `OAT Images: Intake Local File`.
+- For a spontaneous AI/tool output in `~/Downloads`, use the same local-file
+  intake path. Filenames can prefill hints such as tool, timestamp, subject, or
+  style, but the author should confirm provenance before placement.
 - For a URL copied manually, run `OAT Images: Intake URL`.
 - For a late-review visual gap, run `OAT Images: Create Review Image Need`.
 - Some image sites bury the actual downloadable image behind detail pages,

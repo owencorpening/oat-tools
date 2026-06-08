@@ -331,6 +331,10 @@ visual breaks with two already resolved.
 ## Downloads Handling
 
 `~/Downloads` should be treated as an intake buffer, not storage.
+It is also a mixed human workspace: the same folder may contain candidate
+images, AI outputs, screenshots, spreadsheets, installers, markdown drafts, and
+personal files. Intake should filter for likely image assets and never assume
+that everything in the folder belongs to the pipeline.
 
 For local source files:
 
@@ -338,19 +342,28 @@ For local source files:
 2. Compute `contentHash` before moving or renaming the file.
 3. Upsert intake records by `contentHash` when available, falling back to
    source URL or filename only when there is no file content to hash.
-4. Infer useful fields from the filename when possible, especially for
-   AI-generated images with timestamped names.
-5. Ask for or record missing provenance before placement.
-6. Move the image into the asset repo at the final `assetPath`.
-7. Write provenance files alongside the image:
+4. Infer useful fields from the filename when possible. AI tools, screenshot
+   tools, and design tools often save names with tool, date, timestamp, subject,
+   prompt fragment, draft context, or style hints.
+5. Store filename-derived fields as proposed metadata with a confidence marker,
+   not as confirmed provenance.
+6. Ask for or record missing provenance before placement.
+7. Move the image into the asset repo at the final `assetPath`.
+8. Write provenance files alongside the image:
    - `url.txt`
    - `license.txt`
    - `photographer.txt`
-8. Remove or move sidecar/source files so `~/Downloads` is not left carrying
+9. Remove or move sidecar/source files so `~/Downloads` is not left carrying
    finished assets.
 
 This follows the content standard that `~/Downloads` should be empty of processed
 assets when the pipeline is done.
+
+Filename hints are especially useful for spontaneous images created outside the
+OAT workflow, such as `ChatGPT Image Jun 2, 2026, 08_40_36 PM.png` or
+`syntheticBiologyTimeline-publisher-gold.svg`. They can prefill source/tool,
+creation date, subject, and slug candidates, but the user should still confirm
+creator, license, and publishability.
 
 ## Placement Outputs
 
