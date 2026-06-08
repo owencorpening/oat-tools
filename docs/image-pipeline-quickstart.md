@@ -34,13 +34,15 @@ flowchart LR
   B --> C[Download to Downloads]
   B --> D[Capture with bookmarklet]
   B --> E[Use staged sidebar image]
-  C --> F[Intake local file]
-  D --> G[Review staged image]
-  E --> G
-  F --> G
-  G --> H[Click Place]
-  H --> I[Create planned placement]
-  I --> J[Execute planned placement]
+  B --> F[Search inside VS Code]
+  C --> G[Intake local file]
+  D --> H[Review staged image]
+  F --> H
+  E --> H
+  G --> H
+  H --> I[Click Place]
+  I --> J[Create planned placement]
+  J --> K[Execute planned placement]
 ```
 
 ## Seven Frames
@@ -50,16 +52,25 @@ Frame 1: Notice the image opportunity.
 - While reviewing the markdown draft, the author sees a spot where an image
   should go.
 - If the image is already staged, skip to Frame 3.
-- If the author needs to find one, use either the Downloads path or the
-  bookmarklet path.
+- If the author needs to find one, use the bookmarklet path, the Downloads path,
+  or future in-VS-Code provider search.
 
 Frame 2: Add an image to the notebook.
 
+- Current browser search shortcut: in Chrome, type `fi<Tab>` and a search term
+  such as `wetland`. The shortcut expands to
+  `site:unsplash.com OR site:pexels.com OR site:pixabay.com wetland`.
+  Treat the results page as discovery only: it can still show images, previews,
+  or linked pages from other sites.
 - For one-click browser capture, click the OAT D1 image capture bookmarklet.
 - For a browsed image downloaded to `~/Downloads`, run
   `OAT Images: Intake Local File`.
 - For a URL copied manually, run `OAT Images: Intake URL`.
 - For a late-review visual gap, run `OAT Images: Create Review Image Need`.
+- Some image sites bury the actual downloadable image behind detail pages,
+  visit buttons, redirects, or dynamic markup. Prefer the bookmarklet or
+  provider-backed search when possible because the Worker can resolve
+  source-page metadata into a direct image URL and provenance.
 
 Frame 3: Open the staging panel.
 
@@ -106,7 +117,8 @@ marking the placement as done.
 
 1. Review the markdown draft until an image opportunity appears.
 2. Capture an image with the bookmarklet, intake a downloaded file, or choose an
-   existing staged image from the sidebar.
+   existing staged image from the sidebar. Future provider search in VS Code
+   should become the smoothest path.
 3. Open `OAT Image Staging`.
 4. Click `Place` on the staged image.
 5. Run `OAT Images: Prepare Planned Placement Run`.
@@ -154,6 +166,9 @@ marking the placement as done.
 ## Where To Read More
 
 - [use-cases.md](use-cases.md) explains the workflows in more detail.
+- [image-provider-search-plan.md](image-provider-search-plan.md) captures the
+  plan for in-editor provider search while preserving bookmarklet and Downloads
+  intake.
 - [image-pipeline-architecture.md](image-pipeline-architecture.md) explains the
   data model, saga, and repo boundaries.
 - [../tools/d1/README.md](../tools/d1/README.md) explains the Cloudflare D1

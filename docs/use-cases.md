@@ -53,6 +53,17 @@ The author has three common paths:
 2. Browse for an image and click the D1 image capture bookmarklet to stage it.
 3. Use an image that is already staged in the `OAT Image Staging` sidebar.
 
+Current browser search shortcut: in Chrome, `fi<Tab>` plus a search term expands
+to a provider-scoped search such as
+`site:unsplash.com OR site:pexels.com OR site:pixabay.com wetland`. Treat that
+results page as discovery only: it can still include image previews, linked
+pages, or embedded assets from other sites.
+
+Future preferred path: search provider APIs from inside VS Code, stage a result
+with provenance automatically, and avoid leaving the review flow.
+The implementation plan for that path is in
+[image-provider-search-plan.md](image-provider-search-plan.md).
+
 All three paths converge on the same action: review the staged image, click
 `Place`, and create a planned placement for the open draft.
 
@@ -66,7 +77,9 @@ Steps:
 
 1. Install the bookmarklet from [../tools/bookmarklet/README.md](../tools/bookmarklet/README.md).
 2. Start or deploy the ledger Worker.
-3. Browse to the source page for the image.
+3. Browse from the results page to the provider/source page for the image. The
+   current manual search shortcut is `fi<Tab>` in Chrome followed by the search
+   term, but the results page itself is not provenance.
 4. Click the bookmarklet.
 5. Refresh `OAT Image Staging` in VS Code.
 6. Review the staged asset record before planning placement.
@@ -80,11 +93,51 @@ What the bookmarklet does:
   keys are configured.
 - Creates a staged ledger `asset` record. It does not write to Google Sheets.
 
+Important friction:
+
+Some image sites bury the actual image behind detail pages, visit buttons,
+redirects, dynamic markup, or pages that expose only a preview. The bookmarklet
+should treat the visible page as the source page and let the Worker/provider API
+resolve a better direct image URL when possible. Downloads remain useful, but
+they often lose provenance unless the author captures or enters the source page.
+Search-result thumbnails are not enough; the staged record should point to the
+actual source/provider page whenever possible.
+
 Result:
 
 The image appears in the D1-backed staging queue and can move through the same
 placement saga as URL intake, local-file intake, and review-triggered image
 needs.
+
+## Use Case: Search For Images Inside VS Code
+
+Target state: use this when the author is reviewing a draft and wants to find a
+visual without leaving VS Code.
+
+Detailed plan: [image-provider-search-plan.md](image-provider-search-plan.md).
+
+Steps:
+
+1. Select or place the cursor near the dense passage.
+2. Open `OAT Image Staging`.
+3. Search a provider such as Unsplash or Pexels from the sidebar.
+4. Review thumbnails with photographer, license, and source page already shown.
+5. Click `Stage` on a result.
+6. Click `Place` on the staged asset.
+
+What the tool should do:
+
+- Query provider APIs instead of scraping search-result pages.
+- Store the source page, direct image URL, photographer, license, and provider
+  IDs in D1.
+- Avoid the browser round trip when the author is already in review mode.
+- Keep Downloads intake as an escape hatch for sources that cannot be searched
+  through a provider API.
+
+Result:
+
+The author stays in the draft-review loop, and provenance is stronger because it
+comes from the provider API rather than a detached downloaded file.
 
 ## Use Case: Promote Draft Tables
 

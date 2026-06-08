@@ -175,10 +175,20 @@ Images can enter the pipeline from several places:
 - **Author draft review:** the author is reading an open markdown draft and
   notices a spot where a visual should go. This is the human trigger for the
   Downloads path, bookmarklet path, or existing-staged-image path.
+- **Browser provider search:** current manual path using the Chrome `fi<Tab>`
+  shortcut to search `site:unsplash.com OR site:pexels.com OR
+  site:pixabay.com` plus the author's search term. This is discovery, not
+  provenance; results can still include previews or linked assets from other
+  sites.
 - **D1 bookmarklet captures:** images captured in the browser by the bookmarklet
   in `tools/bookmarklet`. The bookmarklet posts page/source metadata to the
   ledger Worker, which enriches provider metadata when API keys are configured
   and creates a staged `asset` record.
+- **In-editor provider search:** target-state flow where the author searches
+  providers such as Unsplash or Pexels from the VS Code sidebar, stages a result
+  with provider-backed provenance, and stays in the draft-review loop. The
+  resumable implementation plan is
+  [image-provider-search-plan.md](image-provider-search-plan.md).
 - **`~/Downloads`:** local files that may have been generated, downloaded, or
   routed by a watcher.
 - **AI-generated files:** obvious generated images such as `chatgpt*.png` or
@@ -195,6 +205,18 @@ Images can enter the pipeline from several places:
 The pipeline should normalize all of these into an asset record or an
 `image_need` before placement. Placement-specific choices should be captured only
 when the user decides where and how the asset will be used.
+
+Source-page resolution rule:
+
+- Store the human source page separately from the direct image URL.
+- Prefer provider APIs for source metadata and direct image URLs when available.
+- Treat browser scraping and Downloads intake as fallback paths, because some
+  sites hide the actual image behind detail pages, visit buttons, redirects, or
+  dynamic markup.
+- Do not treat a search result page or thumbnail preview as provenance; resolve
+  to the provider/source page before staging when possible.
+- If a direct image URL cannot be resolved with confidence, keep the asset
+  staged or `needs-provenance` until the author confirms the source.
 
 ## Asset And Placement Records
 

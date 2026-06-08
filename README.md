@@ -13,6 +13,8 @@ workflow-level guide to what each tool is for and how to use it, see
 [docs/use-cases.md](docs/use-cases.md). For the working architecture target that
 reconciles these extensions with the content standards, see
 [docs/image-pipeline-architecture.md](docs/image-pipeline-architecture.md). For
+the provider-search plan that keeps bookmarklet and Downloads intake, see
+[docs/image-provider-search-plan.md](docs/image-provider-search-plan.md). For
 the broader repository split plan, see
 [docs/repo-refactor-plan.md](docs/repo-refactor-plan.md). For the inventory of
 tool-like files being migrated from the current content workspace, see
@@ -167,6 +169,7 @@ oat-tools-vscode/
 │       └── scripts/
 ├── docs/
 │   ├── image-pipeline-architecture.md
+│   ├── image-provider-search-plan.md
 │   ├── repo-refactor-plan.md
 │   ├── split-plan.md
 │   ├── tool-migration-inventory.md
