@@ -4,17 +4,28 @@ const assert = require('assert');
 const Module = require('module');
 
 const infoMessages = [];
+const warningMessages = [];
+const quickPickValues = [];
+const inputBoxValues = [];
 const fakeVscode = {
   window: {
+    activeTextEditor: null,
     showInformationMessage: async message => {
       infoMessages.push(message);
       return message;
-    }
+    },
+    showWarningMessage: async message => {
+      warningMessages.push(message);
+      return message;
+    },
+    showQuickPick: async () => quickPickValues.shift(),
+    showInputBox: async () => inputBoxValues.shift()
   },
   workspace: {
     getConfiguration: () => ({
       get: () => ''
-    })
+    }),
+    getWorkspaceFolder: () => ({ uri: { fsPath: '/repo' } })
   }
 };
 
@@ -63,21 +74,103 @@ async function testLoadsD1StagedAssets() {
 
 async function testD1ActionsAreGuarded() {
   infoMessages.length = 0;
+  warningMessages.length = 0;
   const provider = new ImagePanelProvider({ subscriptions: [] }, {
-    ledgerWriter: { listStagedAssets: async () => ({ assets: [] }) }
+    ledgerWriter: {
+      savePlacement: async () => {
+        throw new Error('should not save');
+      },
+      listStagedAssets: async () => ({ assets: [] })
+    }
   });
 
   await provider._handlePlace({ source: 'd1' });
   await provider._handleDiscard({ source: 'd1' });
 
-  assert.strictEqual(infoMessages.length, 2);
-  assert.match(infoMessages[0], /placement saga UI/);
-  assert.match(infoMessages[1], /D1 discard is not wired/);
+  assert.strictEqual(warningMessages.length, 1);
+  assert.match(warningMessages[0], /Open the target markdown draft/);
+  assert.strictEqual(infoMessages.length, 1);
+  assert.match(infoMessages[0], /D1 discard is not wired/);
+}
+
+async function testD1PlaceCreatesPlannedPlacement() {
+  infoMessages.length = 0;
+  warningMessages.length = 0;
+  quickPickValues.length = 0;
+  inputBoxValues.length = 0;
+  quickPickValues.push('substack');
+  inputBoxValues.push('3');
+
+  const calls = [];
+  const sent = [];
+  fakeVscode.window.activeTextEditor = fakeEditor();
+
+  const provider = new ImagePanelProvider({ subscriptions: [] }, {
+    ledgerWriter: {
+      savePlacement: async payload => {
+        calls.push(payload);
+        return { placement: payload.placement, saga: payload.saga };
+      },
+      listStagedAssets: async () => ({ assets: [] })
+    }
+  });
+  provider._view = { webview: { postMessage: message => sent.push(message) } };
+
+  const result = await provider._handlePlace({
+    source: 'd1',
+    id: 'asset-1',
+    name: 'river-map',
+    displayName: 'River Map'
+  });
+
+  assert.strictEqual(calls.length, 1);
+  assert.strictEqual(calls[0].contentDraft.draftPath, 'drafts/part-09.md');
+  assert.strictEqual(calls[0].placement.assetId, 'asset-1');
+  assert.strictEqual(calls[0].placement.contentDraftId, calls[0].contentDraft.id);
+  assert.strictEqual(calls[0].placement.target, 'substack');
+  assert.strictEqual(calls[0].placement.figureNumber, '3');
+  assert.strictEqual(calls[0].placement.snippetFormat, 'html-figure');
+  assert.strictEqual(calls[0].placement.status, 'planned');
+  assert.strictEqual(calls[0].saga.assetId, 'asset-1');
+  assert.strictEqual(calls[0].saga.assetPlacementId, calls[0].placement.id);
+  assert.strictEqual(calls[0].saga.status, 'running');
+  assert.strictEqual(result.placement.id, calls[0].placement.id);
+  assert.strictEqual(sent.at(-1).type, 'staged');
+  assert.match(infoMessages.at(-1), /Planned substack placement/);
+
+  fakeVscode.window.activeTextEditor = null;
+}
+
+function fakeEditor() {
+  const lines = [
+    '# Water Part IX',
+    '',
+    'Some intro.',
+    '',
+    '## Maps',
+    'Dense paragraph.'
+  ];
+  const document = {
+    uri: { fsPath: '/repo/drafts/part-09.md' },
+    lineCount: lines.length,
+    lineAt: index => ({ text: lines[index] || '' }),
+    getText: selection => selection ? 'Dense paragraph.' : '<figcaption>Figure 2: Existing</figcaption>'
+  };
+  const position = { line: 5 };
+  return {
+    document,
+    selection: {
+      active: position,
+      start: position,
+      end: position
+    }
+  };
 }
 
 async function run() {
   await testLoadsD1StagedAssets();
   await testD1ActionsAreGuarded();
+  await testD1PlaceCreatesPlannedPlacement();
   console.log('imagePanelProvider tests passed');
 }
 

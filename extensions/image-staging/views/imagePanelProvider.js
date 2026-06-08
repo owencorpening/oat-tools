@@ -5,6 +5,10 @@ const { getServiceAccountToken } = require('../lib/serviceAccountAuth');
 const { getStagedImages, updateRow } = require('../lib/imageStagingSheet');
 const { placeImage, discardPlaced } = require('../lib/imageWorkflow');
 const { resolveThumbUrl } = require('../lib/thumbResolver');
+const {
+  buildContentDraftRecord,
+  buildDraftLocation
+} = require('../lib/reviewImageNeedCommand');
 
 class ImagePanelProvider {
   static viewId = 'oatImages.panel';
@@ -92,8 +96,7 @@ class ImagePanelProvider {
 
   async _handlePlace(image) {
     if (image && image.source === 'd1') {
-      vscode.window.showInformationMessage('OAT: D1 staged assets are visible; placement saga UI is the next step.');
-      return;
+      return this._handleD1Place(image);
     }
 
     const target = await vscode.window.showQuickPick(
@@ -147,6 +150,60 @@ class ImagePanelProvider {
 
     vscode.window.showInformationMessage(`OAT: Image placed as ${target}.`);
     await this._loadStaged();
+  }
+
+  async _handleD1Place(image) {
+    if (!this._ledgerWriter || !this._ledgerWriter.savePlacement) {
+      vscode.window.showWarningMessage('OAT: Set oatImages.ledgerApiUrl before creating D1 placements.');
+      return null;
+    }
+
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      vscode.window.showWarningMessage('OAT: Open the target markdown draft before placing a D1 asset.');
+      return null;
+    }
+
+    const target = await vscode.window.showQuickPick(
+      ['substack', 'carousel', 'linkedin-post'],
+      { placeHolder: 'Publishing target' }
+    );
+    if (!target) return null;
+
+    const defaultFigureNumber = nextFigureNumberHint(editor);
+    const figureNumber = await vscode.window.showInputBox({
+      prompt: target === 'substack' ? 'Figure number' : 'Figure number or handoff label',
+      value: defaultFigureNumber,
+      validateInput: value => target === 'substack' && !String(value || '').trim() ? 'Required for Substack' : null
+    });
+    if (figureNumber === undefined) return null;
+
+    const contentDraft = buildContentDraftRecord({ vscode, editor });
+    const placement = {
+      id: placementId({ assetId: image.id, contentDraftId: contentDraft.id, target, figureNumber }),
+      assetId: image.id,
+      contentDraftId: contentDraft.id,
+      target,
+      figureNumber: String(figureNumber || '').trim() || undefined,
+      draftLocation: buildDraftLocation(editor),
+      snippetFormat: snippetFormatForTarget(target),
+      status: 'planned'
+    };
+    const saga = {
+      id: sagaId(placement.id),
+      assetId: image.id,
+      assetPlacementId: placement.id,
+      currentStep: 1,
+      status: 'running',
+      resolution: 'auto-retry',
+      compensation: 'Ready for local placement saga'
+    };
+
+    await this._ledgerWriter.savePlacement({ contentDraft, placement, saga });
+    vscode.window.showInformationMessage(`OAT: Planned ${target} placement for ${image.displayName || image.name}.`);
+    await this._loadStaged();
+
+    return { contentDraft, placement, saga };
   }
 
   // ── Discard ───────────────────────────────────────────────────────────────
@@ -398,6 +455,38 @@ function normalizeD1AssetForPanel(asset) {
     sourceUrl,
     sourceName: asset.source_name || asset.sourceName || ''
   };
+}
+
+function snippetFormatForTarget(target) {
+  if (target === 'substack') return 'html-figure';
+  if (target === 'carousel') return 'marp-image';
+  if (target === 'linkedin-post') return 'linkedin-handoff-text';
+  return 'other';
+}
+
+function nextFigureNumberHint(editor) {
+  const document = editor && editor.document;
+  if (!document || typeof document.getText !== 'function') return '';
+
+  const matches = document.getText().match(/Figure\s+(\d+)/gi) || [];
+  const numbers = matches
+    .map(match => Number((match.match(/\d+/) || [])[0]))
+    .filter(Number.isFinite);
+  if (numbers.length === 0) return '';
+
+  return String(Math.max(...numbers) + 1);
+}
+
+function placementId({ assetId, contentDraftId, target, figureNumber }) {
+  return `placement_${shortHash(`${assetId}:${contentDraftId}:${target}:${figureNumber || ''}`)}`;
+}
+
+function sagaId(placementIdValue) {
+  return `saga_${shortHash(placementIdValue)}`;
+}
+
+function shortHash(value) {
+  return crypto.createHash('sha1').update(String(value)).digest('hex').slice(0, 16);
 }
 
 function getSetting(key, defaultValue) {
