@@ -172,6 +172,9 @@ they are accepted for publication.
 
 Images can enter the pipeline from several places:
 
+- **Author draft review:** the author is reading an open markdown draft and
+  notices a spot where a visual should go. This is the human trigger for the
+  Downloads path, bookmarklet path, or existing-staged-image path.
 - **D1 bookmarklet captures:** images captured in the browser by the bookmarklet
   in `tools/bookmarklet`. The bookmarklet posts page/source metadata to the
   ledger Worker, which enriches provider metadata when API keys are configured

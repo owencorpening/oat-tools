@@ -3,6 +3,8 @@
 Use this when you want the shortest path from an image idea to a planned image
 placement.
 
+Primary actor: an author reviewing a draft markdown file.
+
 The image notebook is where the tool tracks possible images, why you need them,
 where they should go, and what should happen next.
 
@@ -28,49 +30,63 @@ your draft, commits and pushes Git changes, or marks the image fully placed.
 
 ```mermaid
 flowchart LR
-  A[Capture or add image] --> B[Review staged image]
-  B --> C[Click Place]
-  C --> D[Create planned placement]
-  D --> E[List planned placements]
-  E --> F[Copy placement instructions]
-  F --> G[Execute planned placement]
+  A[Author reviews draft] --> B{Image needed?}
+  B --> C[Download to Downloads]
+  B --> D[Capture with bookmarklet]
+  B --> E[Use staged sidebar image]
+  C --> F[Intake local file]
+  D --> G[Review staged image]
+  E --> G
+  F --> G
+  G --> H[Click Place]
+  H --> I[Create planned placement]
+  I --> J[Execute planned placement]
 ```
 
 ## Seven Frames
 
-Frame 1: Add an image to the notebook.
+Frame 1: Notice the image opportunity.
+
+- While reviewing the markdown draft, the author sees a spot where an image
+  should go.
+- If the image is already staged, skip to Frame 3.
+- If the author needs to find one, use either the Downloads path or the
+  bookmarklet path.
+
+Frame 2: Add an image to the notebook.
 
 - For one-click browser capture, click the OAT D1 image capture bookmarklet.
-- For a web image, run `OAT Images: Intake URL`.
-- For a local image, run `OAT Images: Intake Local File`.
+- For a browsed image downloaded to `~/Downloads`, run
+  `OAT Images: Intake Local File`.
+- For a URL copied manually, run `OAT Images: Intake URL`.
 - For a late-review visual gap, run `OAT Images: Create Review Image Need`.
 
-Frame 2: Open the staging panel.
+Frame 3: Open the staging panel.
 
 - Open the `OAT Image Staging` activity bar view.
 - Run `OAT Images: Refresh Image Panel` if the panel looks stale.
 - With `oatImages.ledgerApiUrl` set, the panel reads staged images from the
   notebook.
 
-Frame 3: Plan a placement.
+Frame 4: Plan a placement.
 
 - Open the target markdown draft.
 - In the image panel, click `Place` on a staged image.
 - Pick `substack`, `carousel`, or `linkedin-post`.
 - Enter the figure number or handoff label.
 
-Frame 4: Confirm the planned work exists.
+Frame 5: Confirm the planned work exists.
 
 - Run `OAT Images: List Planned Image Placements`.
 - Pick a placement to copy its notebook record if you want to inspect it.
 
-Frame 5: Copy placement instructions.
+Frame 6: Copy placement instructions.
 
 - Run `OAT Images: Prepare Planned Placement Run`.
 - Pick the planned placement.
 - The command copies placement instructions to the clipboard.
 
-Frame 6: Know what the instructions are for.
+Frame 7: Execute when ready.
 
 The copied instructions are for the next automation step. They include:
 
@@ -80,8 +96,6 @@ The copied instructions are for the next automation step. They include:
 - which planned placement should be updated
 - whether the automation should download and commit the image
 
-Frame 7: Execute when ready.
-
 The safe stopping point is the copied JSON from `Prepare Planned Placement Run`.
 When you are ready for local side effects, run
 `OAT Images: Execute Planned Placement Run`. It confirms before writing asset
@@ -90,11 +104,13 @@ marking the placement as done.
 
 ## Most Common Path
 
-1. Run `OAT Images: Intake URL`.
-2. Open `OAT Image Staging`.
-3. Click `Place` on the staged image.
-4. Run `OAT Images: Prepare Planned Placement Run`.
-5. Run `OAT Images: Execute Planned Placement Run` when the draft is open and
+1. Review the markdown draft until an image opportunity appears.
+2. Capture an image with the bookmarklet, intake a downloaded file, or choose an
+   existing staged image from the sidebar.
+3. Open `OAT Image Staging`.
+4. Click `Place` on the staged image.
+5. Run `OAT Images: Prepare Planned Placement Run`.
+6. Run `OAT Images: Execute Planned Placement Run` when the draft is open and
    you are ready to write files and update the ledger.
 
 ## Command Cheat Sheet

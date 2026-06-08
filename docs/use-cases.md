@@ -40,6 +40,22 @@ configured. In this stack, the image ledger is backed by Cloudflare D1. The
 image pipeline does not use Google Sheets for capture, staging, placement, or
 discard state.
 
+## Actor: Author Reviewing A Draft
+
+Use this actor when an author has a markdown draft open and is reading for
+publication quality. During review, the author may notice a place where a visual
+would clarify, break up, or strengthen the draft.
+
+The author has three common paths:
+
+1. Browse for an image, download it to `~/Downloads`, and run
+   `OAT Images: Intake Local File`.
+2. Browse for an image and click the D1 image capture bookmarklet to stage it.
+3. Use an image that is already staged in the `OAT Image Staging` sidebar.
+
+All three paths converge on the same action: review the staged image, click
+`Place`, and create a planned placement for the open draft.
+
 ## Use Case: Capture a Web Image With the Bookmarklet
 
 Use the D1 image capture bookmarklet when you are browsing Unsplash, Pexels,
@@ -126,7 +142,8 @@ Common sources:
 
 Steps:
 
-1. Choose or detect the local image file.
+1. While reviewing the draft, browse for an image and download it to
+   `~/Downloads`, or choose another local image file.
 2. Infer a proposed image name and any metadata from the filename.
 3. Ask for missing provenance: source URL, creator or photographer, and license.
 4. Normalize the image into the same record shape as a ledger asset record.
@@ -171,7 +188,8 @@ ledger and is ready to be planned for an article, carousel, or LinkedIn handoff.
 
 Steps:
 
-1. Open the target draft in VS Code.
+1. Open the target draft in VS Code and review to the spot where the image
+   should go.
 2. Open the `OAT Image Staging` activity bar panel.
 3. Click refresh if the staged images do not load automatically.
 4. Review the thumbnail, photographer, license, and URL for the image.
