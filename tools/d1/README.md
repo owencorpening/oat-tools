@@ -66,6 +66,14 @@ Endpoints:
   `UNSPLASH_ACCESS_KEY` or `PEXELS_ACCESS_KEY` is configured, the Worker also
   asks the provider API for authoritative photographer metadata before writing
   the asset.
+- `GET /image-providers` lists enabled image search providers. Pexels appears
+  when `PEXELS_ACCESS_KEY` is configured.
+- `GET /image-providers/search?q=wetland&providers=pexels` searches enabled
+  providers and returns normalized results with source URL, direct image URL,
+  photographer, license, and attribution fields.
+- `POST /captures/provider-image` stages a selected provider result as a D1
+  `asset`. For Pexels, the Worker resolves the selected photo ID before writing
+  the staged asset when the API key is available.
 - `POST /review-image-needs` with `{ "contentDraft": { ... }, "imageNeed": { ... } }`
 - `POST /placements` with `{ "contentDraft": { ... }, "placement": { ... }, "saga": { ... } }`
 - `POST /sagas/:id/step`

@@ -1,6 +1,7 @@
 'use strict';
 
 const ledger = require('../../../extensions/image-staging/lib/assetLedgerD1');
+const pexels = require('./imageProviders/pexels');
 
 async function fetch(request, env) {
   return handleRequest(request, env);
@@ -16,11 +17,20 @@ async function handleRequest(request, env = {}) {
     authorize(request, env);
 
     const url = new URL(request.url);
+    if (request.method === 'GET' && url.pathname === '/image-providers') {
+      return json(await handleListImageProviders(env));
+    }
+    if (request.method === 'GET' && url.pathname === '/image-providers/search') {
+      return json(await handleSearchImageProviders(url, env));
+    }
     if (request.method === 'POST' && url.pathname === '/assets') {
       return json(await handleCreateAsset(request, env.DB), 201);
     }
     if (request.method === 'POST' && url.pathname === '/captures/image') {
       return json(await handleCaptureImage(request, env), 201);
+    }
+    if (request.method === 'POST' && url.pathname === '/captures/provider-image') {
+      return json(await handleCaptureProviderImage(request, env), 201);
     }
     if (request.method === 'POST' && url.pathname === '/review-image-needs') {
       return json(await handleCreateReviewImageNeed(request, env.DB), 201);
@@ -75,6 +85,37 @@ async function handleRequest(request, env = {}) {
     const status = error.status || 500;
     return json({ error: error.message }, status);
   }
+}
+
+async function handleListImageProviders(env = {}) {
+  const providers = [];
+  if (pexels.isEnabled(env)) providers.push(pexels.descriptor());
+  return { providers };
+}
+
+async function handleSearchImageProviders(url, env = {}) {
+  const query = String(url.searchParams.get('q') || '').trim();
+  if (!query) throw httpError(400, 'Missing q');
+
+  const requestedProviders = providerList(url.searchParams.get('providers'));
+  const page = url.searchParams.get('page') || 1;
+  const perPage = url.searchParams.get('perPage') || url.searchParams.get('per_page') || 12;
+  const providers = [];
+  const results = [];
+
+  if (requestedProviders.includes('pexels') && pexels.isEnabled(env)) {
+    const pexelsResults = await pexels.search({ query, page, perPage }, env);
+    providers.push(pexels.descriptor());
+    results.push(...pexelsResults.results);
+  }
+
+  return { query, providers, results };
+}
+
+async function handleCaptureProviderImage(request, env = {}) {
+  const body = await readJson(request);
+  const asset = await normalizeProviderAsset(body, env);
+  return { asset: await ledger.createAsset(env.DB, asset) };
 }
 
 async function handleMarkSagaStep(request, db, sagaId) {
@@ -152,6 +193,51 @@ async function handleCaptureImage(request, env) {
   return { asset: await ledger.createAsset(env.DB, asset) };
 }
 
+async function normalizeProviderAsset(input = {}, env = {}) {
+  const result = input.result || input;
+  const provider = first(input.provider, result.provider);
+  if (provider !== 'pexels') throw httpError(400, 'Unsupported provider');
+
+  const providerId = first(input.providerId, input.id, result.providerId);
+  const resolved = await pexels.resolve({
+    providerId,
+    sourceUrl: first(input.sourceUrl, result.sourceUrl)
+  }, env);
+  const normalized = {
+    ...result,
+    ...resolved,
+    provider: 'pexels',
+    providerId: first(resolved.providerId, providerId, result.providerId)
+  };
+
+  const sourceUrl = first(normalized.sourceUrl, input.sourceUrl);
+  const imageSrc = first(normalized.imageSrc, input.imageSrc);
+  const photographer = first(normalized.photographer, input.photographer, 'UNKNOWN');
+  const license = first(input.license, normalized.license, licenseForSource(sourceUrl));
+  const displayName = first(input.displayName, normalized.title, titleFromUrl(sourceUrl));
+  if (!sourceUrl) throw httpError(400, 'Missing sourceUrl');
+
+  return {
+    id: first(input.assetId, newAssetId()),
+    assetType: 'image',
+    slug: first(input.slug, slugFromName(displayName)),
+    displayName,
+    sourceName: first(input.sourceName, `${normalized.provider}:${normalized.providerId}`, displayName),
+    sourceUrl,
+    imageSrc,
+    photographer,
+    license,
+    attribution: first(input.attribution, normalized.attribution, attributionFor({
+      displayName,
+      photographer,
+      sourceUrl,
+      license
+    })),
+    intakeSection: emptyToUndefined(input.intakeSection),
+    status: 'staged'
+  };
+}
+
 async function normalizeCapturedAsset(input = {}, env = {}) {
   const sourceUrl = first(input.sourceUrl, input.url);
   if (!sourceUrl) throw httpError(400, 'Missing sourceUrl');
@@ -159,7 +245,7 @@ async function normalizeCapturedAsset(input = {}, env = {}) {
   const metadata = await resolveCapturedMetadata(sourceUrl, env);
   const displayName = first(input.displayName, input.name, input.pageTitle, titleFromUrl(sourceUrl));
   const photographer = first(metadata.photographer, input.photographer, 'UNKNOWN');
-  const license = first(input.license, licenseForSource(sourceUrl));
+  const license = first(input.license, metadata.license, licenseForSource(sourceUrl));
   const imageSrc = first(input.imageSrc, input.image_src, metadata.imageSrc);
 
   return {
@@ -208,9 +294,9 @@ async function resolveCapturedMetadata(sourceUrl, env = {}) {
     return fetchUnsplashMetadata(unsplashId, env);
   }
 
-  const pexelsId = extractPexelsPhotoId(sourceUrl);
+  const pexelsId = pexels.extractPhotoId(sourceUrl);
   if (pexelsId && env.PEXELS_ACCESS_KEY) {
-    return fetchPexelsMetadata(pexelsId, env);
+    return pexels.resolve({ providerId: pexelsId }, env);
   }
 
   return {};
@@ -225,18 +311,6 @@ async function fetchUnsplashMetadata(photoId, env) {
   return {
     photographer: data && data.user && data.user.name,
     imageSrc: data && data.urls && (data.urls.regular || data.urls.raw || data.urls.full)
-  };
-}
-
-async function fetchPexelsMetadata(photoId, env) {
-  const data = await fetchJson(
-    `https://api.pexels.com/v1/photos/${encodeURIComponent(photoId)}`,
-    { headers: { Authorization: env.PEXELS_ACCESS_KEY } },
-    env
-  );
-  return {
-    photographer: data && data.photographer,
-    imageSrc: data && data.src && (data.src.large2x || data.src.large || data.src.original)
   };
 }
 
@@ -261,20 +335,6 @@ function extractUnsplashPhotoId(sourceUrl) {
     const photosIndex = parts.indexOf('photos');
     if (photosIndex === -1 || !parts[photosIndex + 1]) return '';
     return parts[photosIndex + 1];
-  } catch {
-    return '';
-  }
-}
-
-function extractPexelsPhotoId(sourceUrl) {
-  try {
-    const parsed = new URL(sourceUrl);
-    if (!/(^|\.)pexels\.com$/i.test(parsed.hostname)) return '';
-    const parts = parsed.pathname.split('/').filter(Boolean);
-    const photoIndex = parts.indexOf('photo');
-    const slug = photoIndex === -1 ? parts[parts.length - 1] : parts[photoIndex + 1];
-    const idMatch = String(slug || '').match(/(\d+)$/);
-    return idMatch ? idMatch[1] : '';
   } catch {
     return '';
   }
@@ -429,6 +489,14 @@ function first(...values) {
   return undefined;
 }
 
+function providerList(value) {
+  const providers = String(value || 'pexels')
+    .split(',')
+    .map(provider => provider.trim().toLowerCase())
+    .filter(Boolean);
+  return providers.length === 0 ? ['pexels'] : providers;
+}
+
 function emptyToUndefined(value) {
   if (value === undefined || value === null) return undefined;
   const clean = String(value).trim();
@@ -438,8 +506,12 @@ function emptyToUndefined(value) {
 module.exports = {
   fetch,
   handleRequest,
+  handleListImageProviders,
+  handleSearchImageProviders,
   handleCreateAsset,
   handleCaptureImage,
+  handleCaptureProviderImage,
+  normalizeProviderAsset,
   normalizeCapturedAsset,
   handleCreateReviewImageNeed,
   handleCreatePlacement,

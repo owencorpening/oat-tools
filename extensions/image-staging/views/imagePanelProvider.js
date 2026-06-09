@@ -30,6 +30,8 @@ class ImagePanelProvider {
       try {
         switch (msg.type) {
           case 'refresh': return await this._loadStaged();
+          case 'providerSearch': return await this._handleProviderSearch(msg);
+          case 'stageProviderImage': return await this._handleStageProviderImage(msg.result);
           case 'place':   return await this._handlePlace(msg.image);
           case 'discard': return await this._handleDiscard(msg.image);
         }
@@ -53,7 +55,19 @@ class ImagePanelProvider {
       return;
     }
 
+    await this._loadProviders();
     await this._loadD1Staged();
+  }
+
+  async _loadProviders() {
+    if (!this._ledgerWriter || !this._ledgerWriter.listImageProviders) return;
+
+    try {
+      const result = await this._ledgerWriter.listImageProviders();
+      this._send({ type: 'providers', providers: Array.isArray(result?.providers) ? result.providers : [] });
+    } catch {
+      this._send({ type: 'providers', providers: [] });
+    }
   }
 
   async _loadD1Staged() {
@@ -65,6 +79,48 @@ class ImagePanelProvider {
     } catch (err) {
       this._send({ type: 'error', message: err.message });
     }
+  }
+
+  async _handleProviderSearch({ query, providers } = {}) {
+    if (!this._ledgerWriter || !this._ledgerWriter.searchImageProviders) {
+      this._send({ type: 'error', message: 'Set oatImages.ledgerApiUrl to search provider images.' });
+      return null;
+    }
+
+    const cleanQuery = String(query || '').trim();
+    if (!cleanQuery) {
+      this._send({ type: 'providerResults', query: cleanQuery, results: [] });
+      return { query: cleanQuery, results: [] };
+    }
+
+    const result = await this._ledgerWriter.searchImageProviders({
+      query: cleanQuery,
+      providers: providers && providers.length ? providers : ['pexels'],
+      perPage: 12
+    });
+    const results = Array.isArray(result?.results) ? result.results : [];
+    this._send({ type: 'providerResults', query: cleanQuery, results });
+    return { query: cleanQuery, results };
+  }
+
+  async _handleStageProviderImage(result) {
+    if (!this._ledgerWriter || !this._ledgerWriter.stageProviderImage) {
+      vscode.window.showWarningMessage('OAT: Set oatImages.ledgerApiUrl before staging provider images.');
+      return null;
+    }
+    if (!result || !result.provider) return null;
+
+    const response = await this._ledgerWriter.stageProviderImage({
+      provider: result.provider,
+      providerId: result.providerId,
+      sourceUrl: result.sourceUrl,
+      result
+    });
+
+    vscode.window.showInformationMessage(`OAT: Staged ${result.title || result.sourceUrl || 'provider image'}.`);
+    this._send({ type: 'providerStaged', asset: response && response.asset });
+    await this._loadStaged();
+    return response;
   }
 
   // ── Place ─────────────────────────────────────────────────────────────────
@@ -181,7 +237,37 @@ body {
   cursor: pointer; font-size: 14px; padding: 2px 5px; border-radius: 3px;
 }
 .refresh-btn:hover { background: var(--vscode-toolbar-hoverBackground); }
+.searchbar {
+  display: grid; grid-template-columns: 1fr auto;
+  gap: 6px; padding: 7px 8px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+.search-input {
+  min-width: 0; padding: 4px 6px;
+  border: 1px solid var(--vscode-input-border, transparent);
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  font-family: var(--vscode-font-family);
+  font-size: 12px;
+}
+.search-btn {
+  padding: 4px 8px; border: none; border-radius: 3px;
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  cursor: pointer; font-family: var(--vscode-font-family);
+  font-size: 12px;
+}
+.search-btn:hover { background: var(--vscode-button-hoverBackground); }
+.search-input:disabled,
+.search-btn:disabled {
+  opacity: 0.55; cursor: not-allowed;
+}
+.section-title {
+  padding: 7px 8px 4px;
+  font-size: 11px; opacity: 0.72; text-transform: uppercase;
+}
 #status { padding: 16px; text-align: center; opacity: 0.6; font-size: 12px; }
+.search-status { padding: 8px; opacity: 0.6; font-size: 11px; }
 .error { color: var(--vscode-errorForeground); }
 .card { border-bottom: 1px solid var(--vscode-panel-border); }
 .thumb-wrap {
@@ -209,6 +295,11 @@ body {
   color: var(--vscode-button-foreground);
 }
 .btn-place:hover { background: var(--vscode-button-hoverBackground); }
+.btn-stage {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+.btn-stage:hover { background: var(--vscode-button-hoverBackground); }
 .btn-discard {
   background: var(--vscode-button-secondaryBackground);
   color: var(--vscode-button-secondaryForeground);
@@ -221,12 +312,20 @@ body {
   <span class="count" id="count"></span>
   <button class="refresh-btn" id="refreshBtn" title="Refresh">↻</button>
 </div>
+<form class="searchbar" id="searchForm">
+  <input class="search-input" id="searchInput" type="search" placeholder="Search Pexels">
+  <button class="search-btn" type="submit">Search</button>
+</form>
+<div id="searchStatus" class="search-status" style="display:none"></div>
+<div id="results"></div>
 <div id="status">Loading…</div>
 <div id="list"></div>
 
 <script nonce="${nonce}">
 const vscode = acquireVsCodeApi();
 let images = [];
+let providerResults = [];
+let availableProviders = [{ id: 'pexels', label: 'Pexels' }];
 
 document.getElementById('refreshBtn').addEventListener('click', () => {
   document.getElementById('status').textContent = 'Loading…';
@@ -235,6 +334,15 @@ document.getElementById('refreshBtn').addEventListener('click', () => {
   document.getElementById('list').innerHTML = '';
   document.getElementById('count').textContent = '';
   vscode.postMessage({ type: 'refresh' });
+});
+
+document.getElementById('searchForm').addEventListener('submit', event => {
+  event.preventDefault();
+  const query = document.getElementById('searchInput').value.trim();
+  if (!query) return;
+  providerResults = [];
+  renderProviderResults('Searching…');
+  vscode.postMessage({ type: 'providerSearch', query, providers: ['pexels'] });
 });
 
 let _timeoutId = null;
@@ -247,6 +355,14 @@ window.addEventListener('message', e => {
     clearTimeout(_timeoutId);
     images = msg.images;
     render();
+  } else if (msg.type === 'providers') {
+    availableProviders = msg.providers || [];
+    renderProviderAvailability();
+  } else if (msg.type === 'providerResults') {
+    providerResults = msg.results || [];
+    renderProviderResults(providerResults.length ? '' : 'No provider results.');
+  } else if (msg.type === 'providerStaged') {
+    renderProviderResults('Staged.');
   } else if (msg.type === 'error') {
     clearTimeout(_timeoutId);
     document.getElementById('status').textContent = '⚠ ' + msg.message;
@@ -256,6 +372,63 @@ window.addEventListener('message', e => {
     document.getElementById('count').textContent = '';
   }
 });
+
+function renderProviderAvailability() {
+  const input = document.getElementById('searchInput');
+  const button = document.querySelector('.search-btn');
+  const enabled = availableProviders.some(provider => provider.id === 'pexels');
+  input.disabled = !enabled;
+  button.disabled = !enabled;
+  input.placeholder = enabled ? 'Search Pexels' : 'Pexels unavailable';
+}
+
+function renderProviderResults(message) {
+  const results = document.getElementById('results');
+  const searchStatus = document.getElementById('searchStatus');
+
+  if (message) {
+    searchStatus.textContent = message;
+    searchStatus.style.display = 'block';
+  } else {
+    searchStatus.textContent = '';
+    searchStatus.style.display = 'none';
+  }
+
+  if (providerResults.length === 0) {
+    results.innerHTML = '';
+    return;
+  }
+
+  results.innerHTML = '<div class="section-title">Provider Results</div>' + providerResults.map((img, i) => {
+    const thumbHtml = img.thumbnailUrl || img.imageSrc
+      ? '<img class="thumb" src="' + esc(img.thumbnailUrl || img.imageSrc) + '" alt="" loading="lazy">'
+      : '<div class="no-thumb">No preview</div>';
+    return (
+      '<div class="card">' +
+        '<div class="thumb-wrap">' + thumbHtml + '</div>' +
+        '<div class="meta">' +
+          '<div class="photographer">' + esc(img.photographer || '(no photographer)') + '</div>' +
+          '<div class="license">'      + esc(img.license      || '')                  + '</div>' +
+          '<div class="url-line">'     + esc(img.sourceUrl    || '')                  + '</div>' +
+        '</div>' +
+        '<div class="actions">' +
+          '<button class="btn btn-stage" data-i="' + i + '">Stage</button>' +
+        '</div>' +
+      '</div>'
+    );
+  }).join('');
+
+  results.querySelectorAll('.thumb').forEach(img => {
+    img.addEventListener('error', function() {
+      this.parentNode.innerHTML = '<div class="no-thumb">No preview</div>';
+    });
+  });
+  results.querySelectorAll('.btn-stage').forEach(btn => {
+    btn.addEventListener('click', function() {
+      vscode.postMessage({ type: 'stageProviderImage', result: providerResults[+this.dataset.i] });
+    });
+  });
+}
 
 function render() {
   const status = document.getElementById('status');
@@ -273,7 +446,7 @@ function render() {
 
   status.style.display = 'none';
   count.textContent = images.length + ' staged';
-  list.innerHTML = images.map((img, i) => {
+  list.innerHTML = '<div class="section-title">Staged Images</div>' + images.map((img, i) => {
     const thumbHtml = img.thumbUrl
       ? '<img class="thumb" src="' + esc(img.thumbUrl) + '" alt="" loading="lazy">'
       : '<div class="no-thumb">No preview</div>';

@@ -44,6 +44,9 @@ async function testClientPostsExpectedPayloads() {
     error: new Error('download failed'),
     resolution: 'manual-review'
   });
+  await client.listImageProviders();
+  await client.searchImageProviders({ query: 'wetland', providers: ['pexels'], page: 2, perPage: 12 });
+  await client.stageProviderImage({ provider: 'pexels', providerId: '1234' });
 
   assert.strictEqual(calls[0][0], 'https://ledger.example.com/api/review-image-needs');
   assert.strictEqual(calls[0][1].method, 'POST');
@@ -74,6 +77,13 @@ async function testClientPostsExpectedPayloads() {
   assert.strictEqual(calls[12][1].body.assetId, 'asset-1');
   assert.strictEqual(calls[13][0], 'https://ledger.example.com/api/sagas/saga-1/failed');
   assert.strictEqual(calls[13][1].body.error, 'download failed');
+  assert.strictEqual(calls[14][0], 'https://ledger.example.com/api/image-providers');
+  assert.strictEqual(calls[14][1].method, 'GET');
+  assert.strictEqual(calls[15][0], 'https://ledger.example.com/api/image-providers/search?q=wetland&providers=pexels&page=2&perPage=12');
+  assert.strictEqual(calls[15][1].method, 'GET');
+  assert.strictEqual(calls[16][0], 'https://ledger.example.com/api/captures/provider-image');
+  assert.strictEqual(calls[16][1].method, 'POST');
+  assert.deepStrictEqual(calls[16][1].body, { provider: 'pexels', providerId: '1234' });
 }
 
 function testSettingsFactory() {
@@ -86,6 +96,9 @@ function testSettingsFactory() {
   assert.strictEqual(empty, null);
   assert.strictEqual(typeof client.saveAsset, 'function');
   assert.strictEqual(typeof client.savePlacement, 'function');
+  assert.strictEqual(typeof client.listImageProviders, 'function');
+  assert.strictEqual(typeof client.searchImageProviders, 'function');
+  assert.strictEqual(typeof client.stageProviderImage, 'function');
   assert.strictEqual(typeof client.listOpenNeeds, 'function');
   assert.strictEqual(typeof client.listPlannedPlacements, 'function');
   assert.strictEqual(typeof client.discardAsset, 'function');

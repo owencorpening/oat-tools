@@ -167,6 +167,82 @@ async function testD1DiscardMarksAssetDiscarded() {
   assert.strictEqual(sent.at(-1).type, 'staged');
 }
 
+async function testProviderSearchSendsResults() {
+  const sent = [];
+  const calls = [];
+  const provider = new ImagePanelProvider({ subscriptions: [] }, {
+    ledgerWriter: {
+      searchImageProviders: async payload => {
+        calls.push(payload);
+        return {
+          results: [
+            {
+              provider: 'pexels',
+              providerId: '1234',
+              title: 'Wetland',
+              sourceUrl: 'https://www.pexels.com/photo/wetland-1234/',
+              imageSrc: 'https://images.pexels.com/photos/1234/large.jpeg',
+              photographer: 'Pexels Photographer',
+              license: 'Pexels License'
+            }
+          ]
+        };
+      }
+    }
+  });
+  provider._view = { webview: { postMessage: message => sent.push(message) } };
+
+  const result = await provider._handleProviderSearch({ query: ' wetland ', providers: ['pexels'] });
+
+  assert.deepStrictEqual(calls, [{ query: 'wetland', providers: ['pexels'], perPage: 12 }]);
+  assert.strictEqual(result.results.length, 1);
+  assert.strictEqual(sent.at(-1).type, 'providerResults');
+  assert.strictEqual(sent.at(-1).results[0].providerId, '1234');
+}
+
+async function testStageProviderImageCreatesAssetAndRefreshes() {
+  infoMessages.length = 0;
+
+  const calls = [];
+  const sent = [];
+  const provider = new ImagePanelProvider({ subscriptions: [] }, {
+    ledgerWriter: {
+      stageProviderImage: async payload => {
+        calls.push(payload);
+        return { asset: { id: 'asset-1' } };
+      },
+      listStagedAssets: async () => ({
+        assets: [
+          {
+            id: 'asset-1',
+            slug: 'wetland',
+            display_name: 'Wetland',
+            source_url: 'https://www.pexels.com/photo/wetland-1234/',
+            status: 'staged'
+          }
+        ]
+      })
+    }
+  });
+  provider._view = { webview: { postMessage: message => sent.push(message) } };
+
+  const response = await provider._handleStageProviderImage({
+    provider: 'pexels',
+    providerId: '1234',
+    title: 'Wetland',
+    sourceUrl: 'https://www.pexels.com/photo/wetland-1234/'
+  });
+
+  assert.strictEqual(response.asset.id, 'asset-1');
+  assert.strictEqual(calls.length, 1);
+  assert.strictEqual(calls[0].provider, 'pexels');
+  assert.strictEqual(calls[0].providerId, '1234');
+  assert.strictEqual(calls[0].result.title, 'Wetland');
+  assert.strictEqual(sent.some(message => message.type === 'providerStaged'), true);
+  assert.strictEqual(sent.at(-1).type, 'staged');
+  assert.match(infoMessages.at(-1), /Staged Wetland/);
+}
+
 function fakeEditor() {
   const lines = [
     '# Water Part IX',
@@ -198,6 +274,8 @@ async function run() {
   await testD1ActionsAreGuarded();
   await testD1PlaceCreatesPlannedPlacement();
   await testD1DiscardMarksAssetDiscarded();
+  await testProviderSearchSendsResults();
+  await testStageProviderImageCreatesAssetAndRefreshes();
   console.log('imagePanelProvider tests passed');
 }
 

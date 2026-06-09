@@ -65,6 +65,84 @@ async function testCaptureImage() {
   ]);
 }
 
+async function testPexelsProviderRoutes() {
+  let response = await handleRequest(new Request('https://ledger.test/image-providers'), { DB: new FakeD1() });
+  let body = await response.json();
+  assert.strictEqual(response.status, 200);
+  assert.deepStrictEqual(body.providers, []);
+
+  const fetched = [];
+  const env = {
+    DB: new FakeD1(),
+    PEXELS_ACCESS_KEY: 'pexels-key',
+    fetch: async (url, init) => {
+      fetched.push([url, init]);
+      if (String(url).includes('/v1/search')) {
+        return {
+          ok: true,
+          json: async () => ({
+            page: 1,
+            per_page: 12,
+            total_results: 1,
+            photos: [pexelsPhoto(1234)]
+          })
+        };
+      }
+      if (String(url).includes('/v1/photos/1234')) {
+        return {
+          ok: true,
+          json: async () => pexelsPhoto(1234)
+        };
+      }
+      return { ok: false, json: async () => ({}) };
+    }
+  };
+
+  response = await handleRequest(new Request('https://ledger.test/image-providers'), env);
+  body = await response.json();
+  assert.strictEqual(response.status, 200);
+  assert.deepStrictEqual(body.providers, [{ id: 'pexels', label: 'Pexels' }]);
+
+  response = await handleRequest(new Request('https://ledger.test/image-providers/search?q=wetland&providers=pexels'), env);
+  body = await response.json();
+  assert.strictEqual(response.status, 200);
+  assert.strictEqual(body.results.length, 1);
+  assert.strictEqual(body.results[0].provider, 'pexels');
+  assert.strictEqual(body.results[0].providerId, '1234');
+  assert.strictEqual(body.results[0].sourceUrl, 'https://www.pexels.com/photo/misty-wetland-1234/');
+  assert.strictEqual(body.results[0].imageSrc, 'https://images.pexels.com/photos/1234/large2x.jpeg');
+  assert.strictEqual(fetched[0][0], 'https://api.pexels.com/v1/search?query=wetland&page=1&per_page=12');
+  assert.deepStrictEqual(fetched[0][1].headers, { Authorization: 'pexels-key' });
+
+  response = await handleRequest(jsonRequest('/captures/provider-image', {
+    provider: 'pexels',
+    providerId: '1234'
+  }), env);
+  body = await response.json();
+  const row = env.DB.one('asset', body.asset.id);
+  assert.strictEqual(response.status, 201);
+  assert.strictEqual(row.status, 'staged');
+  assert.strictEqual(row.display_name, 'Misty wetland at dawn');
+  assert.strictEqual(row.source_name, 'pexels:1234');
+  assert.strictEqual(row.source_url, 'https://www.pexels.com/photo/misty-wetland-1234/');
+  assert.strictEqual(row.image_src, 'https://images.pexels.com/photos/1234/large2x.jpeg');
+  assert.strictEqual(row.photographer, 'Pexels Photographer');
+  assert.strictEqual(row.license, 'Pexels License');
+}
+
+async function testPexelsProviderSearchFailureIsControlled() {
+  const env = {
+    DB: new FakeD1(),
+    PEXELS_ACCESS_KEY: 'pexels-key',
+    fetch: async () => ({ ok: false, json: async () => ({}) })
+  };
+
+  const response = await handleRequest(new Request('https://ledger.test/image-providers/search?q=wetland&providers=pexels'), env);
+  const body = await response.json();
+  assert.strictEqual(response.status, 200);
+  assert.deepStrictEqual(body.results, []);
+}
+
 async function testCreateReviewImageNeedUpsertsDraft() {
   const env = { DB: new FakeD1() };
   const payload = {
@@ -246,6 +324,24 @@ function jsonRequest(path, body, token) {
   });
 }
 
+function pexelsPhoto(id) {
+  return {
+    id,
+    width: 1200,
+    height: 800,
+    url: `https://www.pexels.com/photo/misty-wetland-${id}/`,
+    photographer: 'Pexels Photographer',
+    alt: 'Misty wetland at dawn',
+    src: {
+      small: `https://images.pexels.com/photos/${id}/small.jpeg`,
+      medium: `https://images.pexels.com/photos/${id}/medium.jpeg`,
+      large: `https://images.pexels.com/photos/${id}/large.jpeg`,
+      large2x: `https://images.pexels.com/photos/${id}/large2x.jpeg`,
+      original: `https://images.pexels.com/photos/${id}/original.jpeg`
+    }
+  };
+}
+
 class FakeD1 {
   constructor() {
     this.tables = new Map();
@@ -398,6 +494,8 @@ function byCreatedAt(a, b) {
 (async () => {
   await testCreateAsset();
   await testCaptureImage();
+  await testPexelsProviderRoutes();
+  await testPexelsProviderSearchFailureIsControlled();
   await testCreateReviewImageNeedUpsertsDraft();
   await testCreatePlacementWithSaga();
   await testListRoutes();

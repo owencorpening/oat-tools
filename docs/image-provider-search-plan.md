@@ -166,6 +166,183 @@ is not usually the HTTP call; it is normalizing license, creator, source page,
 direct image URL, rate limits, and search quality into a record the author can
 trust.
 
+## Pexels First Implementation
+
+Use Pexels as the first provider because the Worker already has
+`PEXELS_ACCESS_KEY` support for resolving captured Pexels photo pages.
+
+Reference: [Pexels API documentation](https://www.pexels.com/api/documentation/).
+
+### 1. Extract the Existing Pexels Resolver
+
+Current foothold:
+
+- `tools/d1/worker/index.js` already calls
+  `GET https://api.pexels.com/v1/photos/:id`.
+- It already sends the API key in the `Authorization` header.
+- `extractPexelsPhotoId()` already parses Pexels photo page URLs.
+
+First move:
+
+1. Create `tools/d1/worker/imageProviders/pexels.js`.
+2. Move Pexels-specific URL parsing and fetch logic into that module.
+3. Export:
+   - `id = "pexels"`
+   - `label = "Pexels"`
+   - `extractPhotoId(sourceUrl)`
+   - `resolve({ providerId, sourceUrl }, env)`
+   - `search({ query, page, perPage }, env)`
+4. Keep `resolveCapturedMetadata()` working by calling the new Pexels module.
+5. Add focused tests for Pexels URL parsing and photo normalization.
+
+### 2. Normalize Pexels Photo Records
+
+Normalize both search results and single-photo lookup results into the same
+shape:
+
+```js
+{
+  provider: "pexels",
+  providerId: String(photo.id),
+  title: photo.alt || "Pexels Photo",
+  thumbnailUrl: photo.src?.medium || photo.src?.small,
+  imageSrc: photo.src?.large2x || photo.src?.large || photo.src?.original,
+  sourceUrl: photo.url,
+  photographer: photo.photographer,
+  license: "Pexels License",
+  licenseUrl: "https://www.pexels.com/license/",
+  attribution: "Image: ..., by ..., Source: Pexels. License: Pexels License.",
+  width: photo.width,
+  height: photo.height,
+  rawProviderRecord: photo
+}
+```
+
+Implementation notes:
+
+- Prefer `photo.url` as `sourceUrl`; it is the human provenance page.
+- Prefer `large2x`, then `large`, then `original` as `imageSrc`.
+- Keep `original` available for future placement/download choices, but do not
+  require the sidebar thumbnail to use it.
+- Use `photo.alt` for display text when available.
+
+### 3. Add Worker Provider Endpoints
+
+Add these routes in `tools/d1/worker/index.js`:
+
+| Endpoint | Pexels-first behavior |
+|----------|-----------------------|
+| `GET /image-providers` | Return `{ providers: [{ id: "pexels", label: "Pexels" }] }` when `PEXELS_ACCESS_KEY` exists. |
+| `GET /image-providers/search?q=wetland&providers=pexels` | Call Pexels search and return normalized results. |
+| `POST /captures/provider-image` | Resolve the selected Pexels result and create a staged D1 asset. |
+
+Search endpoint details:
+
+1. Require `q`.
+2. Default `providers=pexels` for the first implementation.
+3. Clamp `perPage` to a small value, such as 12 or 20.
+4. Call `GET https://api.pexels.com/v1/search` with `query`, `page`, and
+   `per_page`.
+5. Return normalized records under `{ results: [...] }`.
+6. Return an empty result set, not a Worker crash, when the provider request
+   fails.
+
+Provider staging endpoint details:
+
+1. Accept `{ provider: "pexels", providerId }` or a normalized search result.
+2. Resolve fresh Pexels metadata by ID before writing D1 when possible.
+3. Create an `asset` with:
+   - `assetType: "image"`
+   - `sourceUrl: normalized.sourceUrl`
+   - `imageSrc: normalized.imageSrc`
+   - `photographer: normalized.photographer`
+   - `license: normalized.license`
+   - `attribution: normalized.attribution`
+   - `status: "staged"`
+4. Use a stable ID such as `asset_pexels_${providerId}` only if duplicates
+   should collapse; otherwise use the existing generated asset ID style.
+
+### 4. Add Worker Tests
+
+Extend `tools/d1/worker/ledgerApiWorker.test.js` or add a provider-specific test
+file.
+
+Minimum tests:
+
+1. `GET /image-providers` hides Pexels when `PEXELS_ACCESS_KEY` is missing.
+2. `GET /image-providers` includes Pexels when `PEXELS_ACCESS_KEY` exists.
+3. `GET /image-providers/search?q=wetland&providers=pexels` calls the Pexels
+   search endpoint with the Authorization header.
+4. Search normalizes `id`, `url`, `src`, `photographer`, `alt`, `width`, and
+   `height`.
+5. `POST /captures/provider-image` creates a staged asset from a Pexels ID.
+6. Failed Pexels fetch returns a controlled response.
+
+### 5. Add Extension Client Methods
+
+Update `extensions/image-staging/lib/ledgerApiClient.js`:
+
+1. `listImageProviders()`
+2. `searchImageProviders({ query, providers, page, perPage })`
+3. `stageProviderImage({ provider, providerId, sourceUrl })`
+
+Add tests in `extensions/image-staging/test/ledgerApiClient.test.js` for URL,
+method, token, and request body shape.
+
+### 6. Add Sidebar Search UI
+
+Update `extensions/image-staging/views/imagePanelProvider.js`.
+
+Extension-side message handling:
+
+1. Add webview message type `providerSearch`.
+2. Add webview message type `stageProviderImage`.
+3. Call the new ledger client methods.
+4. After staging, refresh the staged list.
+
+Webview UI:
+
+1. Add a compact search row above staged assets.
+2. Start with one provider filter: `Pexels`.
+3. Render provider results separately from staged assets.
+4. Each provider result gets `Stage`; staged assets keep `Place` and `Discard`.
+5. Show photographer, license, and source domain on each result.
+
+Keep the first UI pass simple. The important behavior is that an author can
+search, stage, and place without leaving VS Code.
+
+### 7. Local Smoke Test
+
+1. Start the ledger service with `PEXELS_ACCESS_KEY` available.
+2. Open a draft in VS Code.
+3. Open `OAT Image Staging`.
+4. Search `wetland`.
+5. Stage one Pexels result.
+6. Confirm it appears in staged assets with source URL, direct image URL,
+   photographer, license, and attribution.
+7. Click `Place` and create a planned placement.
+8. Run `OAT Images: Prepare Planned Placement Run`.
+
+### 8. Expected First Commit Shape
+
+Likely files:
+
+- `tools/d1/worker/imageProviders/pexels.js`
+- `tools/d1/worker/index.js`
+- `tools/d1/worker/ledgerApiWorker.test.js`
+- `extensions/image-staging/lib/ledgerApiClient.js`
+- `extensions/image-staging/test/ledgerApiClient.test.js`
+- `extensions/image-staging/views/imagePanelProvider.js`
+- docs updates if the UI command names change
+
+Verification:
+
+```bash
+npm run test:d1-worker
+npm run test:image-staging
+npm test
+```
+
 ## API Plan
 
 The D1 Worker should own provider search so browser/API keys stay out of VS Code

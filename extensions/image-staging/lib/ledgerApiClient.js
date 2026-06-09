@@ -29,6 +29,30 @@ function createLedgerApiClient({ baseUrl, token, request = requestJson } = {}) {
         body: payload
       });
     },
+    listImageProviders() {
+      return request(`${normalizedBase}/image-providers`, {
+        method: 'GET',
+        token
+      });
+    },
+    searchImageProviders({ query, providers, page, perPage } = {}) {
+      const params = new URLSearchParams();
+      if (query) params.set('q', query);
+      if (providers) params.set('providers', Array.isArray(providers) ? providers.join(',') : providers);
+      if (page) params.set('page', String(page));
+      if (perPage) params.set('perPage', String(perPage));
+      return request(`${normalizedBase}/image-providers/search?${params.toString()}`, {
+        method: 'GET',
+        token
+      });
+    },
+    stageProviderImage(payload) {
+      return request(`${normalizedBase}/captures/provider-image`, {
+        method: 'POST',
+        token,
+        body: payload
+      });
+    },
     listOpenNeeds({ contentDraftId } = {}) {
       const query = contentDraftId ? `?contentDraftId=${encodeURIComponent(contentDraftId)}` : '';
       return request(`${normalizedBase}/image-needs/open${query}`, {
