@@ -1046,7 +1046,8 @@ function captionSuggestionForImage(image = {}) {
   const title = image.title || image.displayName || image.name || image.sourceName || 'Untitled image';
 
   // For provider images (Pexels, etc.), just use title. Provenance is handled separately.
-  if (image.provider && image.provider !== 'downloads') {
+  // Detect provider images: has sourceUrl but no sourcePath
+  if (image.sourceUrl && !image.sourcePath) {
     return title;
   }
 
