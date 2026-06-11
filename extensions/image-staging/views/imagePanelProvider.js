@@ -707,8 +707,14 @@ window.addEventListener('message', e => {
     providerResults = msg.results || [];
     if (msg.providers) {
       _currentProvider = msg.providers.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' + ');
+      if (msg.providers.length === 1 && msg.providers[0] === 'pexels') {
+        renderPexelsResults(providerResults.length ? '' : 'No Pexels results.');
+      } else {
+        renderProviderResults(providerResults.length ? '' : 'No provider results.');
+      }
+    } else {
+      renderProviderResults(providerResults.length ? '' : 'No provider results.');
     }
-    renderProviderResults(providerResults.length ? '' : 'No provider results.');
   } else if (msg.type === 'providerStaged') {
     if (_lastStagedIndex !== null && providerResults[_lastStagedIndex]) {
       providerResults.splice(_lastStagedIndex, 1);
@@ -743,9 +749,9 @@ function providerPlaceholder() {
   return 'Search ' + names.join(' + ');
 }
 
-function renderProviderResults(message) {
-  const results = document.getElementById('results');
-  const searchStatus = document.getElementById('searchStatus');
+function renderResults(resultsElementId, statusElementId, message) {
+  const results = document.getElementById(resultsElementId);
+  const searchStatus = document.getElementById(statusElementId);
 
   if (message) {
     searchStatus.textContent = message;
@@ -793,6 +799,14 @@ function renderProviderResults(message) {
       this.parentNode.innerHTML = '<div class="no-thumb">No preview</div>';
     });
   });
+}
+
+function renderProviderResults(message) {
+  return renderResults('results', 'searchStatus', message);
+}
+
+function renderPexelsResults(message) {
+  return renderResults('pexelsResults', 'pexelsStatus', message);
 }
 
 function isImageAlreadyStaged(providerResult) {
