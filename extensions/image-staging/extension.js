@@ -10,12 +10,15 @@ const { registerReviewImageNeedCommand } = require('./lib/reviewImageNeedCommand
 const { registerUrlIntakeCommand } = require('./lib/urlIntakeCommand');
 
 function activate(context) {
+  console.log('[OAT] Extension activating...');
   const ledgerWriter = createLedgerWriterFromSettings(vscode);
+  console.log('[OAT] Ledger writer created:', !!ledgerWriter);
   const imagePanel = new ImagePanelProvider(context, { ledgerWriter });
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(ImagePanelProvider.viewId, imagePanel)
   );
+  console.log('[OAT] Webview provider registered');
 
   context.subscriptions.push(
     vscode.commands.registerCommand('oatImages.refreshPanel', () => imagePanel.refresh())

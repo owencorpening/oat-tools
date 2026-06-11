@@ -32,6 +32,7 @@ class ImagePanelProvider {
 
   // Called by VS Code when the panel becomes visible
   resolveWebviewView(webviewView) {
+    console.log('[OAT] resolveWebviewView called');
     this._view = webviewView;
     webviewView.webview.options = {
       enableScripts: true,
@@ -40,6 +41,7 @@ class ImagePanelProvider {
       ] } : {})
     };
     webviewView.webview.html = this._html(webviewView.webview);
+    console.log('[OAT] Webview HTML set');
 
     // Proactive ping — confirms extension→webview channel works
     setTimeout(() => {
@@ -186,21 +188,33 @@ class ImagePanelProvider {
   }
 
   async _handleStageDownloadsImage(result) {
+    console.log('[OAT] _handleStageDownloadsImage called with:', result);
     if (!this._ledgerWriter || !this._ledgerWriter.saveAsset) {
+      console.error('[OAT] No ledger writer or saveAsset method available');
+      console.log('[OAT] ledgerWriter:', this._ledgerWriter);
       vscode.window.showWarningMessage('OAT: Set oatImages.ledgerApiUrl before staging Downloads images.');
       return null;
     }
-    if (!this._downloadsProvider || !this._downloadsProvider.stageDownloadsResult) return null;
+    if (!this._downloadsProvider || !this._downloadsProvider.stageDownloadsResult) {
+      console.error('[OAT] No downloads provider or stageDownloadsResult method');
+      return null;
+    }
 
     try {
+      console.log('[OAT] Calling stageDownloadsResult...');
       const asset = await this._downloadsProvider.stageDownloadsResult(result);
+      console.log('[OAT] Asset created:', asset);
+
+      console.log('[OAT] Saving asset to ledger...');
       await this._ledgerWriter.saveAsset({ asset });
+      console.log('[OAT] Asset saved successfully');
 
       vscode.window.showInformationMessage(`OAT: Staged ${asset.displayName || result.title || 'Downloads image'}.`);
       this._send({ type: 'providerStaged', asset });
       await this._loadStaged();
       return { asset };
     } catch (err) {
+      console.error('[OAT] Error in _handleStageDownloadsImage:', err);
       if (err.message && err.message.includes('UNIQUE constraint failed: asset.content_hash')) {
         vscode.window.showInformationMessage('OAT: This image is already staged.');
         await this._loadStaged();
