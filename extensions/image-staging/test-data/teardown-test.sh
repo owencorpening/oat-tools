@@ -6,6 +6,7 @@ set -e
 DOWNLOADS_DIR="$HOME/Downloads"
 TEST_REPO_COPY="$HOME/test-repo-oat"
 LEDGER_PID_FILE="/tmp/oat-test-ledger.pid"
+TEST_DB_DIR="/tmp/oat-test-ledger"
 
 echo "Cleaning up test environment..."
 echo ""
@@ -41,6 +42,15 @@ if [ -d "$TEST_REPO_COPY" ]; then
   echo "   ✓ Removed test repo"
 else
   echo "   (No test repo found)"
+fi
+
+# 4. Remove test database
+echo "4. Removing test database from $TEST_DB_DIR"
+if [ -d "$TEST_DB_DIR" ]; then
+  rm -rf "$TEST_DB_DIR"
+  echo "   ✓ Removed test database"
+else
+  echo "   (No test database found)"
 fi
 
 echo ""

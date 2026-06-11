@@ -3,8 +3,7 @@
 
 set -e
 
-REPO_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/../../.." && pwd )"
-DB_PATH="$REPO_ROOT/tools/d1/worker/.wrangler/state/local-ledger.sqlite"
+DB_PATH="/tmp/oat-test-ledger/local-ledger.sqlite"
 
 if [ ! -f "$DB_PATH" ]; then
   echo "Database not found at $DB_PATH"

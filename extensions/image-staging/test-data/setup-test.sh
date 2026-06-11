@@ -16,6 +16,8 @@ DOWNLOADS_DIR="$HOME/Downloads"
 TEST_REPO_COPY="$HOME/test-repo-oat"
 LEDGER_PID_FILE="/tmp/oat-test-ledger.pid"
 LEDGER_PORT=8787
+TEST_DB_DIR="/tmp/oat-test-ledger"
+TEST_DB_PATH="$TEST_DB_DIR/local-ledger.sqlite"
 
 echo "Setting up ad-hoc test environment..."
 echo ""
@@ -39,8 +41,9 @@ fi
 # Also kill any process on the ledger port
 lsof -i :$LEDGER_PORT 2>/dev/null | grep -v COMMAND | awk '{print $2}' | xargs -r kill 2>/dev/null || true
 
-# Clear the D1 database so we start fresh
-rm -rf "$REPO_ROOT/tools/d1/worker/.wrangler/state/"
+# Clear the test database directory so we start fresh
+rm -rf "$TEST_DB_DIR"
+mkdir -p "$TEST_DB_DIR"
 
 echo "   ✓ Old test data removed"
 
@@ -54,10 +57,10 @@ echo "3. Copying fresh test repo to $TEST_REPO_COPY"
 cp -r "$TEST_REPO_DIR" "$TEST_REPO_COPY"
 echo "   ✓ Copied repo structure"
 
-# 4. Start local D1 ledger server
+# 4. Start local D1 ledger server with test database
 echo "4. Starting local D1 ledger server..."
 cd "$REPO_ROOT"
-npm run ledger:dev:node > /tmp/oat-test-ledger.log 2>&1 &
+LEDGER_SQLITE_PATH="$TEST_DB_PATH" npm run ledger:dev:node > /tmp/oat-test-ledger.log 2>&1 &
 LEDGER_PID=$!
 echo $LEDGER_PID > "$LEDGER_PID_FILE"
 
