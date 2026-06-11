@@ -61,8 +61,9 @@ class ImagePanelProvider {
       try {
         switch (msg.type) {
           case 'webviewReady': {
-            console.log('[OAT] ✓ Webview is ready and channel is working');
-            return;
+            this._log('[OAT] ✓ Webview is ready and channel is working');
+            this._log('[OAT] Auto-loading Downloads on startup');
+            return await this._handleProviderSearch({ query: '*', providers: ['downloads'] });
           }
           case 'refresh': {
             console.log('[OAT] Handling refresh. ledgerWriter available:', !!this._ledgerWriter, 'has listStagedAssets:', !!(this._ledgerWriter && this._ledgerWriter.listStagedAssets));
