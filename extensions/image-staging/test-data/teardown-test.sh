@@ -1,16 +1,31 @@
 #!/bin/bash
-# teardown-test.sh — Clean up ad-hoc test environment
+# teardown-test.sh — Clean up ad-hoc test environment and stop ledger server
 
 set -e
 
 DOWNLOADS_DIR="$HOME/Downloads"
 TEST_REPO_COPY="$HOME/test-repo-oat"
+LEDGER_PID_FILE="/tmp/oat-test-ledger.pid"
 
 echo "Cleaning up test environment..."
 echo ""
 
-# Remove test images
-echo "1. Removing test images from $DOWNLOADS_DIR"
+# 1. Stop ledger server
+echo "1. Stopping D1 ledger server..."
+if [ -f "$LEDGER_PID_FILE" ]; then
+  LEDGER_PID=$(cat "$LEDGER_PID_FILE")
+  if kill -0 "$LEDGER_PID" 2>/dev/null; then
+    kill "$LEDGER_PID"
+    wait "$LEDGER_PID" 2>/dev/null || true
+    echo "   ✓ Ledger server stopped (PID: $LEDGER_PID)"
+  fi
+  rm -f "$LEDGER_PID_FILE"
+else
+  echo "   (No ledger server running)"
+fi
+
+# 2. Remove test images
+echo "2. Removing test images from $DOWNLOADS_DIR"
 rm -f "$DOWNLOADS_DIR/water-droplet-unsplash.png"
 rm -f "$DOWNLOADS_DIR/ocean-wave-pexels.png"
 rm -f "$DOWNLOADS_DIR/solar-panel-getty.png"
@@ -19,15 +34,15 @@ rm -f "$DOWNLOADS_DIR/forest-landscape.png"
 rm -f "$DOWNLOADS_DIR/ChatGPT Image Jun 10 2026, 03_22_45 PM.png"
 echo "   ✓ Removed 6 test images"
 
-# Remove test repo
+# 3. Remove test repo
+echo "3. Removing test repo from $TEST_REPO_COPY"
 if [ -d "$TEST_REPO_COPY" ]; then
-  echo "2. Removing test repo from $TEST_REPO_COPY"
   rm -rf "$TEST_REPO_COPY"
   echo "   ✓ Removed test repo"
 else
-  echo "2. Test repo not found (already cleaned up?)"
+  echo "   (No test repo found)"
 fi
 
 echo ""
-echo "Cleanup complete!"
+echo "✓ Cleanup complete!"
 echo ""
