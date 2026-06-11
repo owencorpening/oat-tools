@@ -676,10 +676,15 @@ if (document.getElementById('browseBtn')) {
 }
 
 const resultsEl = document.getElementById('results');
+const pexelsResultsEl = document.getElementById('pexelsResults');
 const listEl = document.getElementById('list');
-console.log('[OAT-Webview] Attaching click handlers to:', resultsEl, listEl);
+console.log('[OAT-Webview] Attaching click handlers to:', resultsEl, pexelsResultsEl, listEl);
 resultsEl.addEventListener('click', e => {
   console.log('[OAT-Webview] Click on results:', e.target);
+  handleCardAction(e);
+});
+pexelsResultsEl.addEventListener('click', e => {
+  console.log('[OAT-Webview] Click on pexels results:', e.target);
   handleCardAction(e);
 });
 listEl.addEventListener('click', e => {
