@@ -1,14 +1,12 @@
 # Quick Start: Manual Testing
 
-## 30-Second Setup
+## One-Command Setup
 
 ```bash
-# Run setup script
 extensions/image-staging/test-data/setup-test.sh
-
-# Open in VSCode
-code ~/test-repo-oat
 ```
+
+That's it. VSCode opens automatically with everything ready.
 
 ## 5-Minute Test Flow
 

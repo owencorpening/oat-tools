@@ -36,15 +36,13 @@ extensions/image-staging/test-data/setup-test.sh
 
 This will:
 
-1. Copy test images to `~/Downloads/`
-2. Copy repo structure to `~/test-repo-oat/`
-3. Print next steps
+1. Clean up any old test data
+2. Copy fresh test images to `~/Downloads/`
+3. Copy fresh repo structure to `~/test-repo-oat/`
+4. Configure workspace to use local Downloads only
+5. Open VSCode automatically with the test repo ready
 
-Then open VSCode with the test repo:
-
-```bash
-code ~/test-repo-oat
-```
+You're now ready to test. Search for "water" or any image name in the OAT Images panel.
 
 ### Manual Test Workflows
 
