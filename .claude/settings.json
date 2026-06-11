@@ -16,7 +16,16 @@
       "Bash(sqlite3 /home/owen/dev/oat-tools-vscode/tools/d1/worker/.wrangler/state/v3/d1/miniflare-D1DatabaseObject/9ba2b04bf514d9facfd57ed57d849e77241a7adc99d1c1545d06688b43d84248.sqlite \"SELECT COUNT\\(*\\) as count FROM asset WHERE status = 'staged';\")",
       "Bash(sqlite3 /home/owen/dev/oat-tools-vscode/tools/d1/worker/.wrangler/state/v3/d1/miniflare-D1DatabaseObject/9ba2b04bf514d9facfd57ed57d849e77241a7adc99d1c1545d06688b43d84248.sqlite \"SELECT display_name, status FROM asset;\")",
       "Bash(sqlite3 /home/owen/dev/oat-tools-vscode/tools/d1/worker/.wrangler/state/v3/d1/miniflare-D1DatabaseObject/9ba2b04bf514d9facfd57ed57d849e77241a7adc99d1c1545d06688b43d84248.sqlite \"SELECT id, display_name, image_src, raw_asset_url FROM asset WHERE status = 'staged' LIMIT 1;\")",
-      "Bash(sqlite3 /home/owen/dev/oat-tools-vscode/tools/d1/worker/.wrangler/state/v3/d1/miniflare-D1DatabaseObject/9ba2b04bf514d9facfd57ed57d849e77241a7adc99d1c1545d06688b43d84248.sqlite \"SELECT id, display_name, source_path FROM asset WHERE status = 'staged' LIMIT 1;\")"
+      "Bash(sqlite3 /home/owen/dev/oat-tools-vscode/tools/d1/worker/.wrangler/state/v3/d1/miniflare-D1DatabaseObject/9ba2b04bf514d9facfd57ed57d849e77241a7adc99d1c1545d06688b43d84248.sqlite \"SELECT id, display_name, source_path FROM asset WHERE status = 'staged' LIMIT 1;\")",
+      "Skill(run)",
+      "Skill(run:*)",
+      "Bash(mkdir -p /tmp/oat-test/substack-ideas/test-water-series)",
+      "Bash(node /tmp/create_test_png.js)",
+      "Bash(node /tmp/test-placement-workflow.js)",
+      "Bash(node extensions/image-staging/test/imagePanelProviderIntegration.test.js)"
+    ],
+    "additionalDirectories": [
+      "/tmp/oat-test/substack-ideas"
     ]
   }
 }

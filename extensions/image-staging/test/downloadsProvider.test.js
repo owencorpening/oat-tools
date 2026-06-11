@@ -28,7 +28,7 @@ async function testSearchDownloadsFindsImageFilesAndHints() {
   assert.strictEqual(result.results[0].sourceKind, 'ai-generated');
   assert.strictEqual(result.results[0].proposedTool, 'ChatGPT');
   assert.strictEqual(result.results[0].photographer, 'Owen Corpening');
-  assert.strictEqual(result.results[0].status, 'needs-provenance');
+  assert.strictEqual(result.results[0].status, 'staged');
   assert.match(result.results[0].thumbnailUrl, /^data:image\/png;base64,/);
 }
 

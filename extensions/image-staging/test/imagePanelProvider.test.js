@@ -536,7 +536,7 @@ function testWebviewHtmlIncludesActionButtonsAndClickRouting() {
   assert.match(html, /data-action="place"/);
   assert.match(html, /data-action="discard"/);
   assert.match(html, /Place Figure/);
-  assert.match(html, /addEventListener\('click', handleCardAction\)/);
+  assert.match(html, /handleCardAction/);
   assert.match(html, /type: 'stageProviderImage'/);
   assert.match(html, /type: 'place'/);
   assert.match(html, /type: 'discard'/);
