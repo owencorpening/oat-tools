@@ -5,7 +5,36 @@ Owen's Applied Thinking content production tools for VS Code.
 This repo is a monorepo with two separately installable extensions:
 
 - `OAT Table Tools` for markdown table promotion
-- `OAT Image Staging` for staged image placement
+- `OAT Image Staging` for multi-provider image search, staging, and placement
+
+---
+
+## Quick Start: Image Staging
+
+Set up a local test environment:
+
+```bash
+export PEXELS_ACCESS_KEY=your_api_key
+extensions/image-staging/test-data/setup-test.sh
+```
+
+This creates an isolated test repo with:
+- Local D1 ledger (SQLite on port 8787)
+- Test images in ~/Downloads
+- VSCode instance with extension loaded
+
+**Workflow:**
+1. Open OAT Images panel
+2. Browse Downloads or search Pexels
+3. Stage images (added to ledger)
+4. Open markdown file and click Place Figure
+5. Image inserts with auto-numbered figure + caption
+
+When done: `extensions/image-staging/test-data/teardown-test.sh`
+
+Inspect database: `extensions/image-staging/test-data/db-status.sh`
+
+---
 
 For the fastest image ledger walkthrough, see
 [docs/image-pipeline-quickstart.md](docs/image-pipeline-quickstart.md). For how
