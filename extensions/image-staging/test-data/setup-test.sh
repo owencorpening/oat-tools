@@ -60,7 +60,7 @@ echo "   ✓ Copied repo structure"
 # 4. Start local D1 ledger server with test database
 echo "4. Starting local D1 ledger server..."
 cd "$REPO_ROOT"
-LEDGER_SQLITE_PATH="$TEST_DB_PATH" npm run ledger:dev:node > /tmp/oat-test-ledger.log 2>&1 &
+LEDGER_SQLITE_PATH="$TEST_DB_PATH" PEXELS_ACCESS_KEY="${PEXELS_ACCESS_KEY}" npm run ledger:dev:node > /tmp/oat-test-ledger.log 2>&1 &
 LEDGER_PID=$!
 echo $LEDGER_PID > "$LEDGER_PID_FILE"
 
