@@ -420,6 +420,31 @@ body {
   cursor: pointer; font-size: 14px; padding: 2px 5px; border-radius: 3px;
 }
 .refresh-btn:hover { background: var(--vscode-toolbar-hoverBackground); }
+.tabs {
+  display: flex; gap: 0;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  background: var(--vscode-panel-background);
+  padding: 0;
+}
+.tab-btn {
+  flex: 1; padding: 8px 6px;
+  border: none; border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--vscode-foreground);
+  cursor: pointer; font-family: var(--vscode-font-family);
+  font-size: 12px;
+  opacity: 0.7;
+  transition: opacity 0.2s, border-color 0.2s;
+}
+.tab-btn:hover { opacity: 0.9; }
+.tab-btn.active {
+  opacity: 1;
+  border-bottom-color: var(--vscode-focusBorder, #007acc);
+}
+.tab-content {
+  display: flex; flex-direction: column;
+  flex: 1;
+}
 .searchbar {
   display: grid; grid-template-columns: 1fr auto;
   gap: 6px; padding: 7px 8px;
@@ -561,21 +586,55 @@ body {
   <span class="count" id="count"></span>
   <button class="refresh-btn" id="refreshBtn" title="Refresh">↻</button>
 </div>
-<form class="searchbar" id="searchForm">
-  <input class="search-input" id="searchInput" type="search" placeholder="Search Pexels + Downloads">
-  <button class="search-btn" type="submit">Search</button>
-  <button class="browse-btn" id="browseBtn" type="button" title="Browse all Downloads">⬇ Downloads</button>
-</form>
-<div id="searchStatus" class="search-status" style="display:none"></div>
-<div id="results"></div>
-<div id="status">Loading…</div>
-<div id="list"></div>
+
+<div class="tabs">
+  <button class="tab-btn active" data-tab="downloads">Downloads</button>
+  <button class="tab-btn" data-tab="pexels">Pexels</button>
+  <button class="tab-btn" data-tab="staged">Staged</button>
+</div>
+
+<div class="tab-content" id="downloads-tab">
+  <form class="searchbar" id="searchForm">
+    <input class="search-input" id="searchInput" type="search" placeholder="Search Downloads">
+    <button class="search-btn" type="submit">Search</button>
+    <button class="browse-btn" id="browseBtn" type="button" title="Browse all Downloads">⬇ All</button>
+  </form>
+  <div id="searchStatus" class="search-status" style="display:none"></div>
+  <div id="results"></div>
+  <div id="status">Loading…</div>
+</div>
+
+<div class="tab-content" id="pexels-tab" style="display:none">
+  <form class="searchbar" id="pexelsForm">
+    <input class="search-input" id="pexelsInput" type="search" placeholder="Search Pexels">
+    <button class="search-btn" type="submit">Search</button>
+  </form>
+  <div id="pexelsStatus" class="search-status" style="display:none"></div>
+  <div id="pexelsResults"></div>
+</div>
+
+<div class="tab-content" id="staged-tab" style="display:none">
+  <div id="list"></div>
+</div>
 
 <script nonce="${nonce}">
 const vscode = acquireVsCodeApi();
 let images = [];
 let providerResults = [];
 let availableProviders = [{ id: 'downloads', label: 'Downloads' }];
+
+// Tab switching
+function switchTab(tabName) {
+  document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+
+  document.getElementById(tabName + '-tab').style.display = 'flex';
+  document.querySelector('[data-tab="' + tabName + '"]').classList.add('active');
+}
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+});
 
 document.getElementById('refreshBtn').addEventListener('click', () => {
   document.getElementById('status').textContent = 'Loading…';
@@ -590,19 +649,31 @@ document.getElementById('searchForm').addEventListener('submit', event => {
   event.preventDefault();
   const query = document.getElementById('searchInput').value.trim();
   if (!query) return;
-  _currentProvider = 'Downloads + Pexels';
-  providerResults = [];
-  renderProviderResults('Searching…');
-  vscode.postMessage({ type: 'providerSearch', query, providers: ['downloads', 'pexels'] });
-});
-
-document.getElementById('browseBtn').addEventListener('click', event => {
-  event.preventDefault();
   _currentProvider = 'Downloads';
   providerResults = [];
-  renderProviderResults('Loading Downloads…');
-  vscode.postMessage({ type: 'providerSearch', query: '*', providers: ['downloads'] });
+  renderProviderResults('Searching…');
+  vscode.postMessage({ type: 'providerSearch', query, providers: ['downloads'] });
 });
+
+document.getElementById('pexelsForm').addEventListener('submit', event => {
+  event.preventDefault();
+  const query = document.getElementById('pexelsInput').value.trim();
+  if (!query) return;
+  _currentProvider = 'Pexels';
+  providerResults = [];
+  renderPexelsResults('Searching…');
+  vscode.postMessage({ type: 'providerSearch', query, providers: ['pexels'] });
+});
+
+if (document.getElementById('browseBtn')) {
+  document.getElementById('browseBtn').addEventListener('click', event => {
+    event.preventDefault();
+    _currentProvider = 'Downloads';
+    providerResults = [];
+    renderProviderResults('Loading Downloads…');
+    vscode.postMessage({ type: 'providerSearch', query: '*', providers: ['downloads'] });
+  });
+}
 
 const resultsEl = document.getElementById('results');
 const listEl = document.getElementById('list');
