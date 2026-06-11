@@ -19,7 +19,8 @@ class ImagePanelProvider {
     localDownloadsProvider = downloadsProvider,
     runPlacement = placeAsset,
     getImagesRepoPath = imagesRepoPath,
-    writeSnippet = writeSnippetToActiveEditor
+    writeSnippet = writeSnippetToActiveEditor,
+    outputChannel
   } = {}) {
     this._context = context;
     this._ledgerWriter = ledgerWriter;
@@ -27,12 +28,19 @@ class ImagePanelProvider {
     this._runPlacement = runPlacement;
     this._getImagesRepoPath = getImagesRepoPath;
     this._writeSnippet = writeSnippet;
+    this._outputChannel = outputChannel;
     this._view = null;
+  }
+
+  _log(message) {
+    if (this._outputChannel) {
+      this._outputChannel.appendLine(message);
+    }
   }
 
   // Called by VS Code when the panel becomes visible
   resolveWebviewView(webviewView) {
-    console.log('[OAT] resolveWebviewView called');
+    this._log('[OAT] resolveWebviewView called');
     this._view = webviewView;
     webviewView.webview.options = {
       enableScripts: true,
@@ -41,7 +49,7 @@ class ImagePanelProvider {
       ] } : {})
     };
     webviewView.webview.html = this._html(webviewView.webview);
-    console.log('[OAT] Webview HTML set');
+    this._log('[OAT] Webview HTML set');
 
     // Proactive ping — confirms extension→webview channel works
     setTimeout(() => {
@@ -49,7 +57,7 @@ class ImagePanelProvider {
     }, 1000);
 
     webviewView.webview.onDidReceiveMessage(async msg => {
-      console.log('[OAT] Received message:', msg.type, msg);
+      this._log('[OAT] Received message: ' + msg.type);
       try {
         switch (msg.type) {
           case 'webviewReady': {
@@ -192,33 +200,32 @@ class ImagePanelProvider {
   }
 
   async _handleStageDownloadsImage(result) {
-    console.log('[OAT] _handleStageDownloadsImage called with:', result);
+    this._log('[OAT] _handleStageDownloadsImage called');
     if (!this._ledgerWriter || !this._ledgerWriter.saveAsset) {
-      console.error('[OAT] No ledger writer or saveAsset method available');
-      console.log('[OAT] ledgerWriter:', this._ledgerWriter);
+      this._log('[OAT] ERROR: No ledger writer or saveAsset method');
       vscode.window.showWarningMessage('OAT: Set oatImages.ledgerApiUrl before staging Downloads images.');
       return null;
     }
     if (!this._downloadsProvider || !this._downloadsProvider.stageDownloadsResult) {
-      console.error('[OAT] No downloads provider or stageDownloadsResult method');
+      this._log('[OAT] ERROR: No downloads provider or stageDownloadsResult method');
       return null;
     }
 
     try {
-      console.log('[OAT] Calling stageDownloadsResult...');
+      this._log('[OAT] Calling stageDownloadsResult...');
       const asset = await this._downloadsProvider.stageDownloadsResult(result);
-      console.log('[OAT] Asset created:', asset);
+      this._log('[OAT] Asset created: ' + asset.slug);
 
-      console.log('[OAT] Saving asset to ledger...');
+      this._log('[OAT] Saving asset to ledger...');
       await this._ledgerWriter.saveAsset({ asset });
-      console.log('[OAT] Asset saved successfully');
+      this._log('[OAT] Asset saved successfully');
 
       vscode.window.showInformationMessage(`OAT: Staged ${asset.displayName || result.title || 'Downloads image'}.`);
       this._send({ type: 'providerStaged', asset });
       await this._loadStaged();
       return { asset };
     } catch (err) {
-      console.error('[OAT] Error in _handleStageDownloadsImage:', err);
+      this._log('[OAT] Error in _handleStageDownloadsImage: ' + err.message);
       if (err.message && err.message.includes('UNIQUE constraint failed: asset.content_hash')) {
         vscode.window.showInformationMessage('OAT: This image is already staged.');
         await this._loadStaged();
