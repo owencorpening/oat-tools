@@ -1056,5 +1056,11 @@ function shortHash(value) {
 function getSetting(key, defaultValue) {
   const imageValue = vscode.workspace.getConfiguration('oatImages').get(key, undefined);
   if (imageValue !== undefined && imageValue !== '') return imageValue;
+
+  // Check environment variable as fallback (for testing, e.g., OAT_IMAGES_LEDGER_API_URL)
+  const envVarName = 'OAT_IMAGES_' + key.replace(/([A-Z])/g, '_$1').toUpperCase();
+  const envValue = process.env[envVarName];
+  if (envValue !== undefined && envValue !== '') return envValue;
+
   return vscode.workspace.getConfiguration('oat').get(key, defaultValue);
 }

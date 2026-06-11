@@ -74,24 +74,16 @@ for i in {1..10}; do
   sleep 1
 done
 
-# 5. Configure VSCode workspace to use local ledger
-echo "5. Configuring VSCode workspace"
-mkdir -p "$TEST_REPO_COPY/.vscode"
-cat > "$TEST_REPO_COPY/.vscode/settings.json" << EOF
-{
-  "oatImages.ledgerApiUrl": "http://localhost:$LEDGER_PORT",
-  "[markdown]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
-  }
-}
-EOF
-echo "   ✓ Created workspace settings (using local ledger)"
+# 5. Launch VSCode with environment variable pointing to local ledger
+echo "5. Preparing to open VSCode..."
+echo "   ✓ Ledger configured via environment variable"
 
 echo ""
 echo "✓ Setup complete! Opening VSCode..."
 echo ""
 
-# Launch VSCode
+# Launch VSCode with environment variable for ledger
+export OAT_IMAGES_LEDGER_API_URL="http://localhost:$LEDGER_PORT"
 code "$TEST_REPO_COPY"
 
 echo ""
