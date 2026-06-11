@@ -7,7 +7,7 @@ function buildSnippet({ target, imageUrl, displayName, name, figNum, figureNumbe
 
   switch (target) {
     case 'substack':
-      return `<figure>\n  <img src="${imageUrl}" width="700" alt="${desc}">\n  <figcaption>${figureCaption({ figure, caption: attr })}</figcaption>\n</figure>`;
+      return `<figure>\n  <img src="${imageUrl}" width="700" alt="${desc}">\n  <figcaption>${figureCaption({ figure, caption: attr })}</figcaption>\n</figure>\n\n`;
     case 'carousel':
       return `![bg left:40%](${imageUrl})`;
     case 'linkedin-post':
