@@ -36,11 +36,12 @@ extensions/image-staging/test-data/setup-test.sh
 
 This will:
 
-1. Clean up any old test data
+1. Clean up any old test data and ledger
 2. Copy fresh test images to `~/Downloads/`
 3. Copy fresh repo structure to `~/test-repo-oat/`
-4. Configure workspace to use local Downloads only
-5. Open VSCode automatically with the test repo ready
+4. Start a local D1 ledger server (on port 3001)
+5. Configure test workspace to use the local ledger
+6. Open VSCode automatically with everything ready
 
 You're now ready to test. Search for "water" or any image name in the OAT Images panel.
 
@@ -121,7 +122,7 @@ All images are minimal 1x1 PNG files for testing filename parsing, not image dis
 
 ### Cleanup
 
-After testing, run the teardown script from the repo root:
+After testing, run the teardown script:
 
 ```bash
 extensions/image-staging/test-data/teardown-test.sh
@@ -129,8 +130,9 @@ extensions/image-staging/test-data/teardown-test.sh
 
 This will:
 
-1. Remove test images from `~/Downloads/`
-2. Remove test repo from `~/test-repo-oat/`
+1. Stop the local D1 ledger server
+2. Remove test images from `~/Downloads/`
+3. Remove test repo from `~/test-repo-oat/`
 
 The original files in `extensions/image-staging/test-data/` remain in the repo for future testing.
 
