@@ -21,7 +21,7 @@ into the same draft.
 For the working architecture target behind these workflows, including local
 files from `~/Downloads`, AI-generated image intake, and table promotion as an
 asset pipeline, see
-[image-pipeline-architecture.md](image-pipeline-architecture.md).
+[../dev/image-pipeline-architecture.md](../dev/image-pipeline-architecture.md).
 
 ## Required Local Context
 
@@ -63,7 +63,7 @@ Preferred path: search provider APIs and local `~/Downloads` candidates from
 inside VS Code, stage a result with provenance or filename-hint metadata, and
 avoid leaving the review flow when possible.
 The implementation plan for that path is in
-[image-provider-search-plan.md](image-provider-search-plan.md).
+[../dev/image-provider-search-plan.md](../dev/image-provider-search-plan.md).
 
 All three paths converge on the same action: review the staged image, click
 `Place`, and create a planned placement for the open draft.
@@ -76,7 +76,7 @@ back to VS Code.
 
 Steps:
 
-1. Install the bookmarklet from [../tools/bookmarklet/README.md](../tools/bookmarklet/README.md).
+1. Install the bookmarklet from [../../tools/bookmarklet/README.md](../../tools/bookmarklet/README.md).
 2. Start or deploy the ledger Worker.
 3. Browse from the results page to the provider/source page for the image. The
    current manual search shortcut is `fi<Tab>` in Chrome followed by the search
@@ -115,7 +115,7 @@ needs.
 Use this when the author is reviewing a draft and wants to find a visual without
 leaving VS Code.
 
-Detailed plan: [image-provider-search-plan.md](image-provider-search-plan.md).
+Detailed plan: [../dev/image-provider-search-plan.md](../dev/image-provider-search-plan.md).
 
 Steps:
 

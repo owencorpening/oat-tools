@@ -5,7 +5,7 @@ currently kept in `~/dev/wraith/standards`. It is the working architecture targe
 for content, asset, and audience-aware publishing workflows.
 
 For the broader plan to split the current mixed `wraith` workspace into repos by
-role, see [repo-refactor-plan.md](repo-refactor-plan.md).
+role, see [../archive/repo-refactor-plan.md](../archive/repo-refactor-plan.md).
 
 ## Core Contract
 

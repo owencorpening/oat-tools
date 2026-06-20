@@ -125,7 +125,18 @@ class ImagePanelProvider {
       this._send({ type: 'staged', images, source: 'd1' });
     } catch (err) {
       console.error('[OAT] _loadD1Staged error:', err);
-      this._send({ type: 'error', message: err.message });
+      const baseUrl = vscode.workspace.getConfiguration('oatImages').get('ledgerApiUrl', '');
+      const isUnreachable = err.code === 'ECONNREFUSED' || (err.message || '').includes('ECONNREFUSED');
+      const isUnauthorized = (err.message || '').includes('401');
+      let message;
+      if (isUnreachable) {
+        message = `Can't reach the ledger at ${baseUrl || '(no URL set)'} — is the Worker running? Try: npm run ledger:dev`;
+      } else if (isUnauthorized) {
+        message = `Ledger returned 401 — check oatImages.ledgerApiToken.`;
+      } else {
+        message = err.message;
+      }
+      this._send({ type: 'error', message });
     }
   }
 
@@ -849,7 +860,7 @@ function render() {
   const count  = document.getElementById('count');
 
   if (images.length === 0) {
-    status.textContent = 'Queue empty — log an image to get started.';
+    status.textContent = 'No staged images. Use the search above to find one, or run OAT Images: Intake Local File to add a file from Downloads.';
     status.className = '';
     status.style.display = 'block';
     list.innerHTML = '';

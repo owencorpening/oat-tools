@@ -7,10 +7,12 @@ const os = require('os');
 const path = require('path');
 const { parseTables } = require('./lib/parseTables');
 const { estimateTableImageWidth } = require('./lib/tableImageWidth');
+const { findFigures, extractSheetUrl, computeRepairs } = require('./lib/figureRepair');
 
 function activate(context) {
   context.subscriptions.push(
-    vscode.commands.registerCommand('oatTables.promoteAllTables', promoteAllTables)
+    vscode.commands.registerCommand('oatTables.promoteAllTables', promoteAllTables),
+    vscode.commands.registerCommand('oatTables.repairFigures', repairFigures)
   );
 }
 
@@ -126,6 +128,7 @@ async function promoteAllTables() {
   });
 
   if (succeeded) {
+    await editor.document.save();
     vscode.window.showInformationMessage(
       `OAT: ${replacements.length}/${tables.length} table${replacements.length === 1 ? '' : 's'} promoted.`
     );
@@ -144,6 +147,54 @@ function generateDescriptor(headers) {
       : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()
     )
     .join('');
+}
+
+// ── Repair Figures ───────────────────────────────────────────────────────────
+
+async function repairFigures() {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor) {
+    vscode.window.showErrorMessage('OAT: No active editor.');
+    return;
+  }
+  if (editor.document.languageId !== 'markdown') {
+    vscode.window.showErrorMessage('OAT: Active file must be a markdown document.');
+    return;
+  }
+
+  const text = editor.document.getText();
+  const lines = text.split('\n');
+  const figures = findFigures(lines);
+
+  if (figures.length === 0) {
+    vscode.window.showInformationMessage('OAT: No figures found.');
+    return;
+  }
+
+  const repairs = computeRepairs(lines);
+
+  if (repairs.length === 0) {
+    vscode.window.showInformationMessage('OAT: All figures are properly formatted.');
+    return;
+  }
+
+  // Apply repairs in reverse order to preserve line indices
+  repairs.reverse();
+  const succeeded = await editor.edit(editBuilder => {
+    for (const repair of repairs) {
+      const line = new vscode.Position(repair.lineIdx, 0);
+      const endOfLine = new vscode.Position(repair.lineIdx, repair.oldLine.length);
+      editBuilder.replace(new vscode.Range(line, endOfLine), repair.newLine);
+    }
+  });
+
+  if (succeeded) {
+    vscode.window.showInformationMessage(
+      `OAT: ${repairs.length} figure${repairs.length === 1 ? '' : 's'} repaired and renumbered.`
+    );
+  } else {
+    vscode.window.showErrorMessage('OAT: Repair failed — document may have changed.');
+  }
 }
 
 // ── Cloudflare Worker call ────────────────────────────────────────────────────
@@ -240,7 +291,7 @@ function renderOatHtml(headers, rows) {
   th{background:#005f73;color:#fff;font-size:16px;font-weight:bold;padding:0 12px;height:40px;vertical-align:middle;text-align:left;border-right:1px solid #94d2bd;white-space:nowrap;}
   th:last-child{border-right:none;}
   thead tr{border-bottom:2px solid #94d2bd;}
-  td{font-size:15px;padding:0 12px;height:40px;vertical-align:middle;border-right:1px solid #94d2bd;color:#000;white-space:nowrap;}
+  td{font-size:15px;padding:0 12px;min-height:40px;vertical-align:top;border-right:1px solid #94d2bd;color:#000;word-wrap:break-word;}
   td:last-child{border-right:none;}
   tr.even td{background:#f0f7f8;}
   tr.odd td{background:#fff;}
@@ -270,9 +321,16 @@ async function renderLocalPng(title, headers, rows, partNum, series, imageWidth)
   await execFile('git', ['-C', imagesRepo, 'add', relPath]);
   try {
     await execFile('git', ['-C', imagesRepo, 'commit', '-m', `Add ${title}.png`]);
-    await execFile('git', ['-C', imagesRepo, 'push']);
   } catch (e) {
     if (!e.message.includes('nothing to commit')) throw e;
+  }
+  // Do not block the markdown rewrite if the images repo push is temporarily unavailable.
+  try {
+    await execFile('git', ['-C', imagesRepo, 'push']);
+  } catch (e) {
+    vscode.window.showWarningMessage(
+      `OAT Tables: Created ${title}.png locally, but could not push it to the images repo: ${e.message}`
+    );
   }
 
   return {

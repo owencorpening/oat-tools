@@ -8,13 +8,17 @@
   "categories": ["Other"],
   "main": "./extension.js",
   "scripts": {
-    "test": "node test/parseTables.test.js && node test/tableImageWidth.test.js"
+    "test": "node test/parseTables.test.js && node test/tableImageWidth.test.js && node test/repairFigures.test.js"
   },
   "contributes": {
     "commands": [
       {
         "command": "oatTables.promoteAllTables",
         "title": "OAT Tables: Promote All Tables in Document"
+      },
+      {
+        "command": "oatTables.repairFigures",
+        "title": "OAT Tables: Repair and Renumber Figures"
       }
     ],
     "configuration": {

@@ -108,4 +108,4 @@ Filename matches known AI platform?
 ## See Also
 
 - [image-pipeline-quickstart.md](image-pipeline-quickstart.md) — Quick workflow walkthrough
-- [image-pipeline-architecture.md](image-pipeline-architecture.md) — Data model and saga design
+- [../dev/image-pipeline-architecture.md](../dev/image-pipeline-architecture.md) — Data model and saga design

@@ -23,4 +23,15 @@ assert.strictEqual(tables[0].endLine, 5);
 const notATable = parseTables('| just a pipe-prefixed note |\n| and another one |');
 assert.strictEqual(notATable.length, 0);
 
+const leadingTable = parseTables([
+  '| Alpha | Beta |',
+  '| --- | ---: |',
+  '| One | 1 |',
+  '',
+  'After'
+].join('\n'));
+assert.strictEqual(leadingTable.length, 1);
+assert.strictEqual(leadingTable[0].startLine, 0);
+assert.strictEqual(leadingTable[0].endLine, 2);
+
 console.log('parseTables tests passed');

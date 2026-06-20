@@ -17,7 +17,8 @@ async function executePlannedPlacementRun({
   vscode,
   ledgerWriter,
   buildRunInput = buildPlacementRunInput,
-  runPlacement = placeAsset
+  runPlacement = placeAsset,
+  existsSync = require('fs').existsSync
 } = {}) {
   if (!hasPlacementLedgerMethods(ledgerWriter)) {
     vscode.window.showWarningMessage('OAT: Set oatImages.ledgerApiUrl to execute image placement runs.');
@@ -27,8 +28,20 @@ async function executePlannedPlacementRun({
   const result = await ledgerWriter.listPlannedPlacements();
   const placements = result.placements || [];
   if (placements.length === 0) {
-    vscode.window.showInformationMessage('OAT: No planned image placements to execute.');
+    vscode.window.showInformationMessage('OAT: No planned placements yet — open the OAT Image Staging panel and click Place on a staged image first.');
     return [];
+  }
+
+  const repoPath = imagesRepoPath(vscode);
+  if (!existsSync(repoPath)) {
+    const choice = await vscode.window.showWarningMessage(
+      `OAT: Images repo not found at ${repoPath}. Set oatImages.imagesRepoPath before executing.`,
+      'Open Settings'
+    );
+    if (choice === 'Open Settings') {
+      vscode.commands.executeCommand('workbench.action.openSettings', 'oatImages.imagesRepoPath');
+    }
+    return null;
   }
 
   const picked = await vscode.window.showQuickPick(placements.map(placementItem), {
@@ -37,7 +50,7 @@ async function executePlannedPlacementRun({
   if (!picked) return placements;
 
   const payload = buildRunInput(picked.record, {
-    repoPath: imagesRepoPath(vscode),
+    repoPath,
     download: true,
     commit: true
   });

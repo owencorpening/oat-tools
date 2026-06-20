@@ -1,3 +1,4 @@
+fuck. how to start
 # OAT Tools VS Code Extensions
 
 Owen's Applied Thinking content production tools for VS Code.
@@ -37,19 +38,17 @@ Inspect database: `extensions/image-staging/test-data/db-status.sh`
 ---
 
 For the fastest image ledger walkthrough, see
-[docs/image-pipeline-quickstart.md](docs/image-pipeline-quickstart.md). For how
+[docs/user/image-pipeline-quickstart.md](docs/user/image-pipeline-quickstart.md). For how
 image provenance is determined and auto-staged, see
-[docs/image-provenance.md](docs/image-provenance.md). For the workflow-level
+[docs/user/image-provenance.md](docs/user/image-provenance.md). For the workflow-level
 guide to what each tool is for and how to use it, see
-[docs/use-cases.md](docs/use-cases.md). For the working architecture target that
+[docs/user/use-cases.md](docs/user/use-cases.md). For the working architecture target that
 reconciles these extensions with the content standards, see
-[docs/image-pipeline-architecture.md](docs/image-pipeline-architecture.md). For
+[docs/dev/image-pipeline-architecture.md](docs/dev/image-pipeline-architecture.md). For
 the provider-search plan that keeps bookmarklet and Downloads intake, see
-[docs/image-provider-search-plan.md](docs/image-provider-search-plan.md). For
-the broader repository split plan, see
-[docs/repo-refactor-plan.md](docs/repo-refactor-plan.md). For the inventory of
+[docs/dev/image-provider-search-plan.md](docs/dev/image-provider-search-plan.md). For the inventory of
 tool-like files being migrated from the current content workspace, see
-[docs/tool-migration-inventory.md](docs/tool-migration-inventory.md).
+[docs/dev/tool-migration-inventory.md](docs/dev/tool-migration-inventory.md).
 
 ---
 
@@ -126,8 +125,8 @@ Install each extension separately:
 
 ```bash
 cd ~/.vscode/extensions
-ln -s ~/dev/oat-tools-vscode/extensions/table-tools oat-table-tools-0.1.0
-ln -s ~/dev/oat-tools-vscode/extensions/image-staging oat-image-staging-0.1.0
+ln -s ~/dev/oat-tools/extensions/table-tools oat-table-tools-0.1.0
+ln -s ~/dev/oat-tools/extensions/image-staging oat-image-staging-0.1.0
 ```
 
 Reload VS Code. The table command appears in the Command Palette, and the image
@@ -182,7 +181,7 @@ Google API, screenshot, and Git workflows should be smoke-tested manually.
 ## File Structure
 
 ```text
-oat-tools-vscode/
+oat-tools/
 ├── extensions/
 │   ├── table-tools/
 │   │   ├── extension.js
@@ -200,12 +199,9 @@ oat-tools-vscode/
 │       ├── media/
 │       └── scripts/
 ├── docs/
-│   ├── image-pipeline-architecture.md
-│   ├── image-provider-search-plan.md
-│   ├── repo-refactor-plan.md
-│   ├── split-plan.md
-│   ├── tool-migration-inventory.md
-│   └── use-cases.md
+│   ├── user/                        # workflow guides for daily use
+│   ├── dev/                         # architecture and technical reference
+│   └── archive/                     # completed plans
 ├── tools/
 │   ├── assets/
 │   ├── blockquotes/

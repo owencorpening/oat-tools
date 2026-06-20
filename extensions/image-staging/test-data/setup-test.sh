@@ -38,8 +38,11 @@ if [ -f "$LEDGER_PID_FILE" ]; then
   kill $(cat "$LEDGER_PID_FILE") 2>/dev/null || true
   rm -f "$LEDGER_PID_FILE"
 fi
-# Also kill any process on the ledger port
-lsof -i :$LEDGER_PORT 2>/dev/null | grep -v COMMAND | awk '{print $2}' | xargs -r kill 2>/dev/null || true
+# Also kill any process on the ledger port.
+# Use a plain read loop so the cleanup works on systems without GNU xargs.
+lsof -i :$LEDGER_PORT 2>/dev/null | grep -v COMMAND | awk '{print $2}' | while read -r pid; do
+  [ -n "$pid" ] && kill "$pid" 2>/dev/null || true
+done
 
 # Clear the test database directory so we start fresh
 rm -rf "$TEST_DB_DIR"

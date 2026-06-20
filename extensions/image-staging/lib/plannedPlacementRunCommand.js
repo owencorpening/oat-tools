@@ -1,5 +1,6 @@
 'use strict';
 
+const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { buildPlacementRunInput } = require('./plannedPlacementRun');
@@ -22,7 +23,7 @@ async function preparePlannedPlacementRun({ vscode, ledgerWriter, buildRunInput 
   const result = await ledgerWriter.listPlannedPlacements();
   const placements = result.placements || [];
   if (placements.length === 0) {
-    vscode.window.showInformationMessage('OAT: No planned image placements to prepare.');
+    vscode.window.showInformationMessage('OAT: No planned placements yet — open the OAT Image Staging panel and click Place on a staged image to create one.');
     return [];
   }
 
@@ -31,8 +32,15 @@ async function preparePlannedPlacementRun({ vscode, ledgerWriter, buildRunInput 
   });
   if (!picked) return placements;
 
+  const repoPath = imagesRepoPath(vscode);
+  if (!fs.existsSync(repoPath)) {
+    vscode.window.showWarningMessage(
+      `OAT: Images repo not found at ${repoPath} — set oatImages.imagesRepoPath before executing these instructions.`
+    );
+  }
+
   const payload = buildRunInput(picked.record, {
-    repoPath: imagesRepoPath(vscode),
+    repoPath,
     download: true,
     commit: true
   });

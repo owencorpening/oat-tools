@@ -33,6 +33,7 @@ async function testExecuteRunsPlacementAndReplacesSnippet() {
   const result = await executePlannedPlacementRun({
     vscode,
     ledgerWriter,
+    existsSync: () => true,
     runPlacement: async payload => {
       calls.push(['runPlacement', payload.sagaId, payload.repoPath]);
       await payload.writeSnippet({
@@ -73,6 +74,7 @@ async function testCancelStopsBeforeSideEffects() {
         }
       ]
     }),
+    existsSync: () => true,
     runPlacement: async () => {
       ran = true;
     }

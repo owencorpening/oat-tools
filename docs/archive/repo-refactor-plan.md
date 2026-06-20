@@ -41,7 +41,7 @@ Names can change. The important part is that repos are named for use, not for th
 old workspace name.
 
 For the current inventory of tool-like files and their migration status, see
-[tool-migration-inventory.md](tool-migration-inventory.md).
+[../dev/tool-migration-inventory.md](../dev/tool-migration-inventory.md).
 
 ## What Belongs In D1 Instead Of Git
 

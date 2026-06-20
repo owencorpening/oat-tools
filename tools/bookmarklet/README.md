@@ -33,4 +33,4 @@ configured, and lets the `OAT Image Staging` panel review and place it from D1.
 
 - `../d1/worker/index.js` owns the `/captures/image` endpoint.
 - `../d1/README.md` documents the ledger Worker API.
-- `../../docs/image-pipeline-quickstart.md` documents the daily capture flow.
+- `../../docs/user/image-pipeline-quickstart.md` documents the daily capture flow.
