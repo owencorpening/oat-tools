@@ -260,6 +260,31 @@ async function listStagedAssets(db) {
   `));
 }
 
+async function listAssets(db) {
+  return all(db.prepare(`
+    SELECT
+      a.*,
+      p.target AS placement_target,
+      p.status AS placement_status,
+      p.published_url AS placement_published_url,
+      p.updated_at AS placement_updated_at,
+      d.title AS draft_title,
+      d.draft_path AS draft_path
+      FROM asset a
+      LEFT JOIN asset_placement p
+        ON p.id = (
+          SELECT id
+            FROM asset_placement
+           WHERE asset_id = a.id
+           ORDER BY created_at DESC
+           LIMIT 1
+        )
+      LEFT JOIN content_draft d
+        ON d.id = p.content_draft_id
+     ORDER BY a.created_at ASC
+  `));
+}
+
 async function listPlannedPlacements(db, { contentDraftId } = {}) {
   const sql = `
     SELECT
@@ -396,6 +421,7 @@ module.exports = {
   markPlaced,
   markFailed,
   listOpenNeeds,
+  listAssets,
   listStagedAssets,
   listPlannedPlacements
 };

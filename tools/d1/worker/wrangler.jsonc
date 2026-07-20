@@ -1,7 +1,7 @@
 {
   "$schema": "https://unpkg.com/wrangler/config-schema.json",
   "name": "oat-publishing-ledger",
-  "main": "index.js",
+  "main": "entry.mjs",
   "compatibility_date": "2026-06-07",
   "observability": {
     "enabled": true
@@ -10,7 +10,7 @@
     {
       "binding": "DB",
       "database_name": "oat-publishing-ledger",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "9a9081d8-d8ff-47da-a2f6-fb329a8bf7e6",
       "migrations_dir": "../migrations"
     }
   ]

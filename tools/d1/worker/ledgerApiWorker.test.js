@@ -217,11 +217,18 @@ async function testListRoutes() {
   env.DB.insert('image_need', { id: 'need-1', content_draft_id: 'draft-1', status: 'open', created_at: '2026-01-01T00:00:00.000Z' });
   env.DB.insert('image_need', { id: 'need-2', content_draft_id: 'draft-2', status: 'open', created_at: '2026-01-02T00:00:00.000Z' });
 
+  env.DB.insert('content_draft', { id: 'draft-1', draft_path: 'water-series/part-09/post.md', title: 'Water Part IX' });
+
   const assets = await (await handleRequest(new Request('https://ledger.test/assets/staged'), env)).json();
+  const allAssets = await (await handleRequest(new Request('https://ledger.test/assets'), env)).json();
   const needs = await (await handleRequest(new Request('https://ledger.test/image-needs/open?contentDraftId=draft-1'), env)).json();
   const placements = await (await handleRequest(new Request('https://ledger.test/placements/planned?contentDraftId=draft-1'), env)).json();
 
   assert.deepStrictEqual(assets.assets.map(row => row.id), ['asset-1']);
+  assert.deepStrictEqual(allAssets.assets.map(row => row.id), ['asset-1', 'asset-2']);
+  assert.strictEqual(allAssets.assets[0].placement_target, 'substack');
+  assert.strictEqual(allAssets.assets[0].draft_title, 'Water Part IX');
+  assert.strictEqual(allAssets.assets[1].placement_target, undefined);
   assert.deepStrictEqual(needs.imageNeeds.map(row => row.id), ['need-1']);
   assert.deepStrictEqual(placements.placements.map(row => row.placement_id), ['placement-1']);
   assert.strictEqual(placements.placements[0].saga_id, 'saga-1');
@@ -429,6 +436,29 @@ class FakeStatement {
             saga_status: saga.status
           };
       });
+      return { results: rows };
+    }
+    if (/draft_title/i.test(this.sql)) {
+      const placements = this.db.tables.get('asset_placement') || [];
+      const drafts = this.db.tables.get('content_draft') || [];
+      const rows = [...(this.db.tables.get('asset') || [])]
+        .sort(byCreatedAt)
+        .map(row => {
+          const placement = [...placements]
+            .filter(candidate => candidate.asset_id === row.id)
+            .sort(byCreatedAt)
+            .pop() || {};
+          const draft = drafts.find(candidate => candidate.id === placement.content_draft_id) || {};
+          return {
+            ...row,
+            placement_target: placement.target,
+            placement_status: placement.status,
+            placement_published_url: placement.published_url,
+            placement_updated_at: placement.updated_at,
+            draft_title: draft.title,
+            draft_path: draft.draft_path
+          };
+        });
       return { results: rows };
     }
     if (/FROM\s+asset\b/i.test(this.sql)) {
