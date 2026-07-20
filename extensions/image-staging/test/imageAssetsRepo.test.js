@@ -58,7 +58,7 @@ function testCreatePlacedAssetCompatibility() {
   assert.strictEqual(asset.relPath, 'water-series/part-09/source-photo');
   assert.strictEqual(asset.fileName, 'source-photo.webp');
   assert.strictEqual(asset.imagePath, path.join(repoPath, 'water-series', 'part-09', 'source-photo', 'source-photo.webp'));
-  assert.strictEqual(asset.imageUrl, 'https://raw.githubusercontent.com/owencorpening/images/main/water-series/part-09/source-photo/source-photo.webp');
+  assert.strictEqual(asset.imageUrl, 'https://raw.githubusercontent.com/owencorpening/oat-assets/main/water-series/part-09/source-photo/source-photo.webp');
 }
 
 function testRemovePlacedAssetBySourceUrl() {

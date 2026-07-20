@@ -13,7 +13,7 @@ function createRepoAsset({
   slug = asset && asset.slug,
   fileName,
   rawOwner = 'owencorpening',
-  rawRepo = 'images',
+  rawRepo = 'oat-assets',
   rawBranch = 'main'
 }) {
   requireValue(repoPath, 'repoPath');

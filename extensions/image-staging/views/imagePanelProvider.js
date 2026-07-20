@@ -268,7 +268,7 @@ class ImagePanelProvider {
       const target = placementTargetFromEditor(editor);
       this._log('[OAT] Placement target: ' + target);
       if (!target) {
-        vscode.window.showWarningMessage('OAT: Open a Substack draft under substack-ideas or a carousel draft ending in carousel.md before placing.');
+        vscode.window.showWarningMessage('OAT: Open a Substack draft under substack-unpublished/ (or a carousel draft ending in carousel.md) before placing.');
         return null;
       }
 
@@ -997,25 +997,34 @@ function placementTargetFromEditor(editor) {
   return placementTargetFromDraftPath(editor?.document?.uri?.fsPath);
 }
 
+const DRAFT_ROOT_DIRS = ['substack-unpublished', 'substack-published', 'substack-ideas'];
+
 function extractSeriesAndPartDir(editor) {
   const filePath = editor?.document?.uri?.fsPath || '';
   const normalized = filePath.replace(/\\/g, '/');
   const segments = normalized.split('/').filter(Boolean);
 
-  // Find substack-ideas or standalone
-  const ideaIndex = segments.findIndex(seg => seg === 'substack-ideas' || seg === 'standalone');
+  // Find the draft root (oat-content layout) or legacy substack-ideas/standalone
+  const ideaIndex = segments.findIndex(seg => DRAFT_ROOT_DIRS.includes(seg) || seg === 'standalone');
   if (ideaIndex === -1 || ideaIndex + 2 >= segments.length) {
     return { series: '', partDir: '' };
   }
 
-  // Series is the directory after substack-ideas/
+  // Series is the directory after the draft root
   const series = segments[ideaIndex + 1];
 
-  // PartDir is the filename without .md extension
-  const filename = segments[segments.length - 1];
-  const partDir = filename.replace(/\.md$/i, '');
+  // oat-content layout: series/<article-folder>/<file>.md — partDir comes from
+  // the article folder, shortened to its part-NN prefix to match the
+  // oat-assets convention (part-10-gwetc-execution → part-10).
+  const articleFolder = ideaIndex + 3 < segments.length ? segments[ideaIndex + 2] : '';
+  if (articleFolder) {
+    const partMatch = articleFolder.match(/^(part-\d+)/i);
+    return { series, partDir: partMatch ? partMatch[1].toLowerCase() : articleFolder };
+  }
 
-  return { series, partDir };
+  // Legacy layout: partDir is the filename without .md extension
+  const filename = segments[segments.length - 1];
+  return { series, partDir: filename.replace(/\.md$/i, '') };
 }
 
 function placementTargetFromDraftPath(draftPath) {
@@ -1024,7 +1033,7 @@ function placementTargetFromDraftPath(draftPath) {
   const fileName = segments[segments.length - 1] || '';
 
   if (/carousel\.md$/.test(fileName)) return 'carousel';
-  if (segments.includes('substack-ideas')) return 'substack';
+  if (DRAFT_ROOT_DIRS.some(dir => segments.includes(dir))) return 'substack';
   return null;
 }
 
