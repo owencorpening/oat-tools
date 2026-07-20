@@ -2,8 +2,27 @@
 
 Fresh-start D1 schema for the image and table asset pipeline.
 
-The image pipeline is clean-slate D1. It does not use Google Sheets for image
-capture, staging, placement, or discard state.
+The image pipeline is clean-slate D1: the ledger is the source of truth for
+image capture, staging, placement, and discard state. The legacy "Images"
+Google Sheet still exists as a human-readable mirror — the image-capture
+Apps Script forwards bookmarklet captures to `POST /captures/image` and its
+`syncFromLedger()` (hourly trigger) upserts sheet rows from `GET /assets`.
+
+## Deployment
+
+Deployed 2026-07-19 at **https://oat-publishing-ledger.owencorpening.workers.dev**
+(D1 database `oat-publishing-ledger`, id in `worker/wrangler.jsonc`). Secrets
+set on the Worker: `LEDGER_API_TOKEN` (bearer auth — same value as the
+`oatImages.ledgerApiToken` VS Code setting), `UNSPLASH_ACCESS_KEY`,
+`PEXELS_ACCESS_KEY`. Redeploy after code changes with:
+
+```bash
+cd tools/d1/worker && npx wrangler deploy
+```
+
+The Worker entry is `worker/entry.mjs`, a module-format shim over the
+CommonJS `worker/index.js` (D1 bindings reject service-worker-format
+uploads; index.js stays CommonJS for tests and `ledger:dev:node`).
 
 ## Files
 
@@ -15,15 +34,10 @@ capture, staging, placement, or discard state.
 - `../bookmarklet/` contains the browser capture bookmarklet that writes image
   candidates to this Worker instead of Google Sheets.
 
-## Later Wrangler Commands
+## Wrangler Commands
 
-Create the database once a Cloudflare project/config is ready:
-
-```bash
-wrangler d1 create oat-publishing-ledger
-```
-
-Apply migrations after adding the D1 binding to a Wrangler config:
+The production database already exists and has migrations applied (see
+Deployment above). These commands remain for local dev and future migrations:
 
 ```bash
 npm run ledger:migrations:list:local
@@ -86,6 +100,8 @@ Endpoints:
 - `POST /placements/:id/placed`
 - `GET /image-needs/open`
 - `GET /assets/staged`
+- `GET /assets` — every asset joined with its latest placement and draft
+  title; powers the Google Sheet mirror sync
 - `GET /placements/planned`
 
 VS Code commands that use this API:
@@ -100,8 +116,7 @@ VS Code commands that use this API:
 - `OAT Images: Execute Planned Placement Run`
 
 Set `LEDGER_API_TOKEN` as a Worker secret when the API should require bearer
-authorization. Replace the placeholder `database_id` in `worker/wrangler.jsonc`
-with the ID returned by `wrangler d1 create`.
+authorization (the deployed Worker has it set).
 
 Optional capture metadata secrets:
 

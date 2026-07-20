@@ -2,29 +2,21 @@
 
 Use this when you want the shortest path from an image idea to a placed figure in your draft.
 
-The **image ledger** tracks possible images, why you need them, where they should go, and what should happen next. It runs as a local Cloudflare Worker backed by a D1 database. Some command names say "notebook" — that refers to the same thing.
+The **image ledger** tracks possible images, why you need them, where they should go, and what should happen next. It runs as a Cloudflare Worker backed by a D1 database, deployed at `https://oat-publishing-ledger.owencorpening.workers.dev`. Some command names say "notebook" — that refers to the same thing.
 
 The pipeline keeps file writes, Git commits, and draft edits behind a confirmation step. You can plan a placement and inspect the instructions before anything touches your files.
 
 ## Setup
 
-1. Start the ledger Worker locally:
+1. In VS Code settings, set `oatImages.ledgerApiUrl` to `https://oat-publishing-ledger.owencorpening.workers.dev` and `oatImages.ledgerApiToken` to the Worker's `LEDGER_API_TOKEN` secret value. No local server needed.
 
-   ```bash
-   npm run ledger:dev
-   ```
+   (For local Worker development instead: `npm run ledger:dev`, point `ledgerApiUrl` at `http://127.0.0.1:8787`, and skip the token.)
 
-   This starts Wrangler on port 8787 (Wrangler's default). Leave this terminal running.
+2. Optionally install the [D1 image capture bookmarklet](../../tools/bookmarklet/README.md) for one-click image capture while browsing.
 
-2. In VS Code settings, set `oatImages.ledgerApiUrl` to `http://127.0.0.1:8787`.
+3. Set `oatImages.imagesRepoPath` to your images repo (`~/dev/oat-assets`).
 
-3. `oatImages.ledgerApiToken` is only needed if your deployed Worker requires authentication. Skip it for local development.
-
-4. Optionally install the [D1 image capture bookmarklet](../../tools/bookmarklet/README.md) for one-click image capture while browsing.
-
-5. `oatImages.imagesRepoPath` defaults to `~/dev/images`. Set it only if your images repo is elsewhere.
-
-6. Open the target markdown draft in VS Code.
+4. Open the target markdown draft in VS Code.
 
 ## The Flow
 
@@ -127,14 +119,14 @@ All commands run from the Command Palette — `Ctrl+Shift+P` on Linux/Windows, `
 The extension will tell you what to do in most of these cases, but here's the short version:
 
 - **Panel shows "No staged images":** use the search above to find one, or run `OAT Images: Intake Local File` to add a file from Downloads.
-- **Can't reach the ledger:** confirm `oatImages.ledgerApiUrl` is set and `npm run ledger:dev` is running.
+- **Can't reach the ledger:** confirm `oatImages.ledgerApiUrl` and `oatImages.ledgerApiToken` are set (or, for local dev, that `npm run ledger:dev` is running).
 - **No placements to prepare or execute:** open the staging panel and click `Place` on a staged image first (Frame 4).
 - **Wrong repo path:** the Execute command will offer to open settings — set `oatImages.imagesRepoPath` there.
 
 ## Technical Details
 
-- The ledger Worker runs locally via `npm run ledger:dev` (Wrangler, port 8787) or `npm run ledger:dev:node` (plain Node, for when Wrangler's local D1 runtime is unavailable).
-- The bookmarklet posts to `POST /captures/image` on the ledger Worker. It does not write to Google Sheets.
+- The ledger Worker is deployed at `https://oat-publishing-ledger.owencorpening.workers.dev`; for local development use `npm run ledger:dev` (Wrangler, port 8787) or `npm run ledger:dev:node` (plain Node, for when Wrangler's local D1 runtime is unavailable).
+- The bookmarklet posts to `POST /captures/image` on the ledger Worker. The image-capture Apps Script also forwards its sheet captures to the same endpoint, and mirrors the ledger back into the "Images" Google Sheet hourly (`syncFromLedger`).
 - The Worker uses optional `UNSPLASH_ACCESS_KEY` and `PEXELS_ACCESS_KEY` secrets to enrich captured photographer metadata.
 - Placement instructions are JSON shaped for `imagePipeline.placeAsset`.
 
