@@ -56,8 +56,8 @@ async function testCaptureImage() {
   assert.strictEqual(row.source_url, 'https://unsplash.com/photos/river-crossing-abc123');
   assert.strictEqual(row.image_src, 'https://images.unsplash.com/api-photo');
   assert.strictEqual(row.photographer, 'API Photographer');
-  assert.strictEqual(row.license, 'CC0 Equivalent (No Attribution)');
-  assert.strictEqual(row.attribution, 'Image: River Crossing Photo, by API Photographer, Source: unsplash.com. License: CC0 Equivalent (No Attribution).');
+  assert.strictEqual(row.license, 'Unsplash License');
+  assert.strictEqual(row.attribution, 'Image: River Crossing Photo, by API Photographer, Source: unsplash.com. License: Unsplash License.');
   assert.strictEqual(row.status, 'staged');
   assert.strictEqual(row.intake_section, 'standalone/river-story');
   assert.deepStrictEqual(fetched, [
@@ -141,6 +141,88 @@ async function testPexelsProviderSearchFailureIsControlled() {
   const body = await response.json();
   assert.strictEqual(response.status, 200);
   assert.deepStrictEqual(body.results, []);
+}
+
+async function testUnsplashProviderRoutes() {
+  const fetched = [];
+  const env = {
+    DB: new FakeD1(),
+    UNSPLASH_ACCESS_KEY: 'unsplash-key',
+    fetch: async (url, init) => {
+      fetched.push([url, init]);
+      if (String(url).includes('/search/photos')) {
+        return {
+          ok: true,
+          json: async () => ({
+            total: 1,
+            total_pages: 1,
+            results: [unsplashPhoto('eOvv6TjnSjc')]
+          })
+        };
+      }
+      if (String(url).includes('/photos/eOvv6TjnSjc')) {
+        return {
+          ok: true,
+          json: async () => unsplashPhoto('eOvv6TjnSjc')
+        };
+      }
+      return { ok: false, json: async () => ({}) };
+    }
+  };
+
+  let response = await handleRequest(new Request('https://ledger.test/image-providers'), env);
+  let body = await response.json();
+  assert.strictEqual(response.status, 200);
+  assert.deepStrictEqual(body.providers, [{ id: 'unsplash', label: 'Unsplash' }]);
+
+  response = await handleRequest(new Request('https://ledger.test/image-providers/search?q=wetland&providers=unsplash'), env);
+  body = await response.json();
+  assert.strictEqual(response.status, 200);
+  assert.strictEqual(body.results.length, 1);
+  assert.strictEqual(body.results[0].provider, 'unsplash');
+  assert.strictEqual(body.results[0].providerId, 'eOvv6TjnSjc');
+  assert.strictEqual(body.results[0].sourceUrl, 'https://unsplash.com/photos/eOvv6TjnSjc');
+  assert.strictEqual(body.results[0].imageSrc, 'https://images.unsplash.com/photos/eOvv6TjnSjc/regular.jpeg');
+  assert(String(fetched[0][0]).startsWith('https://api.unsplash.com/search/photos?query=wetland&page=1&per_page=12'));
+
+  response = await handleRequest(jsonRequest('/captures/provider-image', {
+    provider: 'unsplash',
+    providerId: 'eOvv6TjnSjc'
+  }), env);
+  body = await response.json();
+  const row = env.DB.one('asset', body.asset.id);
+  assert.strictEqual(response.status, 201);
+  assert.strictEqual(row.status, 'staged');
+  assert.strictEqual(row.display_name, 'Misty wetland at dawn');
+  assert.strictEqual(row.source_name, 'unsplash:eOvv6TjnSjc');
+  assert.strictEqual(row.source_url, 'https://unsplash.com/photos/eOvv6TjnSjc');
+  assert.strictEqual(row.image_src, 'https://images.unsplash.com/photos/eOvv6TjnSjc/regular.jpeg');
+  assert.strictEqual(row.photographer, 'Unsplash Photographer');
+  assert.strictEqual(row.license, 'Unsplash License');
+}
+
+async function testUnsplashProviderSearchFailureIsControlled() {
+  const env = {
+    DB: new FakeD1(),
+    UNSPLASH_ACCESS_KEY: 'unsplash-key',
+    fetch: async () => ({ ok: false, json: async () => ({}) })
+  };
+
+  const response = await handleRequest(new Request('https://ledger.test/image-providers/search?q=wetland&providers=unsplash'), env);
+  const body = await response.json();
+  assert.strictEqual(response.status, 200);
+  assert.deepStrictEqual(body.results, []);
+}
+
+async function testCaptureProviderImageRejectsDisabledProvider() {
+  const env = { DB: new FakeD1() };
+
+  const response = await handleRequest(jsonRequest('/captures/provider-image', {
+    provider: 'unsplash',
+    providerId: 'eOvv6TjnSjc'
+  }), env);
+
+  assert.strictEqual(response.status, 400);
 }
 
 async function testCreateReviewImageNeedUpsertsDraft() {
@@ -318,6 +400,28 @@ async function testAuthAndErrors() {
 
   response = await handleRequest(new Request('https://ledger.test/nope'), { DB: new FakeD1() });
   assert.strictEqual(response.status, 404);
+}
+
+function unsplashPhoto(id) {
+  return {
+    id,
+    width: 3456,
+    height: 5184,
+    alt_description: 'Misty wetland at dawn',
+    links: {
+      html: `https://unsplash.com/photos/${id}`
+    },
+    user: {
+      name: 'Unsplash Photographer'
+    },
+    urls: {
+      thumb: `https://images.unsplash.com/photos/${id}/thumb.jpeg`,
+      small: `https://images.unsplash.com/photos/${id}/small.jpeg`,
+      regular: `https://images.unsplash.com/photos/${id}/regular.jpeg`,
+      full: `https://images.unsplash.com/photos/${id}/full.jpeg`,
+      raw: `https://images.unsplash.com/photos/${id}/raw.jpeg`
+    }
+  };
 }
 
 function jsonRequest(path, body, token) {
@@ -526,6 +630,9 @@ function byCreatedAt(a, b) {
   await testCaptureImage();
   await testPexelsProviderRoutes();
   await testPexelsProviderSearchFailureIsControlled();
+  await testUnsplashProviderRoutes();
+  await testUnsplashProviderSearchFailureIsControlled();
+  await testCaptureProviderImageRejectsDisabledProvider();
   await testCreateReviewImageNeedUpsertsDraft();
   await testCreatePlacementWithSaga();
   await testListRoutes();

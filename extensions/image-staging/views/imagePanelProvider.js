@@ -173,6 +173,19 @@ class ImagePanelProvider {
       }
     }
 
+    if (requestedProviders.includes('unsplash') && this._ledgerWriter?.searchImageProviders) {
+      try {
+        const result = await this._ledgerWriter.searchImageProviders({
+          query: cleanQuery,
+          providers: ['unsplash'],
+          perPage: 12
+        });
+        results.push(...this._prepareProviderResultsForPanel(result?.results));
+      } catch (err) {
+        this._send({ type: 'providerNotice', message: `Unsplash search skipped: ${err.message}` });
+      }
+    }
+
     this._send({ type: 'providerResults', query: cleanQuery, providers: requestedProviders, results });
     return { query: cleanQuery, results };
   }
@@ -602,6 +615,7 @@ body {
 <div class="tabs">
   <button class="tab-btn active" data-tab="downloads">Downloads</button>
   <button class="tab-btn" data-tab="pexels">Pexels</button>
+  <button class="tab-btn" data-tab="unsplash">Unsplash</button>
   <button class="tab-btn" data-tab="staged">Staged</button>
 </div>
 
@@ -623,6 +637,15 @@ body {
   </form>
   <div id="pexelsStatus" class="search-status" style="display:none"></div>
   <div id="pexelsResults"></div>
+</div>
+
+<div class="tab-content" id="unsplash-tab" style="display:none">
+  <form class="searchbar" id="unsplashForm">
+    <input class="search-input" id="unsplashInput" type="search" placeholder="Search Unsplash">
+    <button class="search-btn" type="submit">Search</button>
+  </form>
+  <div id="unsplashStatus" class="search-status" style="display:none"></div>
+  <div id="unsplashResults"></div>
 </div>
 
 <div class="tab-content" id="staged-tab" style="display:none">
@@ -679,6 +702,17 @@ document.getElementById('pexelsForm').addEventListener('submit', event => {
   vscode.postMessage({ type: 'providerSearch', query, providers: ['pexels'] });
 });
 
+document.getElementById('unsplashForm').addEventListener('submit', event => {
+  event.preventDefault();
+  const query = document.getElementById('unsplashInput').value.trim();
+  if (!query) return;
+  _currentProvider = 'Unsplash';
+  _currentSearchProvider = 'unsplash';
+  providerResults = [];
+  renderUnsplashResults('Searching…');
+  vscode.postMessage({ type: 'providerSearch', query, providers: ['unsplash'] });
+});
+
 if (document.getElementById('browseBtn')) {
   document.getElementById('browseBtn').addEventListener('click', event => {
     event.preventDefault();
@@ -692,14 +726,19 @@ if (document.getElementById('browseBtn')) {
 
 const resultsEl = document.getElementById('results');
 const pexelsResultsEl = document.getElementById('pexelsResults');
+const unsplashResultsEl = document.getElementById('unsplashResults');
 const listEl = document.getElementById('list');
-console.log('[OAT-Webview] Attaching click handlers to:', resultsEl, pexelsResultsEl, listEl);
+console.log('[OAT-Webview] Attaching click handlers to:', resultsEl, pexelsResultsEl, unsplashResultsEl, listEl);
 resultsEl.addEventListener('click', e => {
   console.log('[OAT-Webview] Click on results:', e.target);
   handleCardAction(e);
 });
 pexelsResultsEl.addEventListener('click', e => {
   console.log('[OAT-Webview] Click on pexels results:', e.target);
+  handleCardAction(e);
+});
+unsplashResultsEl.addEventListener('click', e => {
+  console.log('[OAT-Webview] Click on unsplash results:', e.target);
   handleCardAction(e);
 });
 listEl.addEventListener('click', e => {
@@ -730,6 +769,8 @@ window.addEventListener('message', e => {
       _currentProvider = msg.providers.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' + ');
       if (msg.providers.length === 1 && msg.providers[0] === 'pexels') {
         renderPexelsResults(providerResults.length ? '' : 'No Pexels results.');
+      } else if (msg.providers.length === 1 && msg.providers[0] === 'unsplash') {
+        renderUnsplashResults(providerResults.length ? '' : 'No Unsplash results.');
       } else {
         renderProviderResults(providerResults.length ? '' : 'No provider results.');
       }
@@ -743,6 +784,8 @@ window.addEventListener('message', e => {
     }
     if (_currentSearchProvider === 'pexels') {
       renderPexelsResults('Staged.');
+    } else if (_currentSearchProvider === 'unsplash') {
+      renderUnsplashResults('Staged.');
     } else {
       renderProviderResults('Staged.');
     }
@@ -832,6 +875,10 @@ function renderProviderResults(message) {
 
 function renderPexelsResults(message) {
   return renderResults('pexelsResults', 'pexelsStatus', message);
+}
+
+function renderUnsplashResults(message) {
+  return renderResults('unsplashResults', 'unsplashStatus', message);
 }
 
 function isImageAlreadyStaged(providerResult) {

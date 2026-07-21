@@ -419,6 +419,42 @@ async function testProviderSearchSendsResults() {
   ]);
 }
 
+async function testProviderSearchIncludesUnsplash() {
+  const sent = [];
+  const calls = [];
+  const provider = new ImagePanelProvider({ subscriptions: [] }, {
+    ledgerWriter: {
+      searchImageProviders: async payload => {
+        calls.push(payload);
+        return {
+          results: [
+            {
+              provider: 'unsplash',
+              providerId: 'eOvv6TjnSjc',
+              title: 'Wetland',
+              sourceUrl: 'https://unsplash.com/photos/eOvv6TjnSjc',
+              imageSrc: 'https://images.unsplash.com/photos/eOvv6TjnSjc/regular.jpeg',
+              photographer: 'Unsplash Photographer',
+              license: 'Unsplash License'
+            }
+          ]
+        };
+      }
+    }
+  });
+  provider._view = { webview: { postMessage: message => sent.push(message) } };
+
+  const result = await provider._handleProviderSearch({ query: 'wetland', providers: ['unsplash'] });
+
+  assert.deepStrictEqual(calls, [
+    { query: 'wetland', providers: ['unsplash'], perPage: 12 }
+  ]);
+  assert.strictEqual(result.results.length, 1);
+  assert.strictEqual(sent.at(-1).type, 'providerResults');
+  assert.strictEqual(sent.at(-1).results[0].provider, 'unsplash');
+  assert.strictEqual(sent.at(-1).results[0].providerId, 'eOvv6TjnSjc');
+}
+
 async function testProviderSearchUsesDownloadsWithoutLedger() {
   const sent = [];
   const provider = new ImagePanelProvider({ subscriptions: [] }, {
@@ -612,6 +648,7 @@ async function run() {
   await testD1PlaceWarnsWhenTargetCannotBeInferred();
   await testD1DiscardMarksAssetDiscarded();
   await testProviderSearchSendsResults();
+  await testProviderSearchIncludesUnsplash();
   await testProviderSearchUsesDownloadsWithoutLedger();
   await testStageProviderImageCreatesAssetAndRefreshes();
   await testStageDownloadsProviderImageSavesAssetAndRefreshes();

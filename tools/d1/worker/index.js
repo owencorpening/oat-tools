@@ -2,6 +2,9 @@
 
 const ledger = require('../../../extensions/image-staging/lib/assetLedgerD1');
 const pexels = require('./imageProviders/pexels');
+const unsplash = require('./imageProviders/unsplash');
+
+const PROVIDERS = { pexels, unsplash };
 
 async function fetch(request, env) {
   return handleRequest(request, env);
@@ -92,7 +95,9 @@ async function handleRequest(request, env = {}) {
 
 async function handleListImageProviders(env = {}) {
   const providers = [];
-  if (pexels.isEnabled(env)) providers.push(pexels.descriptor());
+  for (const provider of Object.values(PROVIDERS)) {
+    if (provider.isEnabled(env)) providers.push(provider.descriptor());
+  }
   return { providers };
 }
 
@@ -106,10 +111,12 @@ async function handleSearchImageProviders(url, env = {}) {
   const providers = [];
   const results = [];
 
-  if (requestedProviders.includes('pexels') && pexels.isEnabled(env)) {
-    const pexelsResults = await pexels.search({ query, page, perPage }, env);
-    providers.push(pexels.descriptor());
-    results.push(...pexelsResults.results);
+  for (const providerId of requestedProviders) {
+    const provider = PROVIDERS[providerId];
+    if (!provider || !provider.isEnabled(env)) continue;
+    const providerResults = await provider.search({ query, page, perPage }, env);
+    providers.push(provider.descriptor());
+    results.push(...providerResults.results);
   }
 
   return { query, providers, results };
@@ -199,17 +206,18 @@ async function handleCaptureImage(request, env) {
 async function normalizeProviderAsset(input = {}, env = {}) {
   const result = input.result || input;
   const provider = first(input.provider, result.provider);
-  if (provider !== 'pexels') throw httpError(400, 'Unsupported provider');
+  const providerImpl = provider && PROVIDERS[provider];
+  if (!providerImpl || !providerImpl.isEnabled(env)) throw httpError(400, 'Unsupported provider');
 
   const providerId = first(input.providerId, input.id, result.providerId);
-  const resolved = await pexels.resolve({
+  const resolved = await providerImpl.resolve({
     providerId,
     sourceUrl: first(input.sourceUrl, result.sourceUrl)
   }, env);
   const normalized = {
     ...result,
     ...resolved,
-    provider: 'pexels',
+    provider,
     providerId: first(resolved.providerId, providerId, result.providerId)
   };
 
@@ -292,55 +300,17 @@ function sourceDomain(sourceUrl) {
 }
 
 async function resolveCapturedMetadata(sourceUrl, env = {}) {
-  const unsplashId = extractUnsplashPhotoId(sourceUrl);
-  if (unsplashId && env.UNSPLASH_ACCESS_KEY) {
-    return fetchUnsplashMetadata(unsplashId, env);
+  const unsplashId = unsplash.extractPhotoId(sourceUrl);
+  if (unsplashId && unsplash.isEnabled(env)) {
+    return unsplash.resolve({ providerId: unsplashId }, env);
   }
 
   const pexelsId = pexels.extractPhotoId(sourceUrl);
-  if (pexelsId && env.PEXELS_ACCESS_KEY) {
+  if (pexelsId && pexels.isEnabled(env)) {
     return pexels.resolve({ providerId: pexelsId }, env);
   }
 
   return {};
-}
-
-async function fetchUnsplashMetadata(photoId, env) {
-  const data = await fetchJson(
-    `https://api.unsplash.com/photos/${encodeURIComponent(photoId)}?client_id=${encodeURIComponent(env.UNSPLASH_ACCESS_KEY)}`,
-    {},
-    env
-  );
-  return {
-    photographer: data && data.user && data.user.name,
-    imageSrc: data && data.urls && (data.urls.regular || data.urls.raw || data.urls.full)
-  };
-}
-
-async function fetchJson(url, init, env = {}) {
-  const fetcher = env.fetch || globalThis.fetch;
-  if (typeof fetcher !== 'function') return {};
-
-  try {
-    const response = await fetcher(url, init);
-    if (!response || !response.ok) return {};
-    return await response.json();
-  } catch {
-    return {};
-  }
-}
-
-function extractUnsplashPhotoId(sourceUrl) {
-  try {
-    const parsed = new URL(sourceUrl);
-    if (!/(^|\.)unsplash\.com$/i.test(parsed.hostname)) return '';
-    const parts = parsed.pathname.split('/').filter(Boolean);
-    const photosIndex = parts.indexOf('photos');
-    if (photosIndex === -1 || !parts[photosIndex + 1]) return '';
-    return parts[photosIndex + 1];
-  } catch {
-    return '';
-  }
 }
 
 async function handleCreateReviewImageNeed(request, db) {
