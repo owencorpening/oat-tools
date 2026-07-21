@@ -28,10 +28,14 @@
       "Bash(curl -s https://api.github.com/repos/anthropics/claude-code/issues/60937)",
       "Bash(extensions/image-staging/test-data/teardown-test.sh)",
       "Bash(extensions/image-staging/test-data/setup-test.sh)",
-      "Bash(chmod +x /home/owen/dev/oat-tools-vscode/extensions/image-staging/test-data/db-status.sh)"
+      "Bash(chmod +x /home/owen/dev/oat-tools-vscode/extensions/image-staging/test-data/db-status.sh)",
+      "Bash(curl -s http://127.0.0.1:8787/assets/staged)",
+      "Bash(npx wrangler *)",
+      "Bash(mkdir -p /home/owen/dev/oat-content/substack-unpublished/family-history/childhood)"
     ],
     "additionalDirectories": [
-      "/tmp/oat-test/substack-ideas"
+      "/tmp/oat-test/substack-ideas",
+      "/home/owen/dev/oat-content/substack-unpublished/family-history"
     ]
   }
 }

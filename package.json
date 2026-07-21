@@ -25,6 +25,6 @@
     "ledger:migrations:apply:remote": "wrangler d1 migrations apply oat-publishing-ledger --remote --config tools/d1/worker/wrangler.jsonc"
   },
   "devDependencies": {
-    "wrangler": "^4.98.0"
+    "wrangler": "^4.103.0"
   }
 }

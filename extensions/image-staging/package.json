@@ -29,19 +29,23 @@
     "commands": [
       {
         "command": "oatImages.refreshPanel",
-        "title": "OAT Images: Refresh Image Panel"
+        "title": "OAT Images: Refresh Image Panel",
+        "icon": "$(refresh)"
       },
       {
         "command": "oatImages.createReviewNeed",
-        "title": "OAT Images: Create Review Image Need"
+        "title": "OAT Images: Create Review Image Need",
+        "icon": "$(note)"
       },
       {
         "command": "oatImages.intakeLocalFile",
-        "title": "OAT Images: Intake Local File"
+        "title": "OAT Images: Intake Local File",
+        "icon": "$(file-add)"
       },
       {
         "command": "oatImages.intakeUrl",
-        "title": "OAT Images: Intake URL"
+        "title": "OAT Images: Intake URL",
+        "icon": "$(link)"
       },
       {
         "command": "oatImages.listOpenNeeds",
@@ -57,13 +61,53 @@
       },
       {
         "command": "oatImages.preparePlannedPlacementRun",
-        "title": "OAT Images: Prepare Planned Placement Run"
+        "title": "OAT Images: Prepare Planned Placement Run",
+        "icon": "$(clippy)"
       },
       {
         "command": "oatImages.executePlannedPlacementRun",
-        "title": "OAT Images: Execute Planned Placement Run"
+        "title": "OAT Images: Execute Planned Placement Run",
+        "icon": "$(run)"
       }
     ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "oatImages.refreshPanel",
+          "when": "view == oatImages.panel",
+          "group": "navigation"
+        },
+        {
+          "command": "oatImages.intakeLocalFile",
+          "when": "view == oatImages.panel",
+          "group": "navigation"
+        },
+        {
+          "command": "oatImages.intakeUrl",
+          "when": "view == oatImages.panel",
+          "group": "navigation"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "oatImages.preparePlannedPlacementRun",
+          "when": "resourceLangId == markdown",
+          "group": "navigation"
+        },
+        {
+          "command": "oatImages.executePlannedPlacementRun",
+          "when": "resourceLangId == markdown",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "oatImages.createReviewNeed",
+          "when": "resourceLangId == markdown",
+          "group": "oat"
+        }
+      ]
+    },
     "configuration": {
       "title": "OAT Image Staging",
       "properties": {
