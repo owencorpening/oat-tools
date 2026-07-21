@@ -215,7 +215,7 @@ async function testPlacementHappyPath() {
     assert(editorText.includes('<figure>'), 'Editor contains figure element');
     assert(result.placed.ok, 'Placement succeeded');
 
-    assert.match(infoMessages[infoMessages.length - 1], /Placed Figure 1/, 'Success message shown');
+    assert.match(infoMessages[infoMessages.length - 1], /Placed and pushed Figure 1/, 'Success message shown');
 
   } finally {
     // Cleanup: remove test image from Downloads

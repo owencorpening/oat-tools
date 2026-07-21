@@ -52,11 +52,14 @@ async function placeAsset(options = {}) {
     }
 
     await setSagaStep(ledger, db, sagaId, 4, 'Rewrite deterministic provenance files from the asset record');
-    await ledger.updateAssetPublication(db, {
-      assetId: asset.id,
-      assetPath: placedAsset.relPath,
-      rawAssetUrl: placedAsset.imageUrl
-    });
+    const isPublished = download && commit;
+    if (isPublished) {
+      await ledger.updateAssetPublication(db, {
+        assetId: asset.id,
+        assetPath: placedAsset.relPath,
+        rawAssetUrl: placedAsset.imageUrl
+      });
+    }
 
     await setSagaStep(ledger, db, sagaId, 5, 'Retry push if commit exists; otherwise re-run add and commit');
     if (commit) {
@@ -85,11 +88,13 @@ async function placeAsset(options = {}) {
     }
 
     await setSagaStep(ledger, db, sagaId, 7, 'Recompute from repo state and draft snippet if ledger update fails');
-    await ledger.markPlaced(db, {
-      placementId: placement.id,
-      assetId: asset.id,
-      publishedUrl: placedAsset.imageUrl
-    });
+    if (isPublished) {
+      await ledger.markPlaced(db, {
+        placementId: placement.id,
+        assetId: asset.id,
+        publishedUrl: placedAsset.imageUrl
+      });
+    }
     await ledger.markSagaStep(db, sagaId, {
       currentStep: 7,
       status: 'succeeded',

@@ -265,6 +265,7 @@ class ImagePanelProvider {
         return null;
       }
 
+      this._log('[OAT] Editor path: ' + (editor?.document?.uri?.fsPath || '(none)'));
       const target = placementTargetFromEditor(editor);
       this._log('[OAT] Placement target: ' + target);
       if (!target) {
@@ -320,7 +321,7 @@ class ImagePanelProvider {
       const { series, partDir } = extractSeriesAndPartDir(editor);
       this._log('[OAT] Series: ' + series + ', PartDir: ' + partDir);
 
-      this._log('[OAT] Running placement...');
+      this._log('[OAT] Downloading and pushing image to oat-assets...');
       const placed = await this._runPlacement({
         db: {},
         sagaId: saga.id,
@@ -330,13 +331,13 @@ class ImagePanelProvider {
         series,
         partDir,
         ledger: this._ledgerWriter,
-        download: false,
-        commit: false,
+        download: true,
+        commit: true,
         writeSnippet: payload => this._writeSnippet(vscode, payload)
       });
       this._log('[OAT] Placement completed');
 
-      vscode.window.showInformationMessage(`OAT: Placed Figure ${figureNumber} for ${image.displayName || image.name}.`);
+      vscode.window.showInformationMessage(`OAT: Placed and pushed Figure ${figureNumber} for ${image.displayName || image.name}.`);
       await this._loadStaged();
 
       return { contentDraft, placement, saga, placed };

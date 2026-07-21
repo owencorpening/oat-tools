@@ -77,6 +77,46 @@ async function testFailureMarksSagaFailed() {
   assert(calls.some(call => call[0] === 'failed' && call[1] === 'download failed'));
 }
 
+async function testPlanOnlyDoesNotMarkPlaced() {
+  const calls = [];
+  const ledger = fakeLedger(calls);
+  const repo = fakeRepo(calls);
+
+  await placeAsset({
+    db: {},
+    sagaId: 'saga-3',
+    repoPath: '/tmp/oat-assets',
+    asset: {
+      id: 'asset-3',
+      slug: 'lake-map',
+      displayName: 'LakeMap',
+      sourceUrl: 'https://example.com/lake-map.jpg',
+      photographer: 'Owen',
+      license: 'OAT',
+      intakeSection: 'water-series/part-09'
+    },
+    placement: {
+      id: 'placement-3',
+      target: 'substack',
+      figureNumber: '3',
+      contentDraftId: 'draft-1'
+    },
+    ledger,
+    repo,
+    download: false,
+    commit: false,
+    writeSnippet: async ({ snippetFormat }) => calls.push(['writeSnippet', snippetFormat])
+  });
+
+  assert(!calls.some(call => call[0] === 'download'), 'Should not download the asset');
+  assert(!calls.some(call => call[0] === 'gitPush'), 'Should not push to the repo');
+  assert(!calls.some(call => call[0] === 'assetPublication'), 'Should not record publication for an unplaced asset');
+  assert(!calls.some(call => call[0] === 'placed'), 'Should not mark the placement placed');
+  assert(calls.some(call => call[0] === 'placementSnippet'), 'Should still record the planned snippet');
+  assert(calls.some(call => call[0] === 'writeSnippet'), 'Should still write the snippet to the draft');
+  assert.deepStrictEqual(calls.at(-1), ['sagaStep', 7, 'succeeded']);
+}
+
 function testSnippetFormatForTarget() {
   assert.strictEqual(snippetFormatForTarget('substack'), 'html-figure');
   assert.strictEqual(snippetFormatForTarget('carousel'), 'marp-image');
@@ -125,6 +165,7 @@ function fakeRepo(calls, options = {}) {
 (async () => {
   await testPlaceAssetSuccess();
   await testFailureMarksSagaFailed();
+  await testPlanOnlyDoesNotMarkPlaced();
   testSnippetFormatForTarget();
   console.log('imagePipeline tests passed');
 })().catch(error => {

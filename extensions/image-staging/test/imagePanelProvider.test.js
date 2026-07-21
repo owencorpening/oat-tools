@@ -168,7 +168,7 @@ async function testD1PlacePlacesFigureDirectly() {
   assert.strictEqual(result.placement.id, saved[0].placement.id);
   assert.deepStrictEqual(result.placed, { ok: true });
   assert.strictEqual(sent.at(-1).type, 'staged');
-  assert.match(infoMessages.at(-1), /Placed Figure 3/);
+  assert.match(infoMessages.at(-1), /Placed and pushed Figure 3/);
 
   fakeVscode.window.activeTextEditor = null;
 }
