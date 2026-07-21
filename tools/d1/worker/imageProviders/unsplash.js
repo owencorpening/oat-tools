@@ -79,7 +79,12 @@ function extractPhotoId(sourceUrl) {
     const parts = parsed.pathname.split('/').filter(Boolean);
     const photosIndex = parts.indexOf('photos');
     if (photosIndex === -1 || !parts[photosIndex + 1]) return '';
-    return parts[photosIndex + 1];
+    // Unsplash photo links may be a bare id ("eOvv6TjnSjc") or a
+    // slug-prefixed id ("a-hat-and-boxed-water-...-6dX5TPPM34M") — the
+    // real id is always the last hyphen-separated segment.
+    const segment = parts[photosIndex + 1];
+    const pieces = segment.split('-');
+    return pieces[pieces.length - 1];
   } catch {
     return '';
   }

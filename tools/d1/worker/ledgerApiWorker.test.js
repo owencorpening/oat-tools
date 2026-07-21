@@ -61,7 +61,35 @@ async function testCaptureImage() {
   assert.strictEqual(row.status, 'staged');
   assert.strictEqual(row.intake_section, 'standalone/river-story');
   assert.deepStrictEqual(fetched, [
-    'https://api.unsplash.com/photos/river-crossing-abc123?client_id=unsplash-key'
+    'https://api.unsplash.com/photos/abc123?client_id=unsplash-key'
+  ]);
+}
+
+async function testCaptureImageResolvesBareUnsplashId() {
+  const fetched = [];
+  const env = {
+    DB: new FakeD1(),
+    LEDGER_API_TOKEN: 'secret',
+    UNSPLASH_ACCESS_KEY: 'unsplash-key',
+    fetch: async url => {
+      fetched.push(url);
+      return {
+        ok: true,
+        json: async () => ({
+          user: { name: 'API Photographer' },
+          urls: { regular: 'https://images.unsplash.com/api-photo' }
+        })
+      };
+    }
+  };
+  await handleRequest(jsonRequest('/captures/image', {
+    id: 'asset-capture-bare',
+    pageTitle: 'Bare Id Photo',
+    sourceUrl: 'https://unsplash.com/photos/eOvv6TjnSjc'
+  }, 'secret'), env);
+
+  assert.deepStrictEqual(fetched, [
+    'https://api.unsplash.com/photos/eOvv6TjnSjc?client_id=unsplash-key'
   ]);
 }
 
@@ -628,6 +656,7 @@ function byCreatedAt(a, b) {
 (async () => {
   await testCreateAsset();
   await testCaptureImage();
+  await testCaptureImageResolvesBareUnsplashId();
   await testPexelsProviderRoutes();
   await testPexelsProviderSearchFailureIsControlled();
   await testUnsplashProviderRoutes();
