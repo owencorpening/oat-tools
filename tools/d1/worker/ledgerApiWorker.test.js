@@ -284,6 +284,10 @@ async function testRecordAssetUseSucceedsForUnsplash() {
   assert(body.pingedAt, 'response should include pingedAt');
   assert.strictEqual(pingedUrls.length, 1);
   assert.deepStrictEqual(pingedUrls[0][1].headers, { Authorization: 'Client-ID unsplash-key' });
+  // Templated, not the provider's raw attribution string — same shape
+  // regardless of provider (see imageProviders/index.js buildAttributionText).
+  assert.strictEqual(body.attributionText, 'Photo by Unsplash Photographer on Unsplash');
+  assert.notStrictEqual(body.attributionText, body.attribution, 'attributionText should not be the raw per-provider attribution field');
 
   const row = env.DB.one('asset', asset.id);
   assert.strictEqual(row.download_location_pinged_at, body.pingedAt);

@@ -1,7 +1,7 @@
 'use strict';
 
 const ledger = require('../../../extensions/image-staging/lib/assetLedgerD1');
-const { PROVIDERS } = require('./imageProviders');
+const { PROVIDERS, buildAttributionText } = require('./imageProviders');
 
 async function fetch(request, env) {
   return handleRequest(request, env);
@@ -211,7 +211,15 @@ async function handleRecordAssetUse(env, assetId) {
     photographerUrl: asset.photographer_url,
     retrievedAt: asset.retrieved_at,
     rawProviderRecord: parseJsonSafe(asset.raw_provider_record),
+    // `attribution` is the provider's own citation-style string (used
+    // elsewhere, e.g. carousel/on-page captions) — left untouched.
+    // `attributionText` is what actually lands in attribution_text.txt:
+    // one shared template, same shape regardless of provider. See
+    // imageProviders/index.js -> buildAttributionText for why.
     attribution: asset.attribution,
+    attributionText: providerImpl
+      ? buildAttributionText({ photographer: asset.photographer, providerLabel: providerImpl.label })
+      : undefined,
     license: asset.license,
     licenseUrl: asset.license_url,
     originalSource: asset.original_source,

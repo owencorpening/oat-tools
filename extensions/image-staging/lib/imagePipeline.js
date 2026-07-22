@@ -67,7 +67,9 @@ async function placeAsset(options = {}) {
             photographerUrl: record.photographerUrl,
             retrievedAt: record.retrievedAt,
             rawProviderRecord: record.rawProviderRecord,
-            attributionText: record.attribution,
+            // Normalized per-provider template, not the raw attribution
+            // field — see worker's buildAttributionText for why.
+            attributionText: record.attributionText,
             pingedAt: record.pingedAt
           });
         }

@@ -132,7 +132,11 @@ async function testRecordAssetUseWritesComplianceFilesWhenProvenanceExists() {
         photographerUrl: 'https://unsplash.com/@unsplash-photographer',
         retrievedAt: '2026-07-21T00:00:00.000Z',
         rawProviderRecord: { id: 'eOvv6TjnSjc' },
-        attribution: 'Image: Misty wetland, by Unsplash Photographer, Source: Unsplash. License: Unsplash License.'
+        // Raw per-provider string (used elsewhere, e.g. captions) — distinct
+        // from attributionText below, which is what the pipeline actually
+        // writes to attribution_text.txt.
+        attribution: 'Image: Misty wetland, by Unsplash Photographer, Source: Unsplash. License: Unsplash License.',
+        attributionText: 'Photo by Unsplash Photographer on Unsplash'
       };
     }
   });
@@ -171,7 +175,8 @@ async function testRecordAssetUseWritesComplianceFilesWhenProvenanceExists() {
   assert.strictEqual(complianceCall[1], '/tmp/asset-dir/misty-wetland');
   assert.strictEqual(complianceCall[2].providerId, 'eOvv6TjnSjc');
   assert.strictEqual(complianceCall[2].pingedAt, '2026-07-21T00:05:00.000Z');
-  assert.match(complianceCall[2].attributionText, /Unsplash Photographer/);
+  // The templated string, not the raw per-provider attribution field.
+  assert.strictEqual(complianceCall[2].attributionText, 'Photo by Unsplash Photographer on Unsplash');
 }
 
 async function testRecordAssetUseSkippedForAssetWithoutProvenance() {

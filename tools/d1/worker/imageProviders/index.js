@@ -43,4 +43,22 @@ for (const [key, provider] of Object.entries(PROVIDERS)) {
   }
 }
 
-module.exports = { PROVIDERS };
+// Single shared template for attribution_text.txt — the file users
+// actually see, and the one that matters for the liability/provenance
+// goal, so it must read the same way regardless of provider rather than
+// passing through each provider's own (differently-formatted) attribution
+// string. Checked each provider's actual license terms: none mandate an
+// exact phrase (Pexels/Unsplash/Pixabay require no attribution at all;
+// Smithsonian is CC0; Openverse/Wikimedia carry CC-family licenses, which
+// specify required *elements* — title/author/source/license — but never
+// a mandated wording). So one template applies everywhere; there is
+// nothing to override per provider today. If that ever changes, override
+// here per provider id, not in the file-writing code.
+function buildAttributionText({ photographer, providerLabel }) {
+  const hasPhotographer = photographer && photographer !== 'UNKNOWN';
+  return hasPhotographer
+    ? `Photo by ${photographer} on ${providerLabel}`
+    : `Photo via ${providerLabel}`;
+}
+
+module.exports = { PROVIDERS, buildAttributionText };
