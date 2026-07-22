@@ -27,7 +27,13 @@ function createRepoAsset({
   writeProvenanceFiles(assetDir, asset || {});
 
   const downloadSrc = asset && (asset.imageSrc || asset.thumbUrl || asset.sourceUrl || asset.url);
-  const resolvedFileName = fileName || `${slug}${guessExt(downloadSrc)}`;
+  // Locally-sourced assets (Downloads, AI-generated, user-provided) have no
+  // imageSrc/sourceUrl to sniff an extension from — they get copied from
+  // sourcePath instead (see imagePipeline.js), so that's the real file
+  // whose extension should be preserved. Without this, every local upload
+  // silently defaulted to .jpg regardless of its actual type.
+  const extSource = (asset && asset.sourcePath) || downloadSrc;
+  const resolvedFileName = fileName || `${slug}${guessExt(extSource)}`;
   const localPath = path.join(assetDir, resolvedFileName);
   const relDir = path.posix.join(series, partDir, slug);
   const rawBase = buildRawGitHubBase({ owner: rawOwner, repo: rawRepo, branch: rawBranch, relDir });

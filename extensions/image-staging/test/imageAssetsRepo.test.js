@@ -42,6 +42,27 @@ function testCreateRepoAsset() {
   assert.strictEqual(fs.readFileSync(path.join(asset.assetDir, 'license.txt'), 'utf8'), 'OAT rights');
 }
 
+function testCreateRepoAssetUsesSourcePathExtensionForLocalFiles() {
+  const repoPath = tempRepo();
+  const asset = createRepoAsset({
+    repoPath,
+    series: 'water-series',
+    partDir: 'part-10',
+    slug: 'chat-gpt-image',
+    asset: {
+      sourceKind: 'downloads',
+      // No imageSrc/sourceUrl/url — a local upload has none of those,
+      // only sourcePath. Before this fix, guessExt fell through to its
+      // .jpg default regardless of the real file type.
+      sourcePath: '/home/owen/Downloads/ChatGPT Image Jul 21, 2026, 10_08_00 PM.png',
+      photographer: 'Owen Corpening',
+      license: 'OAT rights'
+    }
+  });
+
+  assert.strictEqual(asset.fileName, 'chat-gpt-image.png');
+}
+
 function testCreatePlacedAssetCompatibility() {
   const repoPath = tempRepo();
   const asset = createPlacedAsset({
@@ -147,6 +168,7 @@ function tempRepo() {
 }
 
 testCreateRepoAsset();
+testCreateRepoAssetUsesSourcePathExtensionForLocalFiles();
 testCreatePlacedAssetCompatibility();
 testRemovePlacedAssetBySourceUrl();
 testWriteProviderComplianceFiles();
