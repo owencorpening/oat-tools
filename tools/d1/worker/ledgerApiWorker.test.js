@@ -97,7 +97,10 @@ async function testPexelsProviderRoutes() {
   let response = await handleRequest(new Request('https://ledger.test/image-providers'), { DB: new FakeD1() });
   let body = await response.json();
   assert.strictEqual(response.status, 200);
-  assert.deepStrictEqual(body.providers, []);
+  // Key-gated providers must not show up with no env vars set. (Providers
+  // that need no key at all — Openverse, Wikimedia, LOC — are always
+  // enabled and expected here; we only assert the negative for pexels.)
+  assert(!body.providers.some(p => p.id === 'pexels'), 'pexels should not be enabled without PEXELS_ACCESS_KEY');
 
   const fetched = [];
   const env = {
@@ -129,7 +132,7 @@ async function testPexelsProviderRoutes() {
   response = await handleRequest(new Request('https://ledger.test/image-providers'), env);
   body = await response.json();
   assert.strictEqual(response.status, 200);
-  assert.deepStrictEqual(body.providers, [{ id: 'pexels', label: 'Pexels' }]);
+  assert(body.providers.some(p => p.id === 'pexels'), 'pexels should be enabled with PEXELS_ACCESS_KEY set');
 
   response = await handleRequest(new Request('https://ledger.test/image-providers/search?q=wetland&providers=pexels'), env);
   body = await response.json();
@@ -156,6 +159,9 @@ async function testPexelsProviderRoutes() {
   assert.strictEqual(row.image_src, 'https://images.pexels.com/photos/1234/large2x.jpeg');
   assert.strictEqual(row.photographer, 'Pexels Photographer');
   assert.strictEqual(row.license, 'Pexels License');
+  assert.strictEqual(row.requires_attribution, 0);
+  assert.strictEqual(row.allows_commercial_use, 1);
+  assert.strictEqual(row.allows_modification, 1);
 }
 
 async function testPexelsProviderSearchFailureIsControlled() {
@@ -201,7 +207,7 @@ async function testUnsplashProviderRoutes() {
   let response = await handleRequest(new Request('https://ledger.test/image-providers'), env);
   let body = await response.json();
   assert.strictEqual(response.status, 200);
-  assert.deepStrictEqual(body.providers, [{ id: 'unsplash', label: 'Unsplash' }]);
+  assert(body.providers.some(p => p.id === 'unsplash'), 'unsplash should be enabled with UNSPLASH_ACCESS_KEY set');
 
   response = await handleRequest(new Request('https://ledger.test/image-providers/search?q=wetland&providers=unsplash'), env);
   body = await response.json();
@@ -227,6 +233,9 @@ async function testUnsplashProviderRoutes() {
   assert.strictEqual(row.image_src, 'https://images.unsplash.com/photos/eOvv6TjnSjc/regular.jpeg');
   assert.strictEqual(row.photographer, 'Unsplash Photographer');
   assert.strictEqual(row.license, 'Unsplash License');
+  assert.strictEqual(row.requires_attribution, 0);
+  assert.strictEqual(row.allows_commercial_use, 1);
+  assert.strictEqual(row.allows_modification, 1);
   assert.strictEqual(row.provider, 'unsplash');
   assert.strictEqual(row.provider_id, 'eOvv6TjnSjc');
   assert.strictEqual(row.photographer_url, 'https://unsplash.com/@unsplash-photographer');
@@ -235,7 +244,7 @@ async function testUnsplashProviderRoutes() {
   assert.strictEqual(JSON.parse(row.raw_provider_record).id, 'eOvv6TjnSjc');
 }
 
-async function testDownloadLocationPingSucceedsForUnsplash() {
+async function testRecordAssetUseSucceedsForUnsplash() {
   const pingedUrls = [];
   const env = {
     DB: new FakeD1(),
@@ -259,13 +268,14 @@ async function testDownloadLocationPingSucceedsForUnsplash() {
   const { asset } = await capture.json();
 
   const response = await handleRequest(
-    jsonRequest(`/assets/${asset.id}/download-location-ping`, {}),
+    jsonRequest(`/assets/${asset.id}/record-use`, {}),
     env
   );
   const body = await response.json();
 
   assert.strictEqual(response.status, 200);
-  assert.strictEqual(body.skipped, false);
+  assert.strictEqual(body.hasProvenance, true);
+  assert.strictEqual(body.pingPerformed, true);
   assert.strictEqual(body.provider, 'unsplash');
   assert.strictEqual(body.providerId, 'eOvv6TjnSjc');
   assert.strictEqual(body.photographerUrl, 'https://unsplash.com/@unsplash-photographer');
@@ -278,7 +288,7 @@ async function testDownloadLocationPingSucceedsForUnsplash() {
   assert.strictEqual(row.download_location_pinged_at, body.pingedAt);
 }
 
-async function testDownloadLocationPingSkipsNonUnsplashAssets() {
+async function testRecordAssetUseHasNoProvenanceForPlainAsset() {
   const env = { DB: new FakeD1() };
   const created = await handleRequest(jsonRequest('/assets', {
     asset: {
@@ -291,15 +301,16 @@ async function testDownloadLocationPingSkipsNonUnsplashAssets() {
   }), env);
   assert.strictEqual(created.status, 201);
 
-  const response = await handleRequest(jsonRequest('/assets/asset-plain/download-location-ping', {}), env);
+  const response = await handleRequest(jsonRequest('/assets/asset-plain/record-use', {}), env);
   const body = await response.json();
 
   assert.strictEqual(response.status, 200);
-  assert.deepStrictEqual(body, { assetId: 'asset-plain', skipped: true });
+  assert.strictEqual(body.hasProvenance, false);
+  assert.strictEqual(body.pingPerformed, false);
   assert.strictEqual(env.DB.one('asset', 'asset-plain').download_location_pinged_at, undefined);
 }
 
-async function testDownloadLocationPingFailsLoudlyOnProviderError() {
+async function testRecordAssetUseFailsLoudlyOnProviderError() {
   const env = {
     DB: new FakeD1(),
     UNSPLASH_ACCESS_KEY: 'unsplash-key',
@@ -319,7 +330,7 @@ async function testDownloadLocationPingFailsLoudlyOnProviderError() {
   const { asset } = await capture.json();
 
   const response = await handleRequest(
-    jsonRequest(`/assets/${asset.id}/download-location-ping`, {}),
+    jsonRequest(`/assets/${asset.id}/record-use`, {}),
     env
   );
 
@@ -327,9 +338,9 @@ async function testDownloadLocationPingFailsLoudlyOnProviderError() {
   assert.strictEqual(env.DB.one('asset', asset.id).download_location_pinged_at, undefined);
 }
 
-async function testDownloadLocationPingRejectsUnknownAsset() {
+async function testRecordAssetUseRejectsUnknownAsset() {
   const env = { DB: new FakeD1() };
-  const response = await handleRequest(jsonRequest('/assets/does-not-exist/download-location-ping', {}), env);
+  const response = await handleRequest(jsonRequest('/assets/does-not-exist/record-use', {}), env);
   assert.strictEqual(response.status, 404);
 }
 
@@ -355,6 +366,316 @@ async function testCaptureProviderImageRejectsDisabledProvider() {
   }), env);
 
   assert.strictEqual(response.status, 400);
+}
+
+async function testPixabayProviderRoutes() {
+  const fetched = [];
+  const env = {
+    DB: new FakeD1(),
+    PIXABAY_API_KEY: 'pixabay-key',
+    fetch: async (url, init) => {
+      fetched.push([url, init]);
+      if (String(url).includes('per_page=12') && String(url).includes('q=wheat')) {
+        return { ok: true, json: async () => ({ total: 1, totalHits: 1, hits: [pixabayPhoto(9001)] }) };
+      }
+      if (String(url).includes('id=9001')) {
+        return { ok: true, json: async () => ({ hits: [pixabayPhoto(9001)] }) };
+      }
+      return { ok: false, json: async () => ({}) };
+    }
+  };
+
+  let response = await handleRequest(new Request('https://ledger.test/image-providers'), env);
+  let body = await response.json();
+  assert.strictEqual(response.status, 200);
+  assert(body.providers.some(p => p.id === 'pixabay'), 'pixabay should be enabled with PIXABAY_API_KEY set');
+
+  response = await handleRequest(new Request('https://ledger.test/image-providers/search?q=wheat&providers=pixabay'), env);
+  body = await response.json();
+  assert.strictEqual(response.status, 200);
+  assert.strictEqual(body.results.length, 1);
+  assert.strictEqual(body.results[0].provider, 'pixabay');
+  assert.strictEqual(body.results[0].providerId, '9001');
+  assert.strictEqual(body.results[0].sourceUrl, 'https://pixabay.com/photos/wheat-field-9001/');
+  assert.strictEqual(body.results[0].photographerUrl, 'https://pixabay.com/users/PixabayContributor-5555/');
+  assert(String(fetched[0][0]).includes('key=pixabay-key'));
+
+  response = await handleRequest(jsonRequest('/captures/provider-image', {
+    provider: 'pixabay',
+    providerId: '9001'
+  }), env);
+  body = await response.json();
+  const row = env.DB.one('asset', body.asset.id);
+  assert.strictEqual(response.status, 201);
+  assert.strictEqual(row.status, 'staged');
+  assert.strictEqual(row.source_name, 'pixabay:9001');
+  assert.strictEqual(row.license, 'Pixabay Content License');
+  assert.strictEqual(row.license_url, 'https://pixabay.com/service/license/');
+  assert.strictEqual(row.requires_attribution, 0);
+  assert.strictEqual(row.allows_commercial_use, 1);
+  assert.strictEqual(row.allows_modification, 1);
+  assert.strictEqual(row.photographer_url, 'https://pixabay.com/users/PixabayContributor-5555/');
+}
+
+async function testOpenverseSearchFiltersOutNcAndNdLicenses() {
+  const fetched = [];
+  const env = {
+    DB: new FakeD1(),
+    fetch: async (url, init) => {
+      fetched.push([url, init]);
+      return {
+        ok: true,
+        json: async () => ({
+          result_count: 3,
+          page_count: 1,
+          results: [
+            openversePhoto('by-photo-1', 'by'),
+            openversePhoto('nc-photo-1', 'by-nc'),
+            openversePhoto('nd-photo-1', 'by-nd')
+          ]
+        })
+      };
+    }
+  };
+
+  const response = await handleRequest(new Request('https://ledger.test/image-providers/search?q=wetland&providers=openverse'), env);
+  const body = await response.json();
+
+  assert.strictEqual(response.status, 200);
+  // by-nc and by-nd must never surface, even though the mock server
+  // returned them — this is the client-side backstop, independent of
+  // whatever the license_type request param actually did server-side.
+  assert.deepStrictEqual(body.results.map(r => r.providerId), ['by-photo-1']);
+  assert(String(fetched[0][0]).includes('license_type=commercial%2Cmodification'));
+}
+
+async function testOpenverseProviderRoutesAndUpstreamProvenance() {
+  const env = {
+    DB: new FakeD1(),
+    fetch: async url => {
+      if (String(url).includes('/images/?')) {
+        return { ok: true, json: async () => ({ result_count: 1, page_count: 1, results: [openversePhoto('abc-123', 'by-sa')] }) };
+      }
+      if (String(url).includes('/images/abc-123/')) {
+        return { ok: true, json: async () => openversePhoto('abc-123', 'by-sa') };
+      }
+      return { ok: false, json: async () => ({}) };
+    }
+  };
+
+  let response = await handleRequest(new Request('https://ledger.test/image-providers'), env);
+  let body = await response.json();
+  assert.strictEqual(response.status, 200);
+  assert(body.providers.some(p => p.id === 'openverse'), 'openverse should always be enabled (no key required)');
+
+  response = await handleRequest(new Request('https://ledger.test/image-providers/search?q=wetland&providers=openverse'), env);
+  body = await response.json();
+  assert.strictEqual(body.results[0].photographer, 'Jane Photographer');
+  assert.strictEqual(body.results[0].photographerUrl, 'https://flickr.com/people/janephotographer');
+  assert.strictEqual(body.results[0].license, 'CC BY-SA');
+  assert.strictEqual(body.results[0].requiresAttribution, true);
+  assert.strictEqual(body.results[0].allowsCommercialUse, true);
+
+  response = await handleRequest(jsonRequest('/captures/provider-image', {
+    provider: 'openverse',
+    providerId: 'abc-123'
+  }), env);
+  body = await response.json();
+  const row = env.DB.one('asset', body.asset.id);
+  assert.strictEqual(response.status, 201);
+  assert.strictEqual(row.provider, 'openverse', 'provider column stays "openverse" — the API we queried');
+  assert.strictEqual(row.original_source, 'flickr', 'upstream source recorded distinctly from the provider');
+  assert.strictEqual(row.original_source_url, 'https://flickr.com/photos/janephotographer/123456');
+  assert.strictEqual(row.source_url, 'https://flickr.com/photos/janephotographer/123456');
+  assert.strictEqual(row.requires_attribution, 1);
+  assert.strictEqual(row.allows_commercial_use, 1);
+  assert.strictEqual(row.allows_modification, 1);
+  assert.strictEqual(row.attribution, 'Photo by Jane Photographer, via Openverse (CC BY-SA).');
+}
+
+async function testWikimediaSearchAndCaptureExtractsExtmetadata() {
+  const fetched = [];
+  const env = {
+    DB: new FakeD1(),
+    fetch: async (url, init) => {
+      fetched.push([url, init]);
+      if (String(url).includes('generator=search')) {
+        return {
+          ok: true,
+          json: async () => ({
+            query: { pages: { 555: wikimediaPage(555, 'CC BY-SA 4.0') } }
+          })
+        };
+      }
+      if (String(url).includes('pageids=555')) {
+        return { ok: true, json: async () => ({ query: { pages: { 555: wikimediaPage(555, 'CC BY-SA 4.0') } } }) };
+      }
+      return { ok: false, json: async () => ({}) };
+    }
+  };
+
+  let response = await handleRequest(new Request('https://ledger.test/image-providers'), env);
+  let body = await response.json();
+  assert(body.providers.some(p => p.id === 'wikimedia'), 'wikimedia should always be enabled (no key required)');
+
+  response = await handleRequest(new Request('https://ledger.test/image-providers/search?q=lighthouse&providers=wikimedia'), env);
+  body = await response.json();
+  assert.strictEqual(response.status, 200);
+  assert.strictEqual(body.results.length, 1);
+  assert.strictEqual(body.results[0].providerId, '555');
+  // Artist field arrives as HTML ("<a href=...>Jane Doe</a>") — must be
+  // stripped to plain text before it's used as a photographer name.
+  assert.strictEqual(body.results[0].photographer, 'Jane Doe');
+  assert.strictEqual(body.results[0].license, 'CC BY-SA 4.0');
+  assert.strictEqual(body.results[0].requiresAttribution, true);
+  assert.strictEqual(body.results[0].allowsCommercialUse, true);
+  assert.strictEqual(body.results[0].allowsModification, true);
+  // Mandatory per Wikimedia Foundation API Usage Guidelines — not optional.
+  assert.deepStrictEqual(fetched[0][1].headers, { 'User-Agent': 'OAT-Image-Staging/1.0 (https://github.com/owencorpening/oat-tools)' });
+
+  response = await handleRequest(jsonRequest('/captures/provider-image', {
+    provider: 'wikimedia',
+    providerId: '555'
+  }), env);
+  body = await response.json();
+  const row = env.DB.one('asset', body.asset.id);
+  assert.strictEqual(response.status, 201);
+  assert.strictEqual(row.photographer, 'Jane Doe');
+  assert.strictEqual(row.license, 'CC BY-SA 4.0');
+  assert.strictEqual(row.requires_attribution, 1);
+}
+
+async function testWikimediaUnknownLicenseNeedsProvenanceReview() {
+  const env = {
+    DB: new FakeD1(),
+    fetch: async url => {
+      if (String(url).includes('pageids=777')) {
+        return { ok: true, json: async () => ({ query: { pages: { 777: wikimediaPage(777, '') } } }) };
+      }
+      return { ok: false, json: async () => ({}) };
+    }
+  };
+
+  const response = await handleRequest(jsonRequest('/captures/provider-image', {
+    provider: 'wikimedia',
+    providerId: '777'
+  }), env);
+  const body = await response.json();
+  const row = env.DB.one('asset', body.asset.id);
+
+  assert.strictEqual(response.status, 201);
+  // No confidently-classifiable license → route to needs-provenance rather
+  // than guess a capability flag that might be wrong.
+  assert.strictEqual(row.status, 'needs-provenance');
+  assert.strictEqual(row.requires_attribution, undefined);
+}
+
+async function testSmithsonianProviderRoutesAreAlwaysCc0() {
+  const fetched = [];
+  const env = {
+    DB: new FakeD1(),
+    SMITHSONIAN_API_KEY: 'smithsonian-key',
+    fetch: async (url, init) => {
+      fetched.push([url, init]);
+      if (String(url).includes('/search?')) {
+        return { ok: true, json: async () => ({ response: { rowCount: 1, rows: [smithsonianRow('nmnh_12345')] } }) };
+      }
+      if (String(url).includes('/content/nmnh_12345')) {
+        return { ok: true, json: async () => ({ response: smithsonianRow('nmnh_12345') }) };
+      }
+      return { ok: false, json: async () => ({}) };
+    }
+  };
+
+  let response = await handleRequest(new Request('https://ledger.test/image-providers'), env);
+  let body = await response.json();
+  assert(body.providers.some(p => p.id === 'smithsonian'), 'smithsonian should be enabled with SMITHSONIAN_API_KEY set');
+
+  response = await handleRequest(new Request('https://ledger.test/image-providers/search?q=meteorite&providers=smithsonian'), env);
+  body = await response.json();
+  assert.strictEqual(response.status, 200);
+  assert.strictEqual(body.results.length, 1);
+  assert.strictEqual(body.results[0].providerId, 'nmnh_12345');
+  assert.strictEqual(body.results[0].sourceUrl, 'http://n2t.net/ark:/65665/nmnh_12345');
+  assert(String(fetched[0][0]).includes('api_key=smithsonian-key'));
+
+  response = await handleRequest(jsonRequest('/captures/provider-image', {
+    provider: 'smithsonian',
+    providerId: 'nmnh_12345'
+  }), env);
+  body = await response.json();
+  const row = env.DB.one('asset', body.asset.id);
+  assert.strictEqual(response.status, 201);
+  assert.strictEqual(row.license, 'CC0');
+  assert.strictEqual(row.requires_attribution, 0);
+  assert.strictEqual(row.allows_commercial_use, 1);
+  assert.strictEqual(row.allows_modification, 1);
+  assert.strictEqual(row.photographer, 'Jane Curator');
+}
+
+async function testLocConfidentPublicDomainGetsFlagsAssigned() {
+  const env = {
+    DB: new FakeD1(),
+    fetch: async url => {
+      if (String(url).includes('/search/')) {
+        return { ok: true, json: async () => ({ pagination: { of: 1 }, results: [locRow('2018666890', 'No known restrictions on publication.')] }) };
+      }
+      if (String(url).includes('/item/2018666890/')) {
+        return { ok: true, json: async () => ({ item: locRow('2018666890', 'No known restrictions on publication.') }) };
+      }
+      return { ok: false, json: async () => ({}) };
+    }
+  };
+
+  let response = await handleRequest(new Request('https://ledger.test/image-providers'), env);
+  let body = await response.json();
+  assert(body.providers.some(p => p.id === 'loc'), 'loc should always be enabled (no key required)');
+
+  response = await handleRequest(new Request('https://ledger.test/image-providers/search?q=lighthouse&providers=loc'), env);
+  body = await response.json();
+  assert.strictEqual(response.status, 200);
+  assert.strictEqual(body.results.length, 1);
+  assert.strictEqual(body.results[0].providerId, '2018666890');
+  assert.strictEqual(body.results[0].allowsCommercialUse, true);
+  assert.strictEqual(body.results[0].sourceUrl, 'https://www.loc.gov/item/2018666890/');
+  // Highest-resolution entry (last in the array) should be used as imageSrc.
+  assert.strictEqual(body.results[0].imageSrc, 'https://tile.loc.gov/2018666890/full.jpg');
+
+  response = await handleRequest(jsonRequest('/captures/provider-image', {
+    provider: 'loc',
+    providerId: '2018666890'
+  }), env);
+  body = await response.json();
+  const row = env.DB.one('asset', body.asset.id);
+  assert.strictEqual(response.status, 201);
+  assert.strictEqual(row.status, 'staged');
+  assert.strictEqual(row.allows_commercial_use, 1);
+}
+
+async function testLocAmbiguousRightsRoutesToNeedsProvenance() {
+  const env = {
+    DB: new FakeD1(),
+    fetch: async url => {
+      if (String(url).includes('/search/')) {
+        return { ok: true, json: async () => ({ pagination: { of: 1 }, results: [locRow('2018666891', 'Rights status not evaluated.')] }) };
+      }
+      if (String(url).includes('/item/2018666891/')) {
+        return { ok: true, json: async () => ({ item: locRow('2018666891', 'Rights status not evaluated.') }) };
+      }
+      return { ok: false, json: async () => ({}) };
+    }
+  };
+
+  const response = await handleRequest(jsonRequest('/captures/provider-image', {
+    provider: 'loc',
+    providerId: '2018666891'
+  }), env);
+  const body = await response.json();
+  const row = env.DB.one('asset', body.asset.id);
+
+  assert.strictEqual(response.status, 201);
+  assert.strictEqual(row.status, 'needs-provenance', 'unclear rights text should never be treated as clear');
+  assert.strictEqual(row.allows_commercial_use, undefined);
 }
 
 async function testCreateReviewImageNeedUpsertsDraft() {
@@ -557,6 +878,111 @@ function unsplashPhoto(id) {
       full: `https://images.unsplash.com/photos/${id}/full.jpeg`,
       raw: `https://images.unsplash.com/photos/${id}/raw.jpeg`
     }
+  };
+}
+
+function pixabayPhoto(id) {
+  return {
+    id,
+    pageURL: `https://pixabay.com/photos/wheat-field-${id}/`,
+    tags: 'wheat, field, agriculture',
+    previewURL: `https://pixabay.com/get/preview-${id}.jpg`,
+    webformatURL: `https://pixabay.com/get/webformat-${id}.jpg`,
+    largeImageURL: `https://pixabay.com/get/large-${id}.jpg`,
+    imageWidth: 4000,
+    imageHeight: 3000,
+    user: 'PixabayContributor',
+    user_id: 5555
+  };
+}
+
+function locRow(id, rightsText) {
+  return {
+    id: `https://www.loc.gov/item/${id}/`,
+    title: 'Lighthouse, coastal view',
+    contributor: ['Doe, Jane, photographer'],
+    image_url: [
+      `https://tile.loc.gov/${id}/thumb.jpg`,
+      `https://tile.loc.gov/${id}/medium.jpg`,
+      `https://tile.loc.gov/${id}/full.jpg`
+    ],
+    rights: rightsText,
+    access_restricted: false
+  };
+}
+
+function smithsonianRow(id) {
+  return {
+    id,
+    title: 'Meteorite fragment',
+    unitCode: 'NMNH',
+    content: {
+      descriptiveNonRepeating: {
+        record_link: `http://n2t.net/ark:/65665/${id}`,
+        guid: `http://n2t.net/ark:/65665/${id}`,
+        unit_code: 'Smithsonian National Museum of Natural History',
+        online_media: {
+          mediaCount: 1,
+          media: [{
+            type: 'Images',
+            content: `https://ids.si.edu/ids/deliveryService?id=${id}`,
+            thumbnail: `https://ids.si.edu/ids/deliveryService?id=${id}&max=150`,
+            usage: { access: 'CC0' }
+          }]
+        }
+      },
+      freetext: {
+        name: [{ label: 'Photographer', content: 'Jane Curator' }]
+      }
+    }
+  };
+}
+
+function wikimediaPage(pageid, licenseShortName) {
+  return {
+    pageid,
+    ns: 6,
+    title: 'File:Lighthouse at dusk.jpg',
+    imageinfo: [{
+      url: `https://upload.wikimedia.org/commons/lighthouse-${pageid}.jpg`,
+      thumburl: `https://upload.wikimedia.org/commons/thumb/lighthouse-${pageid}-800px.jpg`,
+      descriptionurl: `https://commons.wikimedia.org/wiki/File:Lighthouse_at_dusk_${pageid}.jpg`,
+      width: 4000,
+      height: 3000,
+      extmetadata: {
+        LicenseShortName: { value: licenseShortName, source: 'commons-desc-page' },
+        LicenseUrl: { value: 'https://creativecommons.org/licenses/by-sa/4.0', source: 'commons-desc-page' },
+        Artist: { value: '<a href="//commons.wikimedia.org/wiki/User:JaneDoe">Jane Doe</a>', source: 'commons-desc-page' },
+        Credit: { value: 'Own work', source: 'commons-desc-page' },
+        AttributionRequired: { value: 'true', source: 'commons-desc-page' }
+      }
+    }]
+  };
+}
+
+function openversePhoto(id, licenseCode) {
+  const licenseNames = {
+    by: 'CC BY',
+    'by-sa': 'CC BY-SA',
+    'by-nc': 'CC BY-NC',
+    'by-nd': 'CC BY-ND'
+  };
+  return {
+    id,
+    title: 'Wetland at dusk',
+    creator: 'Jane Photographer',
+    creator_url: 'https://flickr.com/people/janephotographer',
+    source: 'flickr',
+    provider: 'flickr',
+    foreign_landing_url: 'https://flickr.com/photos/janephotographer/123456',
+    url: `https://live.staticflickr.com/${id}/full.jpg`,
+    thumbnail: `https://live.staticflickr.com/${id}/thumb.jpg`,
+    license: licenseCode,
+    license_version: '2.0',
+    license_url: `https://creativecommons.org/licenses/${licenseCode}/2.0/`,
+    attribution: `Photo by Jane Photographer, via Openverse (${licenseNames[licenseCode] || licenseCode}).`,
+    width: 4000,
+    height: 3000
   };
 }
 
@@ -774,10 +1200,18 @@ function byCreatedAt(a, b) {
   await testUnsplashProviderRoutes();
   await testUnsplashProviderSearchFailureIsControlled();
   await testCaptureProviderImageRejectsDisabledProvider();
-  await testDownloadLocationPingSucceedsForUnsplash();
-  await testDownloadLocationPingSkipsNonUnsplashAssets();
-  await testDownloadLocationPingFailsLoudlyOnProviderError();
-  await testDownloadLocationPingRejectsUnknownAsset();
+  await testPixabayProviderRoutes();
+  await testOpenverseSearchFiltersOutNcAndNdLicenses();
+  await testOpenverseProviderRoutesAndUpstreamProvenance();
+  await testWikimediaSearchAndCaptureExtractsExtmetadata();
+  await testWikimediaUnknownLicenseNeedsProvenanceReview();
+  await testSmithsonianProviderRoutesAreAlwaysCc0();
+  await testLocConfidentPublicDomainGetsFlagsAssigned();
+  await testLocAmbiguousRightsRoutesToNeedsProvenance();
+  await testRecordAssetUseSucceedsForUnsplash();
+  await testRecordAssetUseHasNoProvenanceForPlainAsset();
+  await testRecordAssetUseFailsLoudlyOnProviderError();
+  await testRecordAssetUseRejectsUnknownAsset();
   await testCreateReviewImageNeedUpsertsDraft();
   await testCreatePlacementWithSaga();
   await testListRoutes();

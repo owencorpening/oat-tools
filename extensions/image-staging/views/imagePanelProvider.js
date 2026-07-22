@@ -160,29 +160,21 @@ class ImagePanelProvider {
       results.push(...this._prepareProviderResultsForPanel(localResult?.results));
     }
 
-    if (requestedProviders.includes('pexels') && this._ledgerWriter?.searchImageProviders) {
+    // Every non-downloads provider goes through the same ledger search call
+    // — a new provider needs zero changes here, just its own registry entry
+    // on the worker side.
+    for (const providerId of requestedProviders) {
+      if (providerId === 'downloads' || !this._ledgerWriter?.searchImageProviders) continue;
       try {
         const result = await this._ledgerWriter.searchImageProviders({
           query: cleanQuery,
-          providers: ['pexels'],
+          providers: [providerId],
           perPage: 12
         });
         results.push(...this._prepareProviderResultsForPanel(result?.results));
       } catch (err) {
-        this._send({ type: 'providerNotice', message: `Pexels search skipped: ${err.message}` });
-      }
-    }
-
-    if (requestedProviders.includes('unsplash') && this._ledgerWriter?.searchImageProviders) {
-      try {
-        const result = await this._ledgerWriter.searchImageProviders({
-          query: cleanQuery,
-          providers: ['unsplash'],
-          perPage: 12
-        });
-        results.push(...this._prepareProviderResultsForPanel(result?.results));
-      } catch (err) {
-        this._send({ type: 'providerNotice', message: `Unsplash search skipped: ${err.message}` });
+        const label = this._providerLabel(providerId);
+        this._send({ type: 'providerNotice', message: `${label} search skipped: ${err.message}` });
       }
     }
 
@@ -384,6 +376,13 @@ class ImagePanelProvider {
 
   _send(msg) {
     if (this._view) this._view.webview.postMessage(msg);
+  }
+
+  _providerLabel(providerId) {
+    return String(providerId || '')
+      .split(/[-_]/)
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
   }
 
   _prepareProviderResultsForPanel(results) {
@@ -612,10 +611,8 @@ body {
   <button class="refresh-btn" id="refreshBtn" title="Refresh">↻</button>
 </div>
 
-<div class="tabs">
+<div class="tabs" id="tabBar">
   <button class="tab-btn active" data-tab="downloads">Downloads</button>
-  <button class="tab-btn" data-tab="pexels">Pexels</button>
-  <button class="tab-btn" data-tab="unsplash">Unsplash</button>
   <button class="tab-btn" data-tab="staged">Staged</button>
 </div>
 
@@ -630,23 +627,7 @@ body {
   <div id="status">Loading…</div>
 </div>
 
-<div class="tab-content" id="pexels-tab" style="display:none">
-  <form class="searchbar" id="pexelsForm">
-    <input class="search-input" id="pexelsInput" type="search" placeholder="Search Pexels">
-    <button class="search-btn" type="submit">Search</button>
-  </form>
-  <div id="pexelsStatus" class="search-status" style="display:none"></div>
-  <div id="pexelsResults"></div>
-</div>
-
-<div class="tab-content" id="unsplash-tab" style="display:none">
-  <form class="searchbar" id="unsplashForm">
-    <input class="search-input" id="unsplashInput" type="search" placeholder="Search Unsplash">
-    <button class="search-btn" type="submit">Search</button>
-  </form>
-  <div id="unsplashStatus" class="search-status" style="display:none"></div>
-  <div id="unsplashResults"></div>
-</div>
+<div id="providerTabContents"></div>
 
 <div class="tab-content" id="staged-tab" style="display:none">
   <div id="list"></div>
@@ -658,7 +639,9 @@ let images = [];
 let providerResults = [];
 let availableProviders = [{ id: 'downloads', label: 'Downloads' }];
 
-// Tab switching
+// Tab switching. Delegated on the tab bar itself (rather than binding each
+// button individually) so provider tabs added dynamically after page load
+// work without any extra wiring.
 function switchTab(tabName) {
   document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
   document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
@@ -667,8 +650,9 @@ function switchTab(tabName) {
   document.querySelector('[data-tab="' + tabName + '"]').classList.add('active');
 }
 
-document.querySelectorAll('.tab-btn').forEach(btn => {
-  btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+document.getElementById('tabBar').addEventListener('click', e => {
+  const btn = e.target.closest('.tab-btn');
+  if (btn) switchTab(btn.dataset.tab);
 });
 
 document.getElementById('refreshBtn').addEventListener('click', () => {
@@ -691,28 +675,6 @@ document.getElementById('searchForm').addEventListener('submit', event => {
   vscode.postMessage({ type: 'providerSearch', query, providers: ['downloads'] });
 });
 
-document.getElementById('pexelsForm').addEventListener('submit', event => {
-  event.preventDefault();
-  const query = document.getElementById('pexelsInput').value.trim();
-  if (!query) return;
-  _currentProvider = 'Pexels';
-  _currentSearchProvider = 'pexels';
-  providerResults = [];
-  renderPexelsResults('Searching…');
-  vscode.postMessage({ type: 'providerSearch', query, providers: ['pexels'] });
-});
-
-document.getElementById('unsplashForm').addEventListener('submit', event => {
-  event.preventDefault();
-  const query = document.getElementById('unsplashInput').value.trim();
-  if (!query) return;
-  _currentProvider = 'Unsplash';
-  _currentSearchProvider = 'unsplash';
-  providerResults = [];
-  renderUnsplashResults('Searching…');
-  vscode.postMessage({ type: 'providerSearch', query, providers: ['unsplash'] });
-});
-
 if (document.getElementById('browseBtn')) {
   document.getElementById('browseBtn').addEventListener('click', event => {
     event.preventDefault();
@@ -724,21 +686,58 @@ if (document.getElementById('browseBtn')) {
   });
 }
 
+// Provider tabs (Pexels, Unsplash, Pixabay, ...) are built dynamically from
+// the "providers" message rather than hardcoded per provider — see
+// buildProviderTab() below, invoked once availableProviders is known.
+const builtProviderTabs = new Set();
+
+function buildProviderTab(provider) {
+  if (!provider || !provider.id || provider.id === 'downloads' || builtProviderTabs.has(provider.id)) return;
+  builtProviderTabs.add(provider.id);
+  const label = provider.label || provider.id;
+
+  const tabBtn = document.createElement('button');
+  tabBtn.className = 'tab-btn';
+  tabBtn.dataset.tab = provider.id;
+  tabBtn.textContent = label;
+  document.getElementById('tabBar').insertBefore(tabBtn, document.querySelector('[data-tab="staged"]'));
+
+  const container = document.createElement('div');
+  container.className = 'tab-content';
+  container.id = provider.id + '-tab';
+  container.style.display = 'none';
+  container.innerHTML =
+    '<form class="searchbar" id="' + provider.id + 'Form">' +
+      '<input class="search-input" id="' + provider.id + 'Input" type="search" placeholder="Search ' + esc(label) + '">' +
+      '<button class="search-btn" type="submit">Search</button>' +
+    '</form>' +
+    '<div id="' + provider.id + 'Status" class="search-status" style="display:none"></div>' +
+    '<div id="' + provider.id + 'Results"></div>';
+  document.getElementById('providerTabContents').appendChild(container);
+
+  document.getElementById(provider.id + 'Form').addEventListener('submit', event => {
+    event.preventDefault();
+    const query = document.getElementById(provider.id + 'Input').value.trim();
+    if (!query) return;
+    _currentProvider = label;
+    _currentSearchProvider = provider.id;
+    providerResults = [];
+    renderResultsForProvider(provider.id, 'Searching…');
+    vscode.postMessage({ type: 'providerSearch', query, providers: [provider.id] });
+  });
+}
+
 const resultsEl = document.getElementById('results');
-const pexelsResultsEl = document.getElementById('pexelsResults');
-const unsplashResultsEl = document.getElementById('unsplashResults');
 const listEl = document.getElementById('list');
-console.log('[OAT-Webview] Attaching click handlers to:', resultsEl, pexelsResultsEl, unsplashResultsEl, listEl);
+const providerTabContentsEl = document.getElementById('providerTabContents');
+console.log('[OAT-Webview] Attaching click handlers to:', resultsEl, providerTabContentsEl, listEl);
 resultsEl.addEventListener('click', e => {
   console.log('[OAT-Webview] Click on results:', e.target);
   handleCardAction(e);
 });
-pexelsResultsEl.addEventListener('click', e => {
-  console.log('[OAT-Webview] Click on pexels results:', e.target);
-  handleCardAction(e);
-});
-unsplashResultsEl.addEventListener('click', e => {
-  console.log('[OAT-Webview] Click on unsplash results:', e.target);
+// Delegated: covers every dynamically-built provider results div at once.
+providerTabContentsEl.addEventListener('click', e => {
+  console.log('[OAT-Webview] Click on provider results:', e.target);
   handleCardAction(e);
 });
 listEl.addEventListener('click', e => {
@@ -762,15 +761,15 @@ window.addEventListener('message', e => {
     renderProviderResults('');
   } else if (msg.type === 'providers') {
     availableProviders = msg.providers || [];
+    availableProviders.forEach(buildProviderTab);
     renderProviderAvailability();
   } else if (msg.type === 'providerResults') {
     providerResults = msg.results || [];
     if (msg.providers) {
       _currentProvider = msg.providers.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' + ');
-      if (msg.providers.length === 1 && msg.providers[0] === 'pexels') {
-        renderPexelsResults(providerResults.length ? '' : 'No Pexels results.');
-      } else if (msg.providers.length === 1 && msg.providers[0] === 'unsplash') {
-        renderUnsplashResults(providerResults.length ? '' : 'No Unsplash results.');
+      if (msg.providers.length === 1 && msg.providers[0] !== 'downloads') {
+        const label = _currentProvider;
+        renderResultsForProvider(msg.providers[0], providerResults.length ? '' : ('No ' + label + ' results.'));
       } else {
         renderProviderResults(providerResults.length ? '' : 'No provider results.');
       }
@@ -782,10 +781,8 @@ window.addEventListener('message', e => {
       providerResults.splice(_lastStagedIndex, 1);
       _lastStagedIndex = null;
     }
-    if (_currentSearchProvider === 'pexels') {
-      renderPexelsResults('Staged.');
-    } else if (_currentSearchProvider === 'unsplash') {
-      renderUnsplashResults('Staged.');
+    if (_currentSearchProvider && _currentSearchProvider !== 'downloads' && builtProviderTabs.has(_currentSearchProvider)) {
+      renderResultsForProvider(_currentSearchProvider, 'Staged.');
     } else {
       renderProviderResults('Staged.');
     }
@@ -873,12 +870,8 @@ function renderProviderResults(message) {
   return renderResults('results', 'searchStatus', message);
 }
 
-function renderPexelsResults(message) {
-  return renderResults('pexelsResults', 'pexelsStatus', message);
-}
-
-function renderUnsplashResults(message) {
-  return renderResults('unsplashResults', 'unsplashStatus', message);
+function renderResultsForProvider(providerId, message) {
+  return renderResults(providerId + 'Results', providerId + 'Status', message);
 }
 
 function isImageAlreadyStaged(providerResult) {

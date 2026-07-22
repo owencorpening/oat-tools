@@ -117,20 +117,22 @@ async function testPlanOnlyDoesNotMarkPlaced() {
   assert.deepStrictEqual(calls.at(-1), ['sagaStep', 7, 'succeeded']);
 }
 
-async function testUnsplashDownloadPingWritesComplianceFilesOnSuccess() {
+async function testRecordAssetUseWritesComplianceFilesWhenProvenanceExists() {
   const calls = [];
   const ledger = fakeLedger(calls, {
-    pingDownloadLocation: async (db, { assetId }) => {
-      calls.push(['pingDownloadLocation', assetId]);
+    recordAssetUse: async (db, { assetId }) => {
+      calls.push(['recordAssetUse', assetId]);
       return {
-        skipped: false,
+        hasProvenance: true,
+        pingPerformed: true,
         pingedAt: '2026-07-21T00:05:00.000Z',
         provider: 'unsplash',
         providerId: 'eOvv6TjnSjc',
         photographer: 'Unsplash Photographer',
         photographerUrl: 'https://unsplash.com/@unsplash-photographer',
         retrievedAt: '2026-07-21T00:00:00.000Z',
-        rawProviderRecord: { id: 'eOvv6TjnSjc' }
+        rawProviderRecord: { id: 'eOvv6TjnSjc' },
+        attribution: 'Image: Misty wetland, by Unsplash Photographer, Source: Unsplash. License: Unsplash License.'
       };
     }
   });
@@ -161,22 +163,23 @@ async function testUnsplashDownloadPingWritesComplianceFilesOnSuccess() {
   });
 
   assert.deepStrictEqual(
-    calls.find(call => call[0] === 'pingDownloadLocation'),
-    ['pingDownloadLocation', 'asset-4']
+    calls.find(call => call[0] === 'recordAssetUse'),
+    ['recordAssetUse', 'asset-4']
   );
   const complianceCall = calls.find(call => call[0] === 'writeProviderComplianceFiles');
-  assert(complianceCall, 'should write compliance files once the ping succeeds');
+  assert(complianceCall, 'should write compliance files once provenance is available');
   assert.strictEqual(complianceCall[1], '/tmp/asset-dir/misty-wetland');
   assert.strictEqual(complianceCall[2].providerId, 'eOvv6TjnSjc');
   assert.strictEqual(complianceCall[2].pingedAt, '2026-07-21T00:05:00.000Z');
+  assert.match(complianceCall[2].attributionText, /Unsplash Photographer/);
 }
 
-async function testDownloadPingSkippedForNonUnsplashAsset() {
+async function testRecordAssetUseSkippedForAssetWithoutProvenance() {
   const calls = [];
   const ledger = fakeLedger(calls, {
-    pingDownloadLocation: async (db, { assetId }) => {
-      calls.push(['pingDownloadLocation', assetId]);
-      return { skipped: true };
+    recordAssetUse: async (db, { assetId }) => {
+      calls.push(['recordAssetUse', assetId]);
+      return { hasProvenance: false, pingPerformed: false };
     }
   });
   const repo = fakeRepo(calls);
@@ -205,14 +208,14 @@ async function testDownloadPingSkippedForNonUnsplashAsset() {
     writeSnippet: async () => {}
   });
 
-  assert(calls.some(call => call[0] === 'pingDownloadLocation'), 'should still call the ping (worker decides)');
-  assert(!calls.some(call => call[0] === 'writeProviderComplianceFiles'), 'should not write compliance files when skipped');
+  assert(calls.some(call => call[0] === 'recordAssetUse'), 'should still call recordAssetUse (worker decides)');
+  assert(!calls.some(call => call[0] === 'writeProviderComplianceFiles'), 'should not write compliance files without provenance');
 }
 
-async function testDownloadPingFailureAbortsPlacement() {
+async function testRecordAssetUseFailureAbortsPlacement() {
   const calls = [];
   const ledger = fakeLedger(calls, {
-    pingDownloadLocation: async () => {
+    recordAssetUse: async () => {
       throw new Error('Unsplash download_location ping failed');
     }
   });
@@ -245,7 +248,7 @@ async function testDownloadPingFailureAbortsPlacement() {
   );
 
   assert(!calls.some(call => call[0] === 'writeProviderComplianceFiles'), 'should never write compliance files on ping failure');
-  assert(!calls.some(call => call[0] === 'gitPush'), 'should not proceed to git push after a failed ping');
+  assert(!calls.some(call => call[0] === 'gitPush'), 'should not proceed to git push after a failed use-time obligation');
   assert(calls.some(call => call[0] === 'failed'), 'should mark the saga failed');
 }
 
@@ -275,7 +278,7 @@ function fakeLedger(calls, options = {}) {
     markFailed: async (db, updates) => {
       calls.push(['failed', updates.error.message, updates.resolution]);
     },
-    ...(options.pingDownloadLocation ? { pingDownloadLocation: options.pingDownloadLocation } : {})
+    ...(options.recordAssetUse ? { recordAssetUse: options.recordAssetUse } : {})
   };
 }
 
@@ -303,9 +306,9 @@ function fakeRepo(calls, options = {}) {
   await testPlaceAssetSuccess();
   await testFailureMarksSagaFailed();
   await testPlanOnlyDoesNotMarkPlaced();
-  await testUnsplashDownloadPingWritesComplianceFilesOnSuccess();
-  await testDownloadPingSkippedForNonUnsplashAsset();
-  await testDownloadPingFailureAbortsPlacement();
+  await testRecordAssetUseWritesComplianceFilesWhenProvenanceExists();
+  await testRecordAssetUseSkippedForAssetWithoutProvenance();
+  await testRecordAssetUseFailureAbortsPlacement();
   testSnippetFormatForTarget();
   console.log('imagePipeline tests passed');
 })().catch(error => {

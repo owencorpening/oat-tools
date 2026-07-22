@@ -50,23 +50,25 @@ async function placeAsset(options = {}) {
         await repo.downloadAsset({ url: placedAsset.downloadSrc, dest: placedAsset.imagePath });
       }
 
-      // Some providers (Unsplash) require registering a "download" event at
-      // the moment a photo is actually used, distinct from browsing or
-      // staging it — see imageProviders/unsplash.js. The ledger endpoint is
-      // a no-op for assets that don't need this, so it's always safe to call.
-      // A failed ping throws (propagates to the outer catch below) rather
-      // than silently proceeding, since this is a compliance requirement,
-      // not a nice-to-have.
-      if (ledger.pingDownloadLocation) {
-        const pingResult = await ledger.pingDownloadLocation(db, { assetId: asset.id });
-        if (pingResult && pingResult.skipped === false) {
+      // "Use" this asset with the ledger: archives provider provenance
+      // (raw API response, attribution, retrieval time) for any asset that
+      // has it, and — for providers that require it (currently only
+      // Unsplash's download_location, per its API Guidelines) — registers
+      // the use-time API call. The ledger endpoint is a no-op for assets
+      // without provider metadata, so it's always safe to call. A failed
+      // use-time obligation throws (propagates to the outer catch below)
+      // rather than silently proceeding — that's a compliance requirement,
+      // not a nice-to-have; missing provenance is not an error.
+      if (ledger.recordAssetUse) {
+        const record = await ledger.recordAssetUse(db, { assetId: asset.id });
+        if (record && record.hasProvenance) {
           repo.writeProviderComplianceFiles(placedAsset.assetDir, {
-            providerId: pingResult.providerId,
-            photographer: pingResult.photographer,
-            photographerUrl: pingResult.photographerUrl,
-            retrievedAt: pingResult.retrievedAt,
-            rawProviderRecord: pingResult.rawProviderRecord,
-            pingedAt: pingResult.pingedAt
+            providerId: record.providerId,
+            photographerUrl: record.photographerUrl,
+            retrievedAt: record.retrievedAt,
+            rawProviderRecord: record.rawProviderRecord,
+            attributionText: record.attribution,
+            pingedAt: record.pingedAt
           });
         }
       }

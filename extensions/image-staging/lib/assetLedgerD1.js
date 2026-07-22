@@ -60,7 +60,13 @@ async function createAsset(db, asset) {
     photographer_url: asset.photographerUrl,
     download_location: asset.downloadLocation,
     retrieved_at: asset.retrievedAt,
-    raw_provider_record: jsonString(asset.rawProviderRecord)
+    raw_provider_record: jsonString(asset.rawProviderRecord),
+    requires_attribution: boolToInt(asset.requiresAttribution),
+    allows_commercial_use: boolToInt(asset.allowsCommercialUse),
+    allows_modification: boolToInt(asset.allowsModification),
+    original_source: asset.originalSource,
+    original_source_url: asset.originalSourceUrl,
+    license_url: asset.licenseUrl
   };
 
   await insert(db, 'asset', row);
@@ -405,6 +411,13 @@ function compact(row) {
 function jsonString(value) {
   if (value === undefined || value === null || value === '') return undefined;
   return typeof value === 'string' ? value : JSON.stringify(value);
+}
+
+// SQLite/D1 has no native boolean; store 0/1. undefined/null pass through
+// unchanged — that's "unknown," a distinct fact from "known false."
+function boolToInt(value) {
+  if (value === undefined || value === null) return value;
+  return value ? 1 : 0;
 }
 
 function messageFor(error) {

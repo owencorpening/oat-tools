@@ -65,6 +65,9 @@ function normalizePhoto(photo = {}) {
     license: LICENSE,
     licenseUrl: LICENSE_URL,
     attribution: attributionFor({ title, photographer }),
+    requiresAttribution: false,
+    allowsCommercialUse: true,
+    allowsModification: true,
     width: photo.width,
     height: photo.height,
     rawProviderRecord: photo

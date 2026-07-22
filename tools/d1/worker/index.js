@@ -1,10 +1,7 @@
 'use strict';
 
 const ledger = require('../../../extensions/image-staging/lib/assetLedgerD1');
-const pexels = require('./imageProviders/pexels');
-const unsplash = require('./imageProviders/unsplash');
-
-const PROVIDERS = { pexels, unsplash };
+const { PROVIDERS } = require('./imageProviders');
 
 async function fetch(request, env) {
   return handleRequest(request, env);
@@ -61,9 +58,9 @@ async function handleRequest(request, env = {}) {
     if (request.method === 'POST' && assetDiscardedMatch) {
       return json(await handleMarkAssetDiscarded(env.DB, assetDiscardedMatch[1]));
     }
-    const assetDownloadPingMatch = url.pathname.match(/^\/assets\/([^/]+)\/download-location-ping$/);
-    if (request.method === 'POST' && assetDownloadPingMatch) {
-      return json(await handlePingDownloadLocation(env, assetDownloadPingMatch[1]));
+    const assetRecordUseMatch = url.pathname.match(/^\/assets\/([^/]+)\/record-use$/);
+    if (request.method === 'POST' && assetRecordUseMatch) {
+      return json(await handleRecordAssetUse(env, assetRecordUseMatch[1]));
     }
     const placementPublishingMatch = url.pathname.match(/^\/placements\/([^/]+)\/publishing$/);
     if (request.method === 'POST' && placementPublishingMatch) {
@@ -170,32 +167,43 @@ async function handleMarkAssetDiscarded(db, assetId) {
 }
 
 // Fetches the authoritative asset record from D1 (never trusts whatever the
-// caller echoed back) and, for Unsplash assets only, pings the API's
-// download_location endpoint as required by Unsplash's API Guidelines
-// whenever a photo is actually used. Non-Unsplash assets (or Unsplash
-// assets without a download_location on record) are a no-op — this is not
-// an error, most placements don't need it.
-async function handlePingDownloadLocation(env, assetId) {
+// caller echoed back) and does two independent things at "this asset is
+// actually being used now" time:
+//   1. Provenance archival — hand back the raw API response, attribution,
+//      and retrieval timestamp for any asset that has them, so the pipeline
+//      can archive api_response.json etc. regardless of provider.
+//   2. Provider-specific use-time obligations — currently only Unsplash's
+//      download_location ping (API Guidelines require it be triggered on
+//      use, not on browse/stage). Feature-detected via
+//      providerImpl.pingDownloadLocation; a no-op for every other provider.
+// A failed ping throws (502) and aborts — it's a compliance requirement,
+// not a best-effort nicety. Missing provenance is not an error; most local/
+// manually-intaken assets simply don't have any.
+async function handleRecordAssetUse(env, assetId) {
   const id = decodeURIComponent(assetId);
   const asset = await ledger.getAsset(env.DB, id);
   if (!asset) throw httpError(404, 'Asset not found');
 
   const providerImpl = asset.provider && PROVIDERS[asset.provider];
-  if (!providerImpl || !providerImpl.pingDownloadLocation || !asset.download_location) {
-    return { assetId: id, skipped: true };
+
+  let pingPerformed = false;
+  let pingedAt = null;
+  if (providerImpl && providerImpl.pingDownloadLocation && asset.download_location) {
+    const result = await providerImpl.pingDownloadLocation(asset.download_location, env);
+    if (!result || !result.ok) {
+      throw httpError(502, `${providerImpl.label} download_location ping failed`);
+    }
+    pingedAt = now();
+    pingPerformed = true;
+    await ledger.markDownloadLocationPinged(env.DB, { assetId: id, pingedAt });
   }
 
-  const result = await providerImpl.pingDownloadLocation(asset.download_location, env);
-  if (!result || !result.ok) {
-    throw httpError(502, `${providerImpl.label} download_location ping failed`);
-  }
-
-  const pingedAt = now();
-  await ledger.markDownloadLocationPinged(env.DB, { assetId: id, pingedAt });
+  const hasProvenance = Boolean(asset.raw_provider_record || asset.provider);
 
   return {
     assetId: id,
-    skipped: false,
+    hasProvenance,
+    pingPerformed,
     pingedAt,
     provider: asset.provider,
     providerId: asset.provider_id,
@@ -204,7 +212,10 @@ async function handlePingDownloadLocation(env, assetId) {
     retrievedAt: asset.retrieved_at,
     rawProviderRecord: parseJsonSafe(asset.raw_provider_record),
     attribution: asset.attribution,
-    license: asset.license
+    license: asset.license,
+    licenseUrl: asset.license_url,
+    originalSource: asset.original_source,
+    originalSourceUrl: asset.original_source_url
   };
 }
 
@@ -301,13 +312,22 @@ async function normalizeProviderAsset(input = {}, env = {}) {
       license
     })),
     intakeSection: emptyToUndefined(input.intakeSection),
-    status: 'staged',
+    // Sources with unreliable/inconsistent rights metadata (Library of
+    // Congress in particular) route to needs-provenance instead of staged —
+    // a human has to confirm usage rights before this is placement-ready.
+    status: normalized.needsReview ? 'needs-provenance' : 'staged',
     provider: normalized.provider,
     providerId: normalized.providerId,
     photographerUrl: normalized.photographerUrl,
     downloadLocation: normalized.downloadLocation,
     retrievedAt: now(),
-    rawProviderRecord: normalized.rawProviderRecord
+    rawProviderRecord: normalized.rawProviderRecord,
+    licenseUrl: normalized.licenseUrl,
+    requiresAttribution: normalized.requiresAttribution,
+    allowsCommercialUse: normalized.allowsCommercialUse,
+    allowsModification: normalized.allowsModification,
+    originalSource: normalized.originalSource,
+    originalSourceUrl: normalized.originalSourceUrl
   };
 }
 
@@ -362,14 +382,13 @@ function sourceDomain(sourceUrl) {
 }
 
 async function resolveCapturedMetadata(sourceUrl, env = {}) {
-  const unsplashId = unsplash.extractPhotoId(sourceUrl);
-  if (unsplashId && unsplash.isEnabled(env)) {
-    return unsplash.resolve({ providerId: unsplashId }, env);
-  }
-
-  const pexelsId = pexels.extractPhotoId(sourceUrl);
-  if (pexelsId && pexels.isEnabled(env)) {
-    return pexels.resolve({ providerId: pexelsId }, env);
+  // Try every provider that knows how to parse its own URLs back to an id —
+  // a new provider gets URL-paste intake for free just by implementing
+  // extractPhotoId, no hardcoded list to maintain here.
+  for (const provider of Object.values(PROVIDERS)) {
+    if (typeof provider.extractPhotoId !== 'function' || !provider.isEnabled(env)) continue;
+    const id = provider.extractPhotoId(sourceUrl);
+    if (id) return provider.resolve({ providerId: id }, env);
   }
 
   return {};

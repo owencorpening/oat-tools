@@ -105,8 +105,8 @@ function createLedgerApiClient({ baseUrl, token, request = requestJson } = {}) {
         token
       });
     },
-    pingDownloadLocation(db, { assetId } = {}) {
-      return request(`${normalizedBase}/assets/${encodeURIComponent(assetId)}/download-location-ping`, {
+    recordAssetUse(db, { assetId } = {}) {
+      return request(`${normalizedBase}/assets/${encodeURIComponent(assetId)}/record-use`, {
         method: 'POST',
         token
       });

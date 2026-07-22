@@ -93,14 +93,14 @@ function testWriteProviderComplianceFiles() {
 
   writeProviderComplianceFiles(assetDir, {
     providerId: 'eOvv6TjnSjc',
-    photographer: 'İrem Çevik',
     photographerUrl: 'https://unsplash.com/@irem-cevik',
     retrievedAt: '2026-07-21T00:00:00.000Z',
     rawProviderRecord: { id: 'eOvv6TjnSjc', width: 3456 },
+    attributionText: 'Image: Urban tunnel, by İrem Çevik, Source: Unsplash. License: Unsplash License.',
     pingedAt: '2026-07-21T00:05:00.000Z'
   });
 
-  assert.strictEqual(fs.readFileSync(path.join(assetDir, 'unsplash_photo_id.txt'), 'utf8'), 'eOvv6TjnSjc');
+  assert.strictEqual(fs.readFileSync(path.join(assetDir, 'provider_id.txt'), 'utf8'), 'eOvv6TjnSjc');
   assert.strictEqual(fs.readFileSync(path.join(assetDir, 'photographer_url.txt'), 'utf8'), 'https://unsplash.com/@irem-cevik');
   assert.strictEqual(fs.readFileSync(path.join(assetDir, 'retrieved_at.txt'), 'utf8'), '2026-07-21T00:00:00.000Z');
   assert.deepStrictEqual(
@@ -109,12 +109,28 @@ function testWriteProviderComplianceFiles() {
   );
   assert.strictEqual(
     fs.readFileSync(path.join(assetDir, 'attribution_text.txt'), 'utf8'),
-    'Photo by İrem Çevik on Unsplash (https://unsplash.com/@irem-cevik)'
+    'Image: Urban tunnel, by İrem Çevik, Source: Unsplash. License: Unsplash License.'
   );
   assert.strictEqual(
     fs.readFileSync(path.join(assetDir, 'download_location_pinged.txt'), 'utf8'),
     'true\n2026-07-21T00:05:00.000Z\n'
   );
+}
+
+function testWriteProviderComplianceFilesOmitsPingReceiptWhenNotPinged() {
+  const assetDir = tempRepo();
+
+  writeProviderComplianceFiles(assetDir, {
+    providerId: '12345',
+    photographerUrl: '',
+    retrievedAt: '2026-07-21T00:00:00.000Z',
+    rawProviderRecord: { id: 12345 },
+    attributionText: 'Image: Wheat field, by Pixabay contributor, Source: Pixabay. License: Pixabay Content License.'
+    // no pingedAt — Pixabay has no use-time obligation
+  });
+
+  assert.strictEqual(fs.readFileSync(path.join(assetDir, 'provider_id.txt'), 'utf8'), '12345');
+  assert(!fs.existsSync(path.join(assetDir, 'download_location_pinged.txt')), 'should not write a ping receipt when nothing was pinged');
 }
 
 function testSmallHelpers() {
@@ -134,5 +150,6 @@ testCreateRepoAsset();
 testCreatePlacedAssetCompatibility();
 testRemovePlacedAssetBySourceUrl();
 testWriteProviderComplianceFiles();
+testWriteProviderComplianceFilesOmitsPingReceiptWhenNotPinged();
 testSmallHelpers();
 console.log('imageAssetsRepo tests passed');

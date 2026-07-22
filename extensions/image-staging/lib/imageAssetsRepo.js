@@ -62,22 +62,22 @@ function writeProvenanceFiles(assetDir, asset) {
 // succeeded — download_location_pinged.txt is a receipt, not a request.
 function writeProviderComplianceFiles(assetDir, {
   providerId,
-  photographer,
   photographerUrl,
   retrievedAt,
   rawProviderRecord,
+  attributionText,
   pingedAt
 } = {}) {
-  const attributionText = photographer && photographerUrl
-    ? `Photo by ${photographer} on Unsplash (${photographerUrl})`
-    : '';
-
-  fs.writeFileSync(path.join(assetDir, 'unsplash_photo_id.txt'), providerId || '');
+  fs.writeFileSync(path.join(assetDir, 'provider_id.txt'), providerId || '');
   fs.writeFileSync(path.join(assetDir, 'photographer_url.txt'), photographerUrl || '');
   fs.writeFileSync(path.join(assetDir, 'retrieved_at.txt'), retrievedAt || '');
   fs.writeFileSync(path.join(assetDir, 'api_response.json'), JSON.stringify(rawProviderRecord ?? null, null, 2));
-  fs.writeFileSync(path.join(assetDir, 'attribution_text.txt'), attributionText);
-  fs.writeFileSync(path.join(assetDir, 'download_location_pinged.txt'), `true\n${pingedAt}\n`);
+  fs.writeFileSync(path.join(assetDir, 'attribution_text.txt'), attributionText || '');
+  // Only Unsplash-style providers have a use-time receipt to record; a
+  // provider with nothing to ping simply never produces this file.
+  if (pingedAt) {
+    fs.writeFileSync(path.join(assetDir, 'download_location_pinged.txt'), `true\n${pingedAt}\n`);
+  }
 }
 
 function buildRawGitHubBase({ owner, repo, branch, relDir }) {
