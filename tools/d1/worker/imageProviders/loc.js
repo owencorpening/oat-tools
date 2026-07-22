@@ -18,14 +18,19 @@
 // a header issue. Direct curl from a non-Workers IP succeeds every time.
 // This is an infrastructure-level block between Cloudflare zones that
 // code changes here cannot route around. The implementation and tests
-// are correct against LOC's actual response shape; it simply cannot
-// reach loc.gov from this Worker today.
+// below are correct against LOC's actual response shape — isEnabled()
+// is hardcoded off (see below) so the tool doesn't advertise a provider
+// it cannot actually reach. Flip DISABLED_UNTIL_LOC_UNBLOCKS_WORKERS back
+// to false once loc.gov's WAF stops blocking Cloudflare Workers traffic
+// (spot-check: curl this Worker's /image-providers/search?providers=loc
+// and confirm it returns real results, not a 403 in the Worker's logs).
 const PROVIDER_ID = 'loc';
 const PROVIDER_LABEL = 'Library of Congress';
 const PUBLIC_DOMAIN_PATTERN = /no known (copyright )?restriction|public domain|not protected by copyright/i;
+const DISABLED_UNTIL_LOC_UNBLOCKS_WORKERS = true;
 
 function isEnabled() {
-  return true;
+  return !DISABLED_UNTIL_LOC_UNBLOCKS_WORKERS;
 }
 
 function descriptor() {

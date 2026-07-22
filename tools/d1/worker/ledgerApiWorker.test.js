@@ -2,6 +2,7 @@
 
 const assert = require('assert');
 const { handleRequest } = require('./index');
+const loc = require('./imageProviders/loc');
 
 async function testCreateAsset() {
   const env = { DB: new FakeD1(), LEDGER_API_TOKEN: 'secret' };
@@ -613,9 +614,14 @@ async function testSmithsonianProviderRoutesAreAlwaysCc0() {
   assert.strictEqual(row.photographer, 'Jane Curator');
 }
 
+// LOC is hardcoded disabled (see imageProviders/loc.js) because loc.gov's
+// WAF blocks Cloudflare Workers traffic in production — confirmed via
+// wrangler tail, not assumed. The parsing/routing logic is still correct
+// and worth protecting, so these call the module's search/resolve
+// directly rather than going through the registry, which now refuses it
+// (covered separately by testLocIsDisabledPendingWorkersUnblock below).
 async function testLocConfidentPublicDomainGetsFlagsAssigned() {
   const env = {
-    DB: new FakeD1(),
     fetch: async url => {
       if (String(url).includes('/search/')) {
         return { ok: true, json: async () => ({ pagination: { of: 1 }, results: [locRow('2018666890', 'No known restrictions on publication.')] }) };
@@ -627,38 +633,22 @@ async function testLocConfidentPublicDomainGetsFlagsAssigned() {
     }
   };
 
-  let response = await handleRequest(new Request('https://ledger.test/image-providers'), env);
-  let body = await response.json();
-  assert(body.providers.some(p => p.id === 'loc'), 'loc should always be enabled (no key required)');
-
-  response = await handleRequest(new Request('https://ledger.test/image-providers/search?q=lighthouse&providers=loc'), env);
-  body = await response.json();
-  assert.strictEqual(response.status, 200);
-  assert.strictEqual(body.results.length, 1);
-  assert.strictEqual(body.results[0].providerId, '2018666890');
-  assert.strictEqual(body.results[0].allowsCommercialUse, true);
-  assert.strictEqual(body.results[0].sourceUrl, 'https://www.loc.gov/item/2018666890/');
+  const searchResult = await loc.search({ query: 'lighthouse', page: 1, perPage: 12 }, env);
+  assert.strictEqual(searchResult.results.length, 1);
+  assert.strictEqual(searchResult.results[0].providerId, '2018666890');
+  assert.strictEqual(searchResult.results[0].allowsCommercialUse, true);
+  assert.strictEqual(searchResult.results[0].sourceUrl, 'https://www.loc.gov/item/2018666890/');
   // Highest-resolution entry (last in the array) should be used as imageSrc.
-  assert.strictEqual(body.results[0].imageSrc, 'https://tile.loc.gov/2018666890/full.jpg');
+  assert.strictEqual(searchResult.results[0].imageSrc, 'https://tile.loc.gov/2018666890/full.jpg');
 
-  response = await handleRequest(jsonRequest('/captures/provider-image', {
-    provider: 'loc',
-    providerId: '2018666890'
-  }), env);
-  body = await response.json();
-  const row = env.DB.one('asset', body.asset.id);
-  assert.strictEqual(response.status, 201);
-  assert.strictEqual(row.status, 'staged');
-  assert.strictEqual(row.allows_commercial_use, 1);
+  const resolved = await loc.resolve({ providerId: '2018666890' }, env);
+  assert.strictEqual(resolved.allowsCommercialUse, true);
+  assert.strictEqual(resolved.needsReview, false);
 }
 
 async function testLocAmbiguousRightsRoutesToNeedsProvenance() {
   const env = {
-    DB: new FakeD1(),
     fetch: async url => {
-      if (String(url).includes('/search/')) {
-        return { ok: true, json: async () => ({ pagination: { of: 1 }, results: [locRow('2018666891', 'Rights status not evaluated.')] }) };
-      }
       if (String(url).includes('/item/2018666891/')) {
         return { ok: true, json: async () => ({ item: locRow('2018666891', 'Rights status not evaluated.') }) };
       }
@@ -666,16 +656,25 @@ async function testLocAmbiguousRightsRoutesToNeedsProvenance() {
     }
   };
 
-  const response = await handleRequest(jsonRequest('/captures/provider-image', {
-    provider: 'loc',
-    providerId: '2018666891'
-  }), env);
-  const body = await response.json();
-  const row = env.DB.one('asset', body.asset.id);
+  const resolved = await loc.resolve({ providerId: '2018666891' }, env);
+  assert.strictEqual(resolved.needsReview, true, 'unclear rights text should never be treated as clear');
+  assert.strictEqual(resolved.allowsCommercialUse, undefined);
+}
 
-  assert.strictEqual(response.status, 201);
-  assert.strictEqual(row.status, 'needs-provenance', 'unclear rights text should never be treated as clear');
-  assert.strictEqual(row.allows_commercial_use, undefined);
+async function testLocIsDisabledPendingWorkersUnblock() {
+  assert.strictEqual(loc.isEnabled(), false, 'flip this on once loc.gov stops blocking Workers traffic — see imageProviders/loc.js');
+
+  const env = { DB: new FakeD1() };
+  const providers = await handleRequest(new Request('https://ledger.test/image-providers'), env);
+  const providersBody = await providers.json();
+  assert(!providersBody.providers.some(p => p.id === 'loc'), 'loc should not be advertised as available while disabled');
+
+  const search = await handleRequest(new Request('https://ledger.test/image-providers/search?q=lighthouse&providers=loc'), env);
+  const searchBody = await search.json();
+  assert.deepStrictEqual(searchBody.results, [], 'search should silently skip loc, not attempt it');
+
+  const capture = await handleRequest(jsonRequest('/captures/provider-image', { provider: 'loc', providerId: '2018666890' }), env);
+  assert.strictEqual(capture.status, 400, 'capture should reject loc as unsupported while disabled');
 }
 
 async function testCreateReviewImageNeedUpsertsDraft() {
@@ -1208,6 +1207,7 @@ function byCreatedAt(a, b) {
   await testSmithsonianProviderRoutesAreAlwaysCc0();
   await testLocConfidentPublicDomainGetsFlagsAssigned();
   await testLocAmbiguousRightsRoutesToNeedsProvenance();
+  await testLocIsDisabledPendingWorkersUnblock();
   await testRecordAssetUseSucceedsForUnsplash();
   await testRecordAssetUseHasNoProvenanceForPlainAsset();
   await testRecordAssetUseFailsLoudlyOnProviderError();
