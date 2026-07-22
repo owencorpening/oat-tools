@@ -26,6 +26,8 @@ async function testCreateRowsAndFieldMapping() {
     assetType: 'image',
     slug: 'river-map',
     displayName: 'River Map',
+    sourcePath: '/home/owen/Downloads/river-map.jpg',
+    sourceKind: 'downloads',
     sourceUrl: 'https://example.com/river-map.jpg',
     imageSrc: 'https://example.com/river-map.jpg',
     contentHash: 'sha256:abc',
@@ -60,6 +62,11 @@ async function testCreateRowsAndFieldMapping() {
   assert.strictEqual(db.one('content_draft', 'draft-1').heading_anchor, 'heading');
   assert.strictEqual(db.one('asset', 'asset-1').display_name, 'River Map');
   assert.strictEqual(db.one('asset', 'asset-1').content_hash, 'sha256:abc');
+  // source_kind must round-trip through the ledger — placeAsset relies on it
+  // to tell a local upload (copy + cleanup) apart from a URL-based asset
+  // (download), and it previously wasn't persisted at all.
+  assert.strictEqual(db.one('asset', 'asset-1').source_kind, 'downloads');
+  assert.strictEqual(db.one('asset', 'asset-1').source_path, '/home/owen/Downloads/river-map.jpg');
   assert.deepStrictEqual(
     JSON.parse(db.one('asset_placement', 'placement-1').draft_location_json),
     { path: 'part-09.md', lineStart: 10 }
@@ -132,6 +139,8 @@ async function testListQueries() {
   assert.deepStrictEqual(planned.map(row => row.placement_id), ['placement-1']);
   assert.strictEqual(planned[0].display_name, 'River Map');
   assert.strictEqual(planned[0].saga_id, 'saga-1');
+  assert.strictEqual(planned[0].source_kind, 'downloads');
+  assert.strictEqual(planned[0].source_path, '/home/owen/Downloads/river-map.jpg');
 }
 
 async function testProviderMetadataAndDownloadPing() {
@@ -180,7 +189,7 @@ async function testProviderMetadataAndDownloadPing() {
 
 function seedAssetGraph(db) {
   db.insert('content_draft', { id: 'draft-1', draft_path: 'part-09.md', status: 'active' });
-  db.insert('asset', { id: 'asset-1', status: 'staged', display_name: 'River Map', created_at: '2026-01-01T00:00:00.000Z' });
+  db.insert('asset', { id: 'asset-1', status: 'staged', display_name: 'River Map', source_path: '/home/owen/Downloads/river-map.jpg', source_kind: 'downloads', created_at: '2026-01-01T00:00:00.000Z' });
   db.insert('asset_placement', { id: 'placement-1', asset_id: 'asset-1', content_draft_id: 'draft-1', target: 'substack', status: 'planned', created_at: '2026-01-01T00:00:00.000Z' });
   db.insert('image_need', { id: 'need-1', content_draft_id: 'draft-1', status: 'open', created_at: '2026-01-03T00:00:00.000Z' });
   db.insert('asset_saga', { id: 'saga-1', asset_id: 'asset-1', asset_placement_id: 'placement-1', current_step: 1, status: 'running', resolution: 'auto-retry', retry_count: 0 });
@@ -254,6 +263,8 @@ class FakeStatement {
             placement_status: row.status,
             asset_id: asset.id,
             display_name: asset.display_name,
+            source_path: asset.source_path,
+            source_kind: asset.source_kind,
             asset_status: asset.status,
             saga_id: saga.id,
             saga_status: saga.status,

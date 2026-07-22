@@ -29,6 +29,7 @@ function assetFromPlannedRow(row = {}) {
     displayName: row.display_name || row.displayName,
     sourceName: row.source_name || row.sourceName,
     sourcePath: row.source_path || row.sourcePath,
+    sourceKind: row.source_kind || row.sourceKind,
     sourceUrl: row.source_url || row.sourceUrl,
     imageSrc: row.image_src || row.imageSrc,
     contentHash: row.content_hash || row.contentHash,

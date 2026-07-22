@@ -46,6 +46,13 @@ async function placeAsset(options = {}) {
       const isLocalSource = isLocalSourceKind(asset.sourceKind);
       if (isLocalSource && asset.sourcePath) {
         await repo.copyAsset({ src: asset.sourcePath, dest: placedAsset.imagePath });
+        // Downloads and ai-generated (ChatGPT export) files are transient
+        // staging artifacts, not originals worth keeping — leaving them
+        // behind after a successful placement just clutters ~/Downloads.
+        // user-provided files may live anywhere on disk and are left alone.
+        if (isStagingSourceKind(asset.sourceKind) && repo.deleteSource) {
+          await repo.deleteSource({ path: asset.sourcePath });
+        }
       } else {
         await repo.downloadAsset({ url: placedAsset.downloadSrc, dest: placedAsset.imagePath });
       }
@@ -172,6 +179,7 @@ function normalizeAsset(asset = {}) {
     displayName: asset.displayName || asset.display_name,
     sourceName: asset.sourceName || asset.source_name,
     sourcePath: asset.sourcePath || asset.source_path,
+    sourceKind: asset.sourceKind || asset.source_kind,
     sourceUrl: asset.sourceUrl || asset.source_url || asset.url,
     imageSrc: asset.imageSrc || asset.image_src,
     contentHash: asset.contentHash || asset.content_hash,
@@ -245,6 +253,10 @@ function requireValue(value, name) {
 
 function isLocalSourceKind(sourceKind) {
   return sourceKind === 'downloads' || sourceKind === 'ai-generated' || sourceKind === 'user-provided';
+}
+
+function isStagingSourceKind(sourceKind) {
+  return sourceKind === 'downloads' || sourceKind === 'ai-generated';
 }
 
 module.exports = {

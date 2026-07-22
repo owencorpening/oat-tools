@@ -10,7 +10,8 @@ const {
   writeProviderComplianceFiles,
   removePlacedAssetBySourceUrl,
   buildRawGitHubBase,
-  guessExt
+  guessExt,
+  deleteSource
 } = require('../lib/imageAssetsRepo');
 
 function testCreateRepoAsset() {
@@ -154,6 +155,22 @@ function testWriteProviderComplianceFilesOmitsPingReceiptWhenNotPinged() {
   assert(!fs.existsSync(path.join(assetDir, 'download_location_pinged.txt')), 'should not write a ping receipt when nothing was pinged');
 }
 
+async function testDeleteSourceRemovesFile() {
+  const dir = tempRepo();
+  const filePath = path.join(dir, 'staged.png');
+  fs.writeFileSync(filePath, 'data');
+
+  await deleteSource({ path: filePath });
+
+  assert(!fs.existsSync(filePath));
+}
+
+async function testDeleteSourceIsBestEffortForMissingFile() {
+  // Should not reject even if the file is already gone — a placement that
+  // already succeeded shouldn't be reported as failed over cleanup.
+  await deleteSource({ path: path.join(tempRepo(), 'does-not-exist.png') });
+}
+
 function testSmallHelpers() {
   assert.strictEqual(guessExt('https://example.com/a.jpeg?download=1'), '.jpg');
   assert.strictEqual(guessExt('https://example.com/a'), '.jpg');
@@ -167,11 +184,18 @@ function tempRepo() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'oat-assets-repo-'));
 }
 
-testCreateRepoAsset();
-testCreateRepoAssetUsesSourcePathExtensionForLocalFiles();
-testCreatePlacedAssetCompatibility();
-testRemovePlacedAssetBySourceUrl();
-testWriteProviderComplianceFiles();
-testWriteProviderComplianceFilesOmitsPingReceiptWhenNotPinged();
-testSmallHelpers();
-console.log('imageAssetsRepo tests passed');
+(async () => {
+  testCreateRepoAsset();
+  testCreateRepoAssetUsesSourcePathExtensionForLocalFiles();
+  testCreatePlacedAssetCompatibility();
+  testRemovePlacedAssetBySourceUrl();
+  testWriteProviderComplianceFiles();
+  testWriteProviderComplianceFilesOmitsPingReceiptWhenNotPinged();
+  await testDeleteSourceRemovesFile();
+  await testDeleteSourceIsBestEffortForMissingFile();
+  testSmallHelpers();
+  console.log('imageAssetsRepo tests passed');
+})().catch(error => {
+  console.error(error);
+  process.exit(1);
+});

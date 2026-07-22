@@ -22,6 +22,8 @@ function testBuildPlacementRunInput() {
     asset_type: 'image',
     slug: 'river-map',
     display_name: 'River Map',
+    source_path: '/home/owen/Downloads/river.jpg',
+    source_kind: 'downloads',
     source_url: 'https://example.com/river.jpg',
     image_src: 'https://example.com/river.jpg',
     photographer: 'Owen',
@@ -41,6 +43,11 @@ function testBuildPlacementRunInput() {
   assert.strictEqual(input.asset.id, 'asset-1');
   assert.strictEqual(input.asset.displayName, 'River Map');
   assert.strictEqual(input.asset.intakeSection, 'water-series/part-09');
+  // A planned placement for a Downloads-sourced asset must carry sourceKind
+  // through, or placeAsset can't tell it apart from a URL-based asset and
+  // will try to re-download it instead of copying + cleaning up the local file.
+  assert.strictEqual(input.asset.sourcePath, '/home/owen/Downloads/river.jpg');
+  assert.strictEqual(input.asset.sourceKind, 'downloads');
   assert.strictEqual(input.placement.id, 'placement-1');
   assert.strictEqual(input.placement.figureNumber, '3');
   assert.deepStrictEqual(input.placement.draftLocation, { path: 'part-09.md', lineStart: 42 });

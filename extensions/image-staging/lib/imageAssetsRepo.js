@@ -107,6 +107,15 @@ async function copyAsset({ src, dest }) {
   });
 }
 
+// Best-effort cleanup of a staging source file (e.g. ~/Downloads) after it
+// has been copied into the repo. Swallows errors — a missing/already-removed
+// source file shouldn't fail a placement that already succeeded.
+async function deleteSource({ path: filePath }) {
+  return new Promise(resolve => {
+    fs.unlink(filePath, () => resolve());
+  });
+}
+
 function gitPushAsset(repoPath, relPath, slug) {
   return new Promise((resolve, reject) => {
     const cmd = `git add "${relPath}" && git commit -m "add ${slug}" && git push`;
@@ -177,6 +186,7 @@ module.exports = {
   buildRawGitHubBase,
   downloadAsset,
   copyAsset,
+  deleteSource,
   gitPushAsset,
   removePlacedAssetBySourceUrl,
   guessExt

@@ -257,6 +257,73 @@ async function testRecordAssetUseFailureAbortsPlacement() {
   assert(calls.some(call => call[0] === 'failed'), 'should mark the saga failed');
 }
 
+async function testLocalSourceCopiesAndDeletesDownloadsOriginal() {
+  const calls = [];
+  const ledger = fakeLedger(calls);
+  const repo = fakeRepo(calls);
+
+  await placeAsset({
+    db: {},
+    sagaId: 'saga-7',
+    repoPath: '/tmp/oat-assets',
+    asset: {
+      id: 'asset-7',
+      slug: 'chat-gpt-image',
+      displayName: 'ChatGPT Image',
+      sourcePath: '/home/owen/Downloads/ChatGPT Image.png',
+      sourceKind: 'ai-generated',
+      photographer: 'Owen',
+      license: 'OAT',
+      intakeSection: 'water-series/part-09'
+    },
+    placement: {
+      id: 'placement-7',
+      target: 'substack',
+      contentDraftId: 'draft-1'
+    },
+    ledger,
+    repo,
+    writeSnippet: async () => {}
+  });
+
+  assert(!calls.some(call => call[0] === 'download'), 'should copy a local file instead of downloading it');
+  assert(calls.some(call => call[0] === 'copy' && call[1] === '/home/owen/Downloads/ChatGPT Image.png'), 'should copy from the local sourcePath');
+  assert(calls.some(call => call[0] === 'deleteSource' && call[1] === '/home/owen/Downloads/ChatGPT Image.png'), 'should clean up the Downloads original after a successful copy');
+}
+
+async function testLocalSourceKeepsUserProvidedOriginal() {
+  const calls = [];
+  const ledger = fakeLedger(calls);
+  const repo = fakeRepo(calls);
+
+  await placeAsset({
+    db: {},
+    sagaId: 'saga-8',
+    repoPath: '/tmp/oat-assets',
+    asset: {
+      id: 'asset-8',
+      slug: 'my-photo',
+      displayName: 'My Photo',
+      sourcePath: '/home/owen/Pictures/my-photo.jpg',
+      sourceKind: 'user-provided',
+      photographer: 'Owen',
+      license: 'OAT',
+      intakeSection: 'water-series/part-09'
+    },
+    placement: {
+      id: 'placement-8',
+      target: 'substack',
+      contentDraftId: 'draft-1'
+    },
+    ledger,
+    repo,
+    writeSnippet: async () => {}
+  });
+
+  assert(calls.some(call => call[0] === 'copy'), 'should still copy a user-provided local file');
+  assert(!calls.some(call => call[0] === 'deleteSource'), 'user-provided originals may live anywhere on disk and must not be deleted');
+}
+
 function testSnippetFormatForTarget() {
   assert.strictEqual(snippetFormatForTarget('substack'), 'html-figure');
   assert.strictEqual(snippetFormatForTarget('carousel'), 'marp-image');
@@ -300,6 +367,8 @@ function fakeRepo(calls, options = {}) {
       calls.push(['download']);
       if (options.failDownload) throw new Error('download failed');
     },
+    copyAsset: async ({ src }) => calls.push(['copy', src]),
+    deleteSource: async ({ path }) => calls.push(['deleteSource', path]),
     gitPushAsset: async () => calls.push(['gitPush']),
     writeProviderComplianceFiles: (assetDir, fields) => {
       calls.push(['writeProviderComplianceFiles', assetDir, fields]);
@@ -314,6 +383,8 @@ function fakeRepo(calls, options = {}) {
   await testRecordAssetUseWritesComplianceFilesWhenProvenanceExists();
   await testRecordAssetUseSkippedForAssetWithoutProvenance();
   await testRecordAssetUseFailureAbortsPlacement();
+  await testLocalSourceCopiesAndDeletesDownloadsOriginal();
+  await testLocalSourceKeepsUserProvidedOriginal();
   testSnippetFormatForTarget();
   console.log('imagePipeline tests passed');
 })().catch(error => {
