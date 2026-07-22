@@ -54,6 +54,7 @@ function normalizePhoto(photo = {}) {
   const title = first(photo.alt_description, photo.description, providerId ? `Unsplash Photo ${providerId}` : 'Unsplash Photo');
   const sourceUrl = first(photo.links && photo.links.html);
   const photographer = first(photo.user && photo.user.name, 'UNKNOWN');
+  const photographerUrl = first(photo.user && photo.user.links && photo.user.links.html);
 
   return {
     provider: PROVIDER_ID,
@@ -63,6 +64,10 @@ function normalizePhoto(photo = {}) {
     imageSrc: first(photo.urls && photo.urls.regular, photo.urls && photo.urls.full, photo.urls && photo.urls.raw),
     sourceUrl,
     photographer,
+    photographerUrl,
+    // Per Unsplash API Guidelines, this must be pinged when a photo is
+    // actually used (not just browsed/fetched) — see pingDownloadLocation.
+    downloadLocation: first(photo.links && photo.links.download_location),
     license: LICENSE,
     licenseUrl: LICENSE_URL,
     attribution: attributionFor({ title, photographer }),
@@ -70,6 +75,26 @@ function normalizePhoto(photo = {}) {
     height: photo.height,
     rawProviderRecord: photo
   };
+}
+
+// Unsplash API Guidelines require triggering this endpoint at the moment a
+// photo is actually used (placed/downloaded for real use), separate from
+// browsing or previewing search results. A GET is sufficient to register
+// the download event; the signed URL it returns is not needed here.
+async function pingDownloadLocation(downloadLocation, env = {}) {
+  if (!downloadLocation || !isEnabled(env)) return { ok: false };
+
+  const fetcher = env.fetch || globalThis.fetch;
+  if (typeof fetcher !== 'function') return { ok: false };
+
+  try {
+    const response = await fetcher(downloadLocation, {
+      headers: { Authorization: `Client-ID ${env.UNSPLASH_ACCESS_KEY}` }
+    });
+    return { ok: Boolean(response && response.ok) };
+  } catch {
+    return { ok: false };
+  }
 }
 
 function extractPhotoId(sourceUrl) {
@@ -129,5 +154,6 @@ module.exports = {
   search,
   resolve,
   normalizePhoto,
-  extractPhotoId
+  extractPhotoId,
+  pingDownloadLocation
 };

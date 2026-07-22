@@ -7,6 +7,7 @@ const path = require('path');
 const {
   createRepoAsset,
   createPlacedAsset,
+  writeProviderComplianceFiles,
   removePlacedAssetBySourceUrl,
   buildRawGitHubBase,
   guessExt
@@ -87,6 +88,35 @@ function testRemovePlacedAssetBySourceUrl() {
   assert(!fs.existsSync(path.join(repoPath, 'water-series', 'part-09', 'discard-me')));
 }
 
+function testWriteProviderComplianceFiles() {
+  const assetDir = tempRepo();
+
+  writeProviderComplianceFiles(assetDir, {
+    providerId: 'eOvv6TjnSjc',
+    photographer: 'İrem Çevik',
+    photographerUrl: 'https://unsplash.com/@irem-cevik',
+    retrievedAt: '2026-07-21T00:00:00.000Z',
+    rawProviderRecord: { id: 'eOvv6TjnSjc', width: 3456 },
+    pingedAt: '2026-07-21T00:05:00.000Z'
+  });
+
+  assert.strictEqual(fs.readFileSync(path.join(assetDir, 'unsplash_photo_id.txt'), 'utf8'), 'eOvv6TjnSjc');
+  assert.strictEqual(fs.readFileSync(path.join(assetDir, 'photographer_url.txt'), 'utf8'), 'https://unsplash.com/@irem-cevik');
+  assert.strictEqual(fs.readFileSync(path.join(assetDir, 'retrieved_at.txt'), 'utf8'), '2026-07-21T00:00:00.000Z');
+  assert.deepStrictEqual(
+    JSON.parse(fs.readFileSync(path.join(assetDir, 'api_response.json'), 'utf8')),
+    { id: 'eOvv6TjnSjc', width: 3456 }
+  );
+  assert.strictEqual(
+    fs.readFileSync(path.join(assetDir, 'attribution_text.txt'), 'utf8'),
+    'Photo by İrem Çevik on Unsplash (https://unsplash.com/@irem-cevik)'
+  );
+  assert.strictEqual(
+    fs.readFileSync(path.join(assetDir, 'download_location_pinged.txt'), 'utf8'),
+    'true\n2026-07-21T00:05:00.000Z\n'
+  );
+}
+
 function testSmallHelpers() {
   assert.strictEqual(guessExt('https://example.com/a.jpeg?download=1'), '.jpg');
   assert.strictEqual(guessExt('https://example.com/a'), '.jpg');
@@ -103,5 +133,6 @@ function tempRepo() {
 testCreateRepoAsset();
 testCreatePlacedAssetCompatibility();
 testRemovePlacedAssetBySourceUrl();
+testWriteProviderComplianceFiles();
 testSmallHelpers();
 console.log('imageAssetsRepo tests passed');

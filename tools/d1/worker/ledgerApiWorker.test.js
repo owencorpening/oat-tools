@@ -227,6 +227,110 @@ async function testUnsplashProviderRoutes() {
   assert.strictEqual(row.image_src, 'https://images.unsplash.com/photos/eOvv6TjnSjc/regular.jpeg');
   assert.strictEqual(row.photographer, 'Unsplash Photographer');
   assert.strictEqual(row.license, 'Unsplash License');
+  assert.strictEqual(row.provider, 'unsplash');
+  assert.strictEqual(row.provider_id, 'eOvv6TjnSjc');
+  assert.strictEqual(row.photographer_url, 'https://unsplash.com/@unsplash-photographer');
+  assert.strictEqual(row.download_location, 'https://api.unsplash.com/photos/eOvv6TjnSjc/download');
+  assert(row.retrieved_at, 'retrieved_at should be set at capture time');
+  assert.strictEqual(JSON.parse(row.raw_provider_record).id, 'eOvv6TjnSjc');
+}
+
+async function testDownloadLocationPingSucceedsForUnsplash() {
+  const pingedUrls = [];
+  const env = {
+    DB: new FakeD1(),
+    UNSPLASH_ACCESS_KEY: 'unsplash-key',
+    fetch: async (url, init) => {
+      if (String(url).includes('/photos/eOvv6TjnSjc/download')) {
+        pingedUrls.push([url, init]);
+        return { ok: true, json: async () => ({ url: 'https://signed.example/photo.jpg' }) };
+      }
+      if (String(url).includes('/photos/eOvv6TjnSjc')) {
+        return { ok: true, json: async () => unsplashPhoto('eOvv6TjnSjc') };
+      }
+      return { ok: false, json: async () => ({}) };
+    }
+  };
+
+  const capture = await handleRequest(jsonRequest('/captures/provider-image', {
+    provider: 'unsplash',
+    providerId: 'eOvv6TjnSjc'
+  }), env);
+  const { asset } = await capture.json();
+
+  const response = await handleRequest(
+    jsonRequest(`/assets/${asset.id}/download-location-ping`, {}),
+    env
+  );
+  const body = await response.json();
+
+  assert.strictEqual(response.status, 200);
+  assert.strictEqual(body.skipped, false);
+  assert.strictEqual(body.provider, 'unsplash');
+  assert.strictEqual(body.providerId, 'eOvv6TjnSjc');
+  assert.strictEqual(body.photographerUrl, 'https://unsplash.com/@unsplash-photographer');
+  assert.strictEqual(body.rawProviderRecord.id, 'eOvv6TjnSjc');
+  assert(body.pingedAt, 'response should include pingedAt');
+  assert.strictEqual(pingedUrls.length, 1);
+  assert.deepStrictEqual(pingedUrls[0][1].headers, { Authorization: 'Client-ID unsplash-key' });
+
+  const row = env.DB.one('asset', asset.id);
+  assert.strictEqual(row.download_location_pinged_at, body.pingedAt);
+}
+
+async function testDownloadLocationPingSkipsNonUnsplashAssets() {
+  const env = { DB: new FakeD1() };
+  const created = await handleRequest(jsonRequest('/assets', {
+    asset: {
+      id: 'asset-plain',
+      assetType: 'image',
+      slug: 'plain-image',
+      displayName: 'Plain Image',
+      sourceUrl: 'https://example.com/plain.jpg'
+    }
+  }), env);
+  assert.strictEqual(created.status, 201);
+
+  const response = await handleRequest(jsonRequest('/assets/asset-plain/download-location-ping', {}), env);
+  const body = await response.json();
+
+  assert.strictEqual(response.status, 200);
+  assert.deepStrictEqual(body, { assetId: 'asset-plain', skipped: true });
+  assert.strictEqual(env.DB.one('asset', 'asset-plain').download_location_pinged_at, undefined);
+}
+
+async function testDownloadLocationPingFailsLoudlyOnProviderError() {
+  const env = {
+    DB: new FakeD1(),
+    UNSPLASH_ACCESS_KEY: 'unsplash-key',
+    fetch: async url => {
+      if (String(url).includes('/download')) return { ok: false, json: async () => ({}) };
+      if (String(url).includes('/photos/eOvv6TjnSjc')) {
+        return { ok: true, json: async () => unsplashPhoto('eOvv6TjnSjc') };
+      }
+      return { ok: false, json: async () => ({}) };
+    }
+  };
+
+  const capture = await handleRequest(jsonRequest('/captures/provider-image', {
+    provider: 'unsplash',
+    providerId: 'eOvv6TjnSjc'
+  }), env);
+  const { asset } = await capture.json();
+
+  const response = await handleRequest(
+    jsonRequest(`/assets/${asset.id}/download-location-ping`, {}),
+    env
+  );
+
+  assert.strictEqual(response.status, 502);
+  assert.strictEqual(env.DB.one('asset', asset.id).download_location_pinged_at, undefined);
+}
+
+async function testDownloadLocationPingRejectsUnknownAsset() {
+  const env = { DB: new FakeD1() };
+  const response = await handleRequest(jsonRequest('/assets/does-not-exist/download-location-ping', {}), env);
+  assert.strictEqual(response.status, 404);
 }
 
 async function testUnsplashProviderSearchFailureIsControlled() {
@@ -437,10 +541,14 @@ function unsplashPhoto(id) {
     height: 5184,
     alt_description: 'Misty wetland at dawn',
     links: {
-      html: `https://unsplash.com/photos/${id}`
+      html: `https://unsplash.com/photos/${id}`,
+      download_location: `https://api.unsplash.com/photos/${id}/download`
     },
     user: {
-      name: 'Unsplash Photographer'
+      name: 'Unsplash Photographer',
+      links: {
+        html: 'https://unsplash.com/@unsplash-photographer'
+      }
     },
     urls: {
       thumb: `https://images.unsplash.com/photos/${id}/thumb.jpeg`,
@@ -593,6 +701,10 @@ class FakeStatement {
         });
       return { results: rows };
     }
+    if (/FROM\s+asset\s+WHERE\s+id\s*=\s*\?/i.test(this.sql)) {
+      const row = (this.db.tables.get('asset') || []).find(candidate => candidate.id === this.values[0]);
+      return { results: row ? [row] : [] };
+    }
     if (/FROM\s+asset\b/i.test(this.sql)) {
       const rows = [...(this.db.tables.get('asset') || [])]
         .filter(row => row.status === 'staged')
@@ -662,6 +774,10 @@ function byCreatedAt(a, b) {
   await testUnsplashProviderRoutes();
   await testUnsplashProviderSearchFailureIsControlled();
   await testCaptureProviderImageRejectsDisabledProvider();
+  await testDownloadLocationPingSucceedsForUnsplash();
+  await testDownloadLocationPingSkipsNonUnsplashAssets();
+  await testDownloadLocationPingFailsLoudlyOnProviderError();
+  await testDownloadLocationPingRejectsUnknownAsset();
   await testCreateReviewImageNeedUpsertsDraft();
   await testCreatePlacementWithSaga();
   await testListRoutes();

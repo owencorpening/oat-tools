@@ -134,6 +134,50 @@ async function testListQueries() {
   assert.strictEqual(planned[0].saga_id, 'saga-1');
 }
 
+async function testProviderMetadataAndDownloadPing() {
+  const db = new FakeD1();
+
+  await ledger.createAsset(db, {
+    id: 'asset-unsplash-1',
+    assetType: 'image',
+    slug: 'misty-wetland',
+    displayName: 'Misty wetland at dawn',
+    sourceUrl: 'https://unsplash.com/photos/eOvv6TjnSjc',
+    imageSrc: 'https://images.unsplash.com/photos/eOvv6TjnSjc/regular.jpeg',
+    photographer: 'Unsplash Photographer',
+    photographerUrl: 'https://unsplash.com/@unsplash-photographer',
+    license: 'Unsplash License',
+    provider: 'unsplash',
+    providerId: 'eOvv6TjnSjc',
+    downloadLocation: 'https://api.unsplash.com/photos/eOvv6TjnSjc/download',
+    retrievedAt: '2026-07-21T00:00:00.000Z',
+    rawProviderRecord: { id: 'eOvv6TjnSjc', width: 3456 }
+  });
+
+  const row = db.one('asset', 'asset-unsplash-1');
+  assert.strictEqual(row.provider, 'unsplash');
+  assert.strictEqual(row.provider_id, 'eOvv6TjnSjc');
+  assert.strictEqual(row.photographer_url, 'https://unsplash.com/@unsplash-photographer');
+  assert.strictEqual(row.download_location, 'https://api.unsplash.com/photos/eOvv6TjnSjc/download');
+  assert.strictEqual(row.retrieved_at, '2026-07-21T00:00:00.000Z');
+  assert.deepStrictEqual(JSON.parse(row.raw_provider_record), { id: 'eOvv6TjnSjc', width: 3456 });
+  assert.strictEqual(row.download_location_pinged_at, undefined);
+
+  const fetched = await ledger.getAsset(db, 'asset-unsplash-1');
+  assert.strictEqual(fetched.id, 'asset-unsplash-1');
+  assert.strictEqual(fetched.provider, 'unsplash');
+  assert.strictEqual(await ledger.getAsset(db, 'does-not-exist'), null);
+
+  await ledger.markDownloadLocationPinged(db, {
+    assetId: 'asset-unsplash-1',
+    pingedAt: '2026-07-21T00:05:00.000Z'
+  });
+  assert.strictEqual(
+    db.one('asset', 'asset-unsplash-1').download_location_pinged_at,
+    '2026-07-21T00:05:00.000Z'
+  );
+}
+
 function seedAssetGraph(db) {
   db.insert('content_draft', { id: 'draft-1', draft_path: 'part-09.md', status: 'active' });
   db.insert('asset', { id: 'asset-1', status: 'staged', display_name: 'River Map', created_at: '2026-01-01T00:00:00.000Z' });
@@ -219,6 +263,11 @@ class FakeStatement {
       return { results: rows };
     }
 
+    if (/FROM\s+asset\s+WHERE\s+id\s*=\s*\?/i.test(this.sql)) {
+      const row = (this.db.tables.get('asset') || []).find(candidate => candidate.id === this.values[0]);
+      return { results: row ? [row] : [] };
+    }
+
     if (/FROM\s+asset\b/i.test(this.sql)) {
       const rows = [...(this.db.tables.get('asset') || [])]
         .filter(row => row.status === 'staged')
@@ -283,6 +332,7 @@ function byCreatedAt(a, b) {
   await testCreateRowsAndFieldMapping();
   await testUpdatesAndFailureState();
   await testListQueries();
+  await testProviderMetadataAndDownloadPing();
   console.log('assetLedgerD1 tests passed');
 })().catch(error => {
   console.error(error);

@@ -56,6 +56,30 @@ function writeProvenanceFiles(assetDir, asset) {
   fs.writeFileSync(path.join(assetDir, 'license.txt'), asset.license || '');
 }
 
+// Writes provider-specific compliance files on top of the generic
+// provenance files above. Callers must only invoke this after any required
+// use-time API action (e.g. Unsplash's download_location ping) has already
+// succeeded — download_location_pinged.txt is a receipt, not a request.
+function writeProviderComplianceFiles(assetDir, {
+  providerId,
+  photographer,
+  photographerUrl,
+  retrievedAt,
+  rawProviderRecord,
+  pingedAt
+} = {}) {
+  const attributionText = photographer && photographerUrl
+    ? `Photo by ${photographer} on Unsplash (${photographerUrl})`
+    : '';
+
+  fs.writeFileSync(path.join(assetDir, 'unsplash_photo_id.txt'), providerId || '');
+  fs.writeFileSync(path.join(assetDir, 'photographer_url.txt'), photographerUrl || '');
+  fs.writeFileSync(path.join(assetDir, 'retrieved_at.txt'), retrievedAt || '');
+  fs.writeFileSync(path.join(assetDir, 'api_response.json'), JSON.stringify(rawProviderRecord ?? null, null, 2));
+  fs.writeFileSync(path.join(assetDir, 'attribution_text.txt'), attributionText);
+  fs.writeFileSync(path.join(assetDir, 'download_location_pinged.txt'), `true\n${pingedAt}\n`);
+}
+
 function buildRawGitHubBase({ owner, repo, branch, relDir }) {
   return `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${relDir}`;
 }
@@ -143,6 +167,7 @@ module.exports = {
   createRepoAsset,
   createPlacedAsset,
   writeProvenanceFiles,
+  writeProviderComplianceFiles,
   buildRawGitHubBase,
   downloadAsset,
   copyAsset,

@@ -61,6 +61,10 @@ async function handleRequest(request, env = {}) {
     if (request.method === 'POST' && assetDiscardedMatch) {
       return json(await handleMarkAssetDiscarded(env.DB, assetDiscardedMatch[1]));
     }
+    const assetDownloadPingMatch = url.pathname.match(/^\/assets\/([^/]+)\/download-location-ping$/);
+    if (request.method === 'POST' && assetDownloadPingMatch) {
+      return json(await handlePingDownloadLocation(env, assetDownloadPingMatch[1]));
+    }
     const placementPublishingMatch = url.pathname.match(/^\/placements\/([^/]+)\/publishing$/);
     if (request.method === 'POST' && placementPublishingMatch) {
       return json(await handleMarkPlacementPublishing(env.DB, placementPublishingMatch[1]));
@@ -165,6 +169,58 @@ async function handleMarkAssetDiscarded(db, assetId) {
   return { assetId: decodeURIComponent(assetId), ok: true };
 }
 
+// Fetches the authoritative asset record from D1 (never trusts whatever the
+// caller echoed back) and, for Unsplash assets only, pings the API's
+// download_location endpoint as required by Unsplash's API Guidelines
+// whenever a photo is actually used. Non-Unsplash assets (or Unsplash
+// assets without a download_location on record) are a no-op — this is not
+// an error, most placements don't need it.
+async function handlePingDownloadLocation(env, assetId) {
+  const id = decodeURIComponent(assetId);
+  const asset = await ledger.getAsset(env.DB, id);
+  if (!asset) throw httpError(404, 'Asset not found');
+
+  const providerImpl = asset.provider && PROVIDERS[asset.provider];
+  if (!providerImpl || !providerImpl.pingDownloadLocation || !asset.download_location) {
+    return { assetId: id, skipped: true };
+  }
+
+  const result = await providerImpl.pingDownloadLocation(asset.download_location, env);
+  if (!result || !result.ok) {
+    throw httpError(502, `${providerImpl.label} download_location ping failed`);
+  }
+
+  const pingedAt = now();
+  await ledger.markDownloadLocationPinged(env.DB, { assetId: id, pingedAt });
+
+  return {
+    assetId: id,
+    skipped: false,
+    pingedAt,
+    provider: asset.provider,
+    providerId: asset.provider_id,
+    photographer: asset.photographer,
+    photographerUrl: asset.photographer_url,
+    retrievedAt: asset.retrieved_at,
+    rawProviderRecord: parseJsonSafe(asset.raw_provider_record),
+    attribution: asset.attribution,
+    license: asset.license
+  };
+}
+
+function parseJsonSafe(value) {
+  if (!value) return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+function now() {
+  return new Date().toISOString();
+}
+
 async function handleMarkPlacementPublishing(db, placementId) {
   await ledger.markPlacementPublishing(db, decodeURIComponent(placementId));
   return { placementId: decodeURIComponent(placementId), ok: true };
@@ -245,7 +301,13 @@ async function normalizeProviderAsset(input = {}, env = {}) {
       license
     })),
     intakeSection: emptyToUndefined(input.intakeSection),
-    status: 'staged'
+    status: 'staged',
+    provider: normalized.provider,
+    providerId: normalized.providerId,
+    photographerUrl: normalized.photographerUrl,
+    downloadLocation: normalized.downloadLocation,
+    retrievedAt: now(),
+    rawProviderRecord: normalized.rawProviderRecord
   };
 }
 

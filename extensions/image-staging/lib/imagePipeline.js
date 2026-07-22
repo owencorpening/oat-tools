@@ -49,6 +49,27 @@ async function placeAsset(options = {}) {
       } else {
         await repo.downloadAsset({ url: placedAsset.downloadSrc, dest: placedAsset.imagePath });
       }
+
+      // Some providers (Unsplash) require registering a "download" event at
+      // the moment a photo is actually used, distinct from browsing or
+      // staging it — see imageProviders/unsplash.js. The ledger endpoint is
+      // a no-op for assets that don't need this, so it's always safe to call.
+      // A failed ping throws (propagates to the outer catch below) rather
+      // than silently proceeding, since this is a compliance requirement,
+      // not a nice-to-have.
+      if (ledger.pingDownloadLocation) {
+        const pingResult = await ledger.pingDownloadLocation(db, { assetId: asset.id });
+        if (pingResult && pingResult.skipped === false) {
+          repo.writeProviderComplianceFiles(placedAsset.assetDir, {
+            providerId: pingResult.providerId,
+            photographer: pingResult.photographer,
+            photographerUrl: pingResult.photographerUrl,
+            retrievedAt: pingResult.retrievedAt,
+            rawProviderRecord: pingResult.rawProviderRecord,
+            pingedAt: pingResult.pingedAt
+          });
+        }
+      }
     }
 
     await setSagaStep(ledger, db, sagaId, 4, 'Rewrite deterministic provenance files from the asset record');

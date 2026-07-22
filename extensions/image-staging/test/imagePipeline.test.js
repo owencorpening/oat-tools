@@ -117,6 +117,138 @@ async function testPlanOnlyDoesNotMarkPlaced() {
   assert.deepStrictEqual(calls.at(-1), ['sagaStep', 7, 'succeeded']);
 }
 
+async function testUnsplashDownloadPingWritesComplianceFilesOnSuccess() {
+  const calls = [];
+  const ledger = fakeLedger(calls, {
+    pingDownloadLocation: async (db, { assetId }) => {
+      calls.push(['pingDownloadLocation', assetId]);
+      return {
+        skipped: false,
+        pingedAt: '2026-07-21T00:05:00.000Z',
+        provider: 'unsplash',
+        providerId: 'eOvv6TjnSjc',
+        photographer: 'Unsplash Photographer',
+        photographerUrl: 'https://unsplash.com/@unsplash-photographer',
+        retrievedAt: '2026-07-21T00:00:00.000Z',
+        rawProviderRecord: { id: 'eOvv6TjnSjc' }
+      };
+    }
+  });
+  const repo = fakeRepo(calls);
+
+  await placeAsset({
+    db: {},
+    sagaId: 'saga-4',
+    repoPath: '/tmp/oat-assets',
+    asset: {
+      id: 'asset-4',
+      slug: 'misty-wetland',
+      displayName: 'Misty wetland at dawn',
+      sourceUrl: 'https://unsplash.com/photos/eOvv6TjnSjc',
+      photographer: 'Unsplash Photographer',
+      license: 'Unsplash License',
+      intakeSection: 'water-series/part-09'
+    },
+    placement: {
+      id: 'placement-4',
+      target: 'substack',
+      figureNumber: '4',
+      contentDraftId: 'draft-1'
+    },
+    ledger,
+    repo,
+    writeSnippet: async () => {}
+  });
+
+  assert.deepStrictEqual(
+    calls.find(call => call[0] === 'pingDownloadLocation'),
+    ['pingDownloadLocation', 'asset-4']
+  );
+  const complianceCall = calls.find(call => call[0] === 'writeProviderComplianceFiles');
+  assert(complianceCall, 'should write compliance files once the ping succeeds');
+  assert.strictEqual(complianceCall[1], '/tmp/asset-dir/misty-wetland');
+  assert.strictEqual(complianceCall[2].providerId, 'eOvv6TjnSjc');
+  assert.strictEqual(complianceCall[2].pingedAt, '2026-07-21T00:05:00.000Z');
+}
+
+async function testDownloadPingSkippedForNonUnsplashAsset() {
+  const calls = [];
+  const ledger = fakeLedger(calls, {
+    pingDownloadLocation: async (db, { assetId }) => {
+      calls.push(['pingDownloadLocation', assetId]);
+      return { skipped: true };
+    }
+  });
+  const repo = fakeRepo(calls);
+
+  await placeAsset({
+    db: {},
+    sagaId: 'saga-5',
+    repoPath: '/tmp/oat-assets',
+    asset: {
+      id: 'asset-5',
+      slug: 'river-map',
+      displayName: 'RiverMap',
+      sourceUrl: 'https://example.com/river-map.jpg',
+      photographer: 'Owen',
+      license: 'OAT',
+      intakeSection: 'water-series/part-09'
+    },
+    placement: {
+      id: 'placement-5',
+      target: 'substack',
+      figureNumber: '5',
+      contentDraftId: 'draft-1'
+    },
+    ledger,
+    repo,
+    writeSnippet: async () => {}
+  });
+
+  assert(calls.some(call => call[0] === 'pingDownloadLocation'), 'should still call the ping (worker decides)');
+  assert(!calls.some(call => call[0] === 'writeProviderComplianceFiles'), 'should not write compliance files when skipped');
+}
+
+async function testDownloadPingFailureAbortsPlacement() {
+  const calls = [];
+  const ledger = fakeLedger(calls, {
+    pingDownloadLocation: async () => {
+      throw new Error('Unsplash download_location ping failed');
+    }
+  });
+  const repo = fakeRepo(calls);
+
+  await assert.rejects(
+    () => placeAsset({
+      db: {},
+      sagaId: 'saga-6',
+      repoPath: '/tmp/oat-assets',
+      asset: {
+        id: 'asset-6',
+        slug: 'misty-wetland-2',
+        displayName: 'Misty wetland at dawn 2',
+        sourceUrl: 'https://unsplash.com/photos/abc123',
+        photographer: 'Unsplash Photographer',
+        license: 'Unsplash License',
+        intakeSection: 'water-series/part-09'
+      },
+      placement: {
+        id: 'placement-6',
+        target: 'substack',
+        contentDraftId: 'draft-1'
+      },
+      ledger,
+      repo,
+      writeSnippet: async () => {}
+    }),
+    /Unsplash download_location ping failed/
+  );
+
+  assert(!calls.some(call => call[0] === 'writeProviderComplianceFiles'), 'should never write compliance files on ping failure');
+  assert(!calls.some(call => call[0] === 'gitPush'), 'should not proceed to git push after a failed ping');
+  assert(calls.some(call => call[0] === 'failed'), 'should mark the saga failed');
+}
+
 function testSnippetFormatForTarget() {
   assert.strictEqual(snippetFormatForTarget('substack'), 'html-figure');
   assert.strictEqual(snippetFormatForTarget('carousel'), 'marp-image');
@@ -124,7 +256,7 @@ function testSnippetFormatForTarget() {
   assert.strictEqual(snippetFormatForTarget('unknown'), 'raw-url');
 }
 
-function fakeLedger(calls) {
+function fakeLedger(calls, options = {}) {
   return {
     markSagaStep: async (db, sagaId, updates) => {
       calls.push(['sagaStep', updates.currentStep, updates.status]);
@@ -142,7 +274,8 @@ function fakeLedger(calls) {
     },
     markFailed: async (db, updates) => {
       calls.push(['failed', updates.error.message, updates.resolution]);
-    }
+    },
+    ...(options.pingDownloadLocation ? { pingDownloadLocation: options.pingDownloadLocation } : {})
   };
 }
 
@@ -150,6 +283,7 @@ function fakeRepo(calls, options = {}) {
   return {
     createPlacedAsset: ({ series, partDir, slug }) => ({
       downloadSrc: 'https://example.com/river-map.jpg',
+      assetDir: `/tmp/asset-dir/${slug}`,
       imagePath: `/tmp/${slug}.jpg`,
       relPath: `${series}/${partDir}/${slug}`,
       imageUrl: `https://raw.example.com/${series}/${partDir}/${slug}/${slug}.jpg`
@@ -158,7 +292,10 @@ function fakeRepo(calls, options = {}) {
       calls.push(['download']);
       if (options.failDownload) throw new Error('download failed');
     },
-    gitPushAsset: async () => calls.push(['gitPush'])
+    gitPushAsset: async () => calls.push(['gitPush']),
+    writeProviderComplianceFiles: (assetDir, fields) => {
+      calls.push(['writeProviderComplianceFiles', assetDir, fields]);
+    }
   };
 }
 
@@ -166,6 +303,9 @@ function fakeRepo(calls, options = {}) {
   await testPlaceAssetSuccess();
   await testFailureMarksSagaFailed();
   await testPlanOnlyDoesNotMarkPlaced();
+  await testUnsplashDownloadPingWritesComplianceFilesOnSuccess();
+  await testDownloadPingSkippedForNonUnsplashAsset();
+  await testDownloadPingFailureAbortsPlacement();
   testSnippetFormatForTarget();
   console.log('imagePipeline tests passed');
 })().catch(error => {

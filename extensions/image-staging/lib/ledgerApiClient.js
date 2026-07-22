@@ -105,6 +105,12 @@ function createLedgerApiClient({ baseUrl, token, request = requestJson } = {}) {
         token
       });
     },
+    pingDownloadLocation(db, { assetId } = {}) {
+      return request(`${normalizedBase}/assets/${encodeURIComponent(assetId)}/download-location-ping`, {
+        method: 'POST',
+        token
+      });
+    },
     updatePlacementSnippet(db, { placementId, snippet, snippetFormat } = {}) {
       return request(`${normalizedBase}/placements/${encodeURIComponent(placementId)}/snippet`, {
         method: 'POST',

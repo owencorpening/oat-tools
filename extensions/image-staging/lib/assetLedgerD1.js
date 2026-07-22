@@ -54,11 +54,31 @@ async function createAsset(db, asset) {
     intake_section: asset.intakeSection,
     asset_path: asset.assetPath,
     raw_asset_url: asset.rawAssetUrl,
-    status: asset.status || 'candidate'
+    status: asset.status || 'candidate',
+    provider: asset.provider,
+    provider_id: asset.providerId,
+    photographer_url: asset.photographerUrl,
+    download_location: asset.downloadLocation,
+    retrieved_at: asset.retrievedAt,
+    raw_provider_record: jsonString(asset.rawProviderRecord)
   };
 
   await insert(db, 'asset', row);
   return row;
+}
+
+async function getAsset(db, id) {
+  if (!id) throw new Error('getAsset requires id');
+  const rows = await all(db.prepare('SELECT * FROM asset WHERE id = ?').bind(id));
+  return rows[0] || null;
+}
+
+async function markDownloadLocationPinged(db, { assetId, pingedAt } = {}) {
+  if (!assetId) throw new Error('markDownloadLocationPinged requires assetId');
+
+  await updateById(db, 'asset', assetId, {
+    download_location_pinged_at: pingedAt || now()
+  });
 }
 
 async function createPlacement(db, placement) {
@@ -408,6 +428,8 @@ module.exports = {
   createContentItem,
   createContentDraft,
   createAsset,
+  getAsset,
+  markDownloadLocationPinged,
   createPlacement,
   createImageNeed,
   createSaga,
