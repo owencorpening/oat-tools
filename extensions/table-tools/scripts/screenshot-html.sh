@@ -1,16 +1,18 @@
 #!/bin/bash
-# Usage: screenshot-html.sh <input.html> <output.png> [width]
+# Usage: screenshot-html.sh <input.html> <output.png> [width] [selector]
 INPUT=$1
 OUTPUT=$2
 WIDTH=${3:-700}
+SELECTOR=${4:-.table-frame}
 
-PUPPETEER_DIR=${PUPPETEER_DIR:-"$HOME/dev/wraith/substack-ideas/water-series/part-09-corridors/assets"}
+PUPPETEER_DIR=${PUPPETEER_DIR:-"$HOME/dev/oat-tools/extensions/table-tools"}
 
-node - "$INPUT" "$OUTPUT" "$WIDTH" "$PUPPETEER_DIR" <<'NODE'
+node - "$INPUT" "$OUTPUT" "$WIDTH" "$PUPPETEER_DIR" "$SELECTOR" <<'NODE'
 const input = process.argv[2];
 const output = process.argv[3];
 const initialWidth = Number(process.argv[4]) || 700;
 const puppeteerDir = process.argv[5];
+const selector = process.argv[6] || '.table-frame';
 const puppeteer = require(`${puppeteerDir}/node_modules/puppeteer`);
 const path = require('path');
 
@@ -20,12 +22,11 @@ const path = require('path');
   await page.setViewport({ width: Math.max(initialWidth, 320), height: 800, deviceScaleFactor: 1 });
   await page.goto('file://' + path.resolve(input), { waitUntil: 'networkidle2', timeout: 30000 });
 
-  const selector = '.table-frame';
   const handle = await page.$(selector);
-  if (!handle) throw new Error('Table frame not found in rendered HTML');
+  if (!handle) throw new Error(`Selector "${selector}" not found in rendered HTML`);
 
   const box = await handle.boundingBox();
-  if (!box) throw new Error('Unable to measure rendered table frame');
+  if (!box) throw new Error(`Unable to measure rendered element for "${selector}"`);
 
   const width = Math.ceil(box.width);
   const height = Math.ceil(box.height);

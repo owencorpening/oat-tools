@@ -1,36 +1,17 @@
-# Blockquote Renderer
+# Blockquote / Pullquote Rendering — Retired
 
-Renders body markdown blockquotes into OAT-styled PNG images. This supports the
-content standard that body blockquotes are replaced with designed image assets
-before publishing to Substack.
+The Python CLI that used to live here (`blockquote-renderer.py`) has been
+retired in favor of the `table-tools` VS Code extension, which now covers both
+the batch and one-off cases with a single renderer and one visual style:
 
-## Usage
+- `OAT Tables: Promote Selection as Pullquote` — render whatever text is
+  currently selected.
+- `OAT Tables: Promote All Pullquotes in Document` — scan the active markdown
+  file for every `>` blockquote and promote each one in place.
 
-```bash
-python tools/blockquotes/blockquote-renderer.py path/to/post.md
-```
+Both commands render the PNG, commit + push it to the images repo, and replace
+the markdown text with the `<img>` embed automatically — no manual URL
+copy/paste step, which the old CLI required.
 
-Optional target controls:
-
-```bash
-python tools/blockquotes/blockquote-renderer.py path/to/post.md \
-  --asset-repo ~/dev/images \
-  --section water-series/part-09 \
-  --slug water-part-09-corridors
-```
-
-Defaults:
-
-- Asset repo: `OAT_ASSET_REPO_PATH`, then `~/dev/images`
-- Section: `standalone`
-- Slug: markdown filename without extension
-
-Output:
-
-```text
-[asset repo]/[section]/[slug]/blockquotes/blockquote-01.png
-```
-
-After rendering, commit the generated PNGs in the asset repo and replace the
-body blockquote in the Substack editor with the raw GitHub image URL. Alt text
-should be the verbatim blockquote text.
+See `oat-standards/sops/sop-blockquote-image.md` for the full workflow and
+design spec.

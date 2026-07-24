@@ -4,11 +4,15 @@
   "displayName": "OAT Table Tools",
   "description": "Owen's Applied Thinking table promotion commands for VS Code",
   "version": "0.1.0",
-  "engines": { "vscode": "^1.75.0" },
-  "categories": ["Other"],
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Other"
+  ],
   "main": "./extension.js",
   "scripts": {
-    "test": "node test/parseTables.test.js && node test/tableImageWidth.test.js && node test/repairFigures.test.js"
+    "test": "node test/parseTables.test.js && node test/tableImageWidth.test.js && node test/repairFigures.test.js && node test/parseBlockquotes.test.js"
   },
   "contributes": {
     "commands": [
@@ -19,6 +23,14 @@
       {
         "command": "oatTables.repairFigures",
         "title": "OAT Tables: Repair and Renumber Figures"
+      },
+      {
+        "command": "oatTables.promotePullquote",
+        "title": "OAT Tables: Promote Selection as Pullquote"
+      },
+      {
+        "command": "oatTables.promoteAllPullquotes",
+        "title": "OAT Tables: Promote All Pullquotes in Document"
       }
     ],
     "configuration": {
@@ -32,14 +44,22 @@
         "oatTables.imagesRepoPath": {
           "type": "string",
           "default": "",
-          "description": "Absolute path to the local images repo. Defaults to ~/dev/images."
+          "description": "Absolute path to the local images repo. Defaults to ~/dev/oat-assets."
         },
         "oatTables.screenshotScriptPath": {
           "type": "string",
           "default": "",
           "description": "Absolute path to screenshot-html.sh. Defaults to scripts/screenshot-html.sh in this extension if present, then ~/dev/wraith/scripts/screenshot-html.sh."
+        },
+        "oatTables.puppeteerDir": {
+          "type": "string",
+          "default": "",
+          "description": "Directory containing a node_modules/puppeteer install, used by screenshot-html.sh to render table PNGs. Defaults to this extension's dev repo checkout (~/dev/oat-tools/extensions/table-tools)."
         }
       }
     }
+  },
+  "dependencies": {
+    "puppeteer": "^25.3.0"
   }
 }

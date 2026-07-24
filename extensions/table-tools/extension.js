@@ -8,11 +8,14 @@ const path = require('path');
 const { parseTables } = require('./lib/parseTables');
 const { estimateTableImageWidth } = require('./lib/tableImageWidth');
 const { findFigures, extractSheetUrl, computeRepairs } = require('./lib/figureRepair');
+const { parseBlockquotes } = require('./lib/parseBlockquotes');
 
 function activate(context) {
   context.subscriptions.push(
     vscode.commands.registerCommand('oatTables.promoteAllTables', promoteAllTables),
-    vscode.commands.registerCommand('oatTables.repairFigures', repairFigures)
+    vscode.commands.registerCommand('oatTables.repairFigures', repairFigures),
+    vscode.commands.registerCommand('oatTables.promotePullquote', promotePullquote),
+    vscode.commands.registerCommand('oatTables.promoteAllPullquotes', promoteAllPullquotes)
   );
 }
 
@@ -246,7 +249,12 @@ function execFile(command, args, options = {}) {
 
 function imagesRepoPath() {
   return getSetting('imagesRepoPath', '')
-    || path.join(os.homedir(), 'dev', 'images');
+    || path.join(os.homedir(), 'dev', 'oat-assets');
+}
+
+function puppeteerDir() {
+  return getSetting('puppeteerDir', '')
+    || path.join(os.homedir(), 'dev', 'oat-tools', 'extensions', 'table-tools');
 }
 
 function screenshotScriptPath() {
@@ -288,10 +296,10 @@ function renderOatHtml(headers, rows) {
   body{margin:0;background:transparent;font-family:Arial,sans-serif;}
   .table-frame{display:inline-block;padding:16px;background:#fff;}
   table{border-collapse:collapse;width:max-content;}
-  th{background:#005f73;color:#fff;font-size:16px;font-weight:bold;padding:0 12px;height:40px;vertical-align:middle;text-align:left;border-right:1px solid #94d2bd;white-space:nowrap;}
+  th{background:#005f73;color:#fff;font-size:16px;font-weight:bold;padding:10px 14px;vertical-align:middle;text-align:left;border-right:1px solid #94d2bd;white-space:nowrap;}
   th:last-child{border-right:none;}
   thead tr{border-bottom:2px solid #94d2bd;}
-  td{font-size:15px;padding:0 12px;min-height:40px;vertical-align:top;border-right:1px solid #94d2bd;color:#000;word-wrap:break-word;}
+  td{font-size:15px;padding:9px 14px;vertical-align:top;border-right:1px solid #94d2bd;color:#000;word-wrap:break-word;}
   td:last-child{border-right:none;}
   tr.even td{background:#f0f7f8;}
   tr.odd td{background:#fff;}
@@ -300,8 +308,249 @@ function renderOatHtml(headers, rows) {
 <body><div class="table-frame"><table><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table></div></body></html>`;
 }
 
+// ── Promote Pullquote ────────────────────────────────────────────────────────
+
+async function promotePullquote() {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor) {
+    vscode.window.showErrorMessage('OAT: No active editor.');
+    return;
+  }
+  if (editor.document.languageId !== 'markdown') {
+    vscode.window.showErrorMessage('OAT: Active file must be a markdown document.');
+    return;
+  }
+
+  const selection = editor.selection;
+  if (selection.isEmpty) {
+    vscode.window.showErrorMessage('OAT: Select the quote text first.');
+    return;
+  }
+
+  const rawText = editor.document.getText(selection);
+  const text = cleanQuoteText(rawText);
+  if (!text) {
+    vscode.window.showErrorMessage('OAT: Selection has no text after removing blockquote markers.');
+    return;
+  }
+
+  const partNum = await vscode.window.showInputBox({
+    prompt: 'Part number (e.g. 09)',
+    placeHolder: '09',
+    validateInput: v => v && v.trim() ? null : 'Part number is required'
+  });
+  if (!partNum) return;
+
+  const series = await vscode.window.showInputBox({
+    prompt: 'Series slug',
+    placeHolder: 'water-series',
+    value: 'water-series',
+    validateInput: v => v && v.trim() ? null : 'Series is required'
+  });
+  if (series === undefined) return;
+
+  const descriptor = generateQuoteDescriptor(text);
+  const title = `part${partNum.trim()}-pullquote-${descriptor}`;
+
+  try {
+    const { pngUrl } = await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: 'OAT: Rendering pullquote', cancellable: false },
+      () => renderAndPushPng(renderPullquoteHtml(text), title, partNum.trim(), series.trim(), 900, '.pullquote-frame')
+    );
+
+    const embed = `<img src="${pngUrl}" width="900" alt="${escapeHtml(text)}">`;
+
+    const succeeded = await editor.edit(editBuilder => {
+      editBuilder.replace(selection, embed);
+    });
+
+    if (succeeded) {
+      await editor.document.save();
+      vscode.window.showInformationMessage('OAT: Pullquote promoted.');
+    } else {
+      vscode.window.showErrorMessage('OAT: Edit failed — document may have changed during processing.');
+    }
+  } catch (err) {
+    vscode.window.showErrorMessage(`OAT: Pullquote promotion failed — ${err.message}`);
+  }
+}
+
+// ── Promote All Pullquotes ───────────────────────────────────────────────────
+
+async function promoteAllPullquotes() {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor) {
+    vscode.window.showErrorMessage('OAT: No active editor.');
+    return;
+  }
+  if (editor.document.languageId !== 'markdown') {
+    vscode.window.showErrorMessage('OAT: Active file must be a markdown document.');
+    return;
+  }
+
+  const partNum = await vscode.window.showInputBox({
+    prompt: 'Part number (e.g. 09)',
+    placeHolder: '09',
+    validateInput: v => v && v.trim() ? null : 'Part number is required'
+  });
+  if (!partNum) return;
+
+  const series = await vscode.window.showInputBox({
+    prompt: 'Series slug',
+    placeHolder: 'water-series',
+    value: 'water-series',
+    validateInput: v => v && v.trim() ? null : 'Series is required'
+  });
+  if (series === undefined) return;
+
+  const text = editor.document.getText();
+  const quotes = parseBlockquotes(text);
+
+  if (quotes.length === 0) {
+    vscode.window.showInformationMessage('OAT: No blockquotes found in document.');
+    return;
+  }
+
+  const replacements = [];
+  const descriptorCount = {};
+
+  await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: `OAT: Promoting ${quotes.length} pullquote${quotes.length === 1 ? '' : 's'}`,
+      cancellable: false
+    },
+    async progress => {
+      for (let i = 0; i < quotes.length; i++) {
+        const quote = quotes[i];
+        progress.report({
+          message: `${i + 1}/${quotes.length} — ${quote.text.slice(0, 40)}`,
+          increment: 100 / quotes.length
+        });
+
+        let descriptor = generateQuoteDescriptor(quote.text);
+        descriptorCount[descriptor] = (descriptorCount[descriptor] || 0) + 1;
+        if (descriptorCount[descriptor] > 1) {
+          descriptor = descriptor + descriptorCount[descriptor];
+        }
+
+        const title = `part${partNum.trim()}-pullquote-${descriptor}`;
+
+        try {
+          const { pngUrl } = await renderAndPushPng(
+            renderPullquoteHtml(quote.text), title, partNum.trim(), series.trim(), 900, '.pullquote-frame'
+          );
+          const embed = `<img src="${pngUrl}" width="900" alt="${escapeHtml(quote.text)}">`;
+          replacements.push({ startLine: quote.startLine, endLine: quote.endLine, embed });
+        } catch (err) {
+          vscode.window.showWarningMessage(`OAT: Pullquote ${i + 1} failed — ${err.message}`);
+        }
+      }
+    }
+  );
+
+  if (replacements.length === 0) {
+    vscode.window.showErrorMessage('OAT: All pullquote promotions failed. Check images repo access.');
+    return;
+  }
+
+  replacements.sort((a, b) => b.startLine - a.startLine);
+
+  const succeeded = await editor.edit(editBuilder => {
+    for (const r of replacements) {
+      const start = new vscode.Position(r.startLine, 0);
+      const end = new vscode.Position(r.endLine + 1, 0);
+      editBuilder.replace(new vscode.Range(start, end), r.embed + '\n');
+    }
+  });
+
+  if (succeeded) {
+    await editor.document.save();
+    vscode.window.showInformationMessage(
+      `OAT: ${replacements.length}/${quotes.length} pullquote${replacements.length === 1 ? '' : 's'} promoted.`
+    );
+  } else {
+    vscode.window.showErrorMessage('OAT: Edit failed — document may have changed during processing.');
+  }
+}
+
+function cleanQuoteText(raw) {
+  return raw
+    .split('\n')
+    .map(line => line.replace(/^\s*>\s?/, '').trim())
+    .filter(Boolean)
+    .join(' ')
+    .replace(/^["'“‘]+|["'”’]+$/g, '')
+    .trim();
+}
+
+function generateQuoteDescriptor(text) {
+  const words = text
+    .replace(/[^a-zA-Z0-9 ]/g, '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 6);
+  if (words.length === 0) return 'quote';
+  return words
+    .map((w, i) => i === 0
+      ? w.toLowerCase()
+      : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()
+    )
+    .join('');
+}
+
+function renderPullquoteHtml(text) {
+  return `<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<style>
+  body{margin:0;background:transparent;font-family:Arial,'Helvetica Neue',sans-serif;}
+  .pullquote-frame{
+    width:900px;
+    box-sizing:border-box;
+    background:#d2e8ee;
+    border-left:8px solid #005f73;
+    padding:40px 48px 40px 40px;
+    position:relative;
+  }
+  .quote-mark{
+    font-size:64px;
+    font-weight:bold;
+    color:#005f73;
+    line-height:1;
+    margin:0 0 4px 0;
+    font-family:Georgia,'Times New Roman',serif;
+  }
+  .quote-text{
+    font-size:26px;
+    font-style:italic;
+    color:#003366;
+    line-height:1.45;
+    margin:0;
+  }
+  .watermark{
+    position:absolute;
+    bottom:16px;
+    right:24px;
+    font-size:13px;
+    color:#5a7a8f;
+  }
+</style></head>
+<body>
+<div class="pullquote-frame">
+  <div class="quote-mark">&rdquo;</div>
+  <p class="quote-text">${escapeHtml(text)}</p>
+  <div class="watermark">owencorpening.substack.com</div>
+</div>
+</body></html>`;
+}
+
 async function renderLocalPng(title, headers, rows, partNum, series, imageWidth) {
   const html = renderOatHtml(headers, rows);
+  return renderAndPushPng(html, title, partNum, series, imageWidth, '.table-frame');
+}
+
+async function renderAndPushPng(html, title, partNum, series, initialWidth, selector) {
   const tmpHtml = path.join(os.tmpdir(), `${title}.html`);
   fs.writeFileSync(tmpHtml, html, 'utf8');
 
@@ -314,8 +563,10 @@ async function renderLocalPng(title, headers, rows, partNum, series, imageWidth)
   if (!fs.existsSync(script)) {
     throw new Error(`Screenshot script not found: ${script}`);
   }
-  const screenshotOutput = await execFile('bash', [script, tmpHtml, outPng, String(imageWidth)]);
-  const renderedWidth = parseRenderedWidth(screenshotOutput) || imageWidth;
+  const screenshotOutput = await execFile('bash', [script, tmpHtml, outPng, String(initialWidth), selector], {
+    env: { ...process.env, PUPPETEER_DIR: puppeteerDir() }
+  });
+  const renderedWidth = parseRenderedWidth(screenshotOutput) || initialWidth;
 
   const relPath = `generated/${series}/part-${partNum}/${title}.png`;
   await execFile('git', ['-C', imagesRepo, 'add', relPath]);

@@ -58,16 +58,38 @@ tool-like files being migrated from the current content workspace, see
 
 Location: `extensions/table-tools/`
 
-Command:
+Commands:
 
 - `OAT Tables: Promote All Tables in Document`
+- `OAT Tables: Repair and Renumber Figures`
+- `OAT Tables: Promote Selection as Pullquote`
+- `OAT Tables: Promote All Pullquotes in Document`
 
-Scans the active markdown file, finds every markdown table, and for each one:
+**Promote All Tables in Document** scans the active markdown file, finds every markdown table, and for each one:
 
 1. Calls the Cloudflare Worker (`oat-promote-tables`) to create a styled Google Sheet
 2. Screenshots the table as a PNG via a local HTML render and headless browser
 3. Commits and pushes the PNG to the `owencorpening/images` repo
 4. Replaces the markdown table in the editor with a `<figure>` embed
+
+**Repair and Renumber Figures** walks every `<figure>` block in the active markdown
+file and renumbers `Figure N —` captions sequentially. Any figure whose caption
+is just a "View full data table" link (i.e. freshly promoted, no description
+yet) gets a `Figure N — [Add description]` placeholder inserted for you to fill in.
+
+**Promote Selection as Pullquote** takes the current editor selection (a
+blockquote or any short passage, `>` markdown prefix optional), renders it as a
+styled PNG — light-teal background, navy italic text, decorative quote mark,
+`owencorpening.substack.com` watermark — pushes it to the images repo the same
+way tables are pushed, and replaces the selection with an `<img>` tag (alt text
+= verbatim quote).
+
+**Promote All Pullquotes in Document** is the batch counterpart: scans the
+active markdown file for every `>` blockquote (multi-line blockquotes are
+joined into one quote) and promotes each one in place, same as Promote All
+Tables does for tables. This replaced the old `tools/blockquotes/blockquote-renderer.py`
+CLI, which required manually copying each rendered PNG's URL into the doc —
+these commands do the replacement automatically.
 
 Settings:
 
