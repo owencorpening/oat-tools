@@ -6,6 +6,7 @@ const { registerExecutePlannedPlacementCommand } = require('./lib/executePlanned
 const { registerLocalFileIntakeCommand } = require('./lib/localFileIntakeCommand');
 const { createLedgerWriterFromSettings } = require('./lib/ledgerApiClient');
 const { registerPlannedPlacementRunCommand } = require('./lib/plannedPlacementRunCommand');
+const { registerPullquoteCommands } = require('./lib/pullquoteCommands');
 const { registerReviewImageNeedCommand } = require('./lib/reviewImageNeedCommand');
 const { registerUrlIntakeCommand } = require('./lib/urlIntakeCommand');
 
@@ -33,6 +34,7 @@ function activate(context) {
   registerLedgerBrowseCommands(context, vscode, { ledgerWriter });
   registerExecutePlannedPlacementCommand(context, vscode, { ledgerWriter });
   registerPlannedPlacementRunCommand(context, vscode, { ledgerWriter });
+  registerPullquoteCommands(context, vscode);
 }
 
 function deactivate() {}

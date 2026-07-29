@@ -7,6 +7,7 @@
   "engines": { "vscode": "^1.75.0" },
   "categories": ["Other"],
   "main": "./extension.js",
+  "extensionDependencies": ["owencorpening.oat-table-tools"],
   "contributes": {
     "viewsContainers": {
       "activitybar": [
@@ -68,6 +69,18 @@
         "command": "oatImages.executePlannedPlacementRun",
         "title": "OAT Images: Execute Planned Placement Run",
         "icon": "$(run)"
+      },
+      {
+        "command": "oatImages.findNextPullquote",
+        "title": "OAT: Find Next Pullquote"
+      },
+      {
+        "command": "oatImages.insertPullquote",
+        "title": "OAT: Insert Pullquote"
+      },
+      {
+        "command": "oatImages.insertPullquoteAndContinue",
+        "title": "OAT: Insert Pullquote & Continue"
       }
     ],
     "menus": {
@@ -130,6 +143,26 @@
           "type": "string",
           "default": "",
           "description": "Optional bearer token for oatImages.ledgerApiUrl."
+        },
+        "oatImages.anthropicApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Anthropic API key used by the pullquote-suggestion commands (Claude Messages API)."
+        },
+        "oatImages.pullquoteModel": {
+          "type": "string",
+          "default": "claude-sonnet-5",
+          "description": "Claude model id used for pullquote candidate selection."
+        },
+        "oatImages.pullquoteSopPath": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to sop-pullquote-selection.md, used verbatim as the system prompt. Defaults to ~/dev/oat-standards/sops/sop-pullquote-selection.md."
+        },
+        "oatImages.pullquoteScanWindowChars": {
+          "type": "number",
+          "default": 8000,
+          "description": "How many characters of document text (from the cursor forward) to send to Claude per Find Next Pullquote scan."
         }
       }
     }
