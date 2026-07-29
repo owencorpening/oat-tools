@@ -101,10 +101,11 @@ async function promoteAllTables() {
             partNum.trim(), series.trim(), fallbackImageWidth
           );
 
+          const caption = inferTableCaption(table.headers);
           const embed =
             `<figure>\n` +
             `  <img width="${imageWidth}" src="${pngUrl}" alt="${descriptor} data table">\n` +
-            `  <figcaption><a href="${sheetUrl}">View full data table</a></figcaption>\n` +
+            `  <figcaption>Figure — ${escapeHtml(caption)}<br><a href="${sheetUrl}">View full data table</a></figcaption>\n` +
             `</figure>`;
 
           replacements.push({ startLine: table.startLine, endLine: table.endLine, embed });
@@ -131,6 +132,7 @@ async function promoteAllTables() {
   });
 
   if (succeeded) {
+    await applyFigureRepairs(editor);
     await editor.document.save();
     vscode.window.showInformationMessage(
       `OAT: ${replacements.length}/${tables.length} table${replacements.length === 1 ? '' : 's'} promoted.`
@@ -152,6 +154,13 @@ function generateDescriptor(headers) {
     .join('');
 }
 
+// Brief, structurally-derived caption — never fabricates an interpretation of
+// the data, just names the columns, so it's always safe to auto-insert.
+function inferTableCaption(headers) {
+  if (headers.length <= 1) return headers[0] || 'Data table';
+  return `${headers[0]} vs. ${headers[headers.length - 1]}`;
+}
+
 // ── Repair Figures ───────────────────────────────────────────────────────────
 
 async function repairFigures() {
@@ -165,23 +174,34 @@ async function repairFigures() {
     return;
   }
 
-  const text = editor.document.getText();
-  const lines = text.split('\n');
-  const figures = findFigures(lines);
-
+  const figures = findFigures(editor.document.getText().split('\n'));
   if (figures.length === 0) {
     vscode.window.showInformationMessage('OAT: No figures found.');
     return;
   }
 
-  const repairs = computeRepairs(lines);
+  const repaired = await applyFigureRepairs(editor);
 
-  if (repairs.length === 0) {
+  if (repaired === 0) {
     vscode.window.showInformationMessage('OAT: All figures are properly formatted.');
-    return;
+  } else if (repaired === null) {
+    vscode.window.showErrorMessage('OAT: Repair failed — document may have changed.');
+  } else {
+    vscode.window.showInformationMessage(
+      `OAT: ${repaired} figure${repaired === 1 ? '' : 's'} repaired and renumbered.`
+    );
   }
+}
 
-  // Apply repairs in reverse order to preserve line indices
+// Renumbers every <figure> in the document sequentially and fills in any
+// missing "Figure N —" prefix. Returns the repair count, or null on edit
+// failure (document changed mid-operation). Shared by repairFigures and by
+// promoteAllTables, which auto-runs this after inserting new table figures.
+async function applyFigureRepairs(editor) {
+  const lines = editor.document.getText().split('\n');
+  const repairs = computeRepairs(lines);
+  if (repairs.length === 0) return 0;
+
   repairs.reverse();
   const succeeded = await editor.edit(editBuilder => {
     for (const repair of repairs) {
@@ -191,13 +211,7 @@ async function repairFigures() {
     }
   });
 
-  if (succeeded) {
-    vscode.window.showInformationMessage(
-      `OAT: ${repairs.length} figure${repairs.length === 1 ? '' : 's'} repaired and renumbered.`
-    );
-  } else {
-    vscode.window.showErrorMessage('OAT: Repair failed — document may have changed.');
-  }
+  return succeeded ? repairs.length : null;
 }
 
 // ── Cloudflare Worker call ────────────────────────────────────────────────────
@@ -333,6 +347,11 @@ async function promotePullquote() {
     vscode.window.showErrorMessage('OAT: Selection has no text after removing blockquote markers.');
     return;
   }
+  if (isLongForPullquote(text)) {
+    vscode.window.showWarningMessage(
+      `OAT: Selection is long for a pullquote (${LONG_QUOTE_WORD_THRESHOLD}+ words) — promoting anyway.`
+    );
+  }
 
   const partNum = await vscode.window.showInputBox({
     prompt: 'Part number (e.g. 09)',
@@ -359,9 +378,11 @@ async function promotePullquote() {
     );
 
     const embed = `<img src="${pngUrl}" width="900" alt="${escapeHtml(text)}">`;
+    const insertLine = findParagraphEndLine(editor.document, selection.end.line);
+    const insertPos = editor.document.lineAt(insertLine).range.end;
 
     const succeeded = await editor.edit(editBuilder => {
-      editBuilder.replace(selection, embed);
+      editBuilder.insert(insertPos, `\n\n${embed}`);
     });
 
     if (succeeded) {
@@ -373,6 +394,17 @@ async function promotePullquote() {
   } catch (err) {
     vscode.window.showErrorMessage(`OAT: Pullquote promotion failed — ${err.message}`);
   }
+}
+
+// Returns the last line of the paragraph (contiguous non-blank lines)
+// containing/starting at startLine, so the pullquote can be inserted after
+// the paragraph without disturbing the original text.
+function findParagraphEndLine(document, startLine) {
+  let line = startLine;
+  while (line + 1 < document.lineCount && document.lineAt(line + 1).text.trim() !== '') {
+    line++;
+  }
+  return line;
 }
 
 // ── Promote All Pullquotes ───────────────────────────────────────────────────
@@ -404,15 +436,32 @@ async function promoteAllPullquotes() {
   if (series === undefined) return;
 
   const text = editor.document.getText();
-  const quotes = parseBlockquotes(text);
+  const allQuotes = parseBlockquotes(text);
+
+  if (allQuotes.length === 0) {
+    vscode.window.showInformationMessage('OAT: No blockquotes found in document.');
+    return;
+  }
+
+  const quotes = allQuotes.filter(q => !q.skipReason);
+  const skipped = allQuotes.filter(q => q.skipReason);
+
+  if (skipped.length > 0) {
+    vscode.window.showWarningMessage(
+      `OAT: Skipped ${skipped.length} blockquote${skipped.length === 1 ? '' : 's'} that ` +
+      `${skipped.length === 1 ? 'reads' : 'read'} as a structural callout, not a pullquote ` +
+      `(${skipped.map(q => q.skipReason).join(', ')}) — promote ${skipped.length === 1 ? 'it' : 'them'} individually if intended.`
+    );
+  }
 
   if (quotes.length === 0) {
-    vscode.window.showInformationMessage('OAT: No blockquotes found in document.');
+    vscode.window.showInformationMessage('OAT: No promotable pullquotes found (all blockquotes were structural).');
     return;
   }
 
   const replacements = [];
   const descriptorCount = {};
+  const longQuotes = [];
 
   await vscode.window.withProgress(
     {
@@ -428,6 +477,8 @@ async function promoteAllPullquotes() {
           increment: 100 / quotes.length
         });
 
+        if (isLongForPullquote(quote.text)) longQuotes.push(quote.text);
+
         let descriptor = generateQuoteDescriptor(quote.text);
         descriptorCount[descriptor] = (descriptorCount[descriptor] || 0) + 1;
         if (descriptorCount[descriptor] > 1) {
@@ -441,7 +492,7 @@ async function promoteAllPullquotes() {
             renderPullquoteHtml(quote.text), title, partNum.trim(), series.trim(), 900, '.pullquote-frame'
           );
           const embed = `<img src="${pngUrl}" width="900" alt="${escapeHtml(quote.text)}">`;
-          replacements.push({ startLine: quote.startLine, endLine: quote.endLine, embed });
+          replacements.push({ endLine: quote.endLine, embed });
         } catch (err) {
           vscode.window.showWarningMessage(`OAT: Pullquote ${i + 1} failed — ${err.message}`);
         }
@@ -454,13 +505,12 @@ async function promoteAllPullquotes() {
     return;
   }
 
-  replacements.sort((a, b) => b.startLine - a.startLine);
+  replacements.sort((a, b) => b.endLine - a.endLine);
 
   const succeeded = await editor.edit(editBuilder => {
     for (const r of replacements) {
-      const start = new vscode.Position(r.startLine, 0);
-      const end = new vscode.Position(r.endLine + 1, 0);
-      editBuilder.replace(new vscode.Range(start, end), r.embed + '\n');
+      const insertPos = editor.document.lineAt(r.endLine).range.end;
+      editBuilder.insert(insertPos, `\n\n${r.embed}`);
     }
   });
 
@@ -469,9 +519,21 @@ async function promoteAllPullquotes() {
     vscode.window.showInformationMessage(
       `OAT: ${replacements.length}/${quotes.length} pullquote${replacements.length === 1 ? '' : 's'} promoted.`
     );
+    if (longQuotes.length > 0) {
+      vscode.window.showWarningMessage(
+        `OAT: ${longQuotes.length} promoted quote${longQuotes.length === 1 ? ' is' : 's are'} long for a ` +
+        `pullquote (${LONG_QUOTE_WORD_THRESHOLD}+ words) — worth checking it reads well as an image.`
+      );
+    }
   } else {
     vscode.window.showErrorMessage('OAT: Edit failed — document may have changed during processing.');
   }
+}
+
+const LONG_QUOTE_WORD_THRESHOLD = 60;
+
+function isLongForPullquote(text) {
+  return text.trim().split(/\s+/).filter(Boolean).length > LONG_QUOTE_WORD_THRESHOLD;
 }
 
 function cleanQuoteText(raw) {

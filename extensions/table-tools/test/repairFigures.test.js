@@ -86,6 +86,20 @@ assert.strictEqual(r3.length, 1);
 assert.ok(r3[0].newLine.includes('Figure 1 — [Add description]'));
 assert.ok(r3[0].newLine.includes('https://docs.google.com/spreadsheets/d/xyz'));
 
+// Table figure with an inferred caption already present (from promoteAllTables)
+// keeps that text instead of overwriting it with the placeholder
+const inferredCaption = [
+  '<figure>',
+  '  <img src="table.png">',
+  '  <figcaption>Figure — Phase vs. Structure<br><a href="https://docs.google.com/spreadsheets/d/xyz">View full data table</a></figcaption>',
+  '</figure>',
+];
+const rInferred = computeRepairs(inferredCaption);
+assert.strictEqual(rInferred.length, 1);
+assert.ok(rInferred[0].newLine.includes('Figure 1 — Phase vs. Structure'));
+assert.ok(rInferred[0].newLine.includes('https://docs.google.com/spreadsheets/d/xyz'));
+assert.ok(!rInferred[0].newLine.includes('[Add description]'));
+
 // Two figures get sequential numbers
 const twoMixed = [
   '<figure>',

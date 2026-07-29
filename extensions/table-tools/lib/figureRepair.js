@@ -42,7 +42,13 @@ function computeRepairs(lines) {
 
     if (captionText.includes('View full data') && !captionText.match(/^Figure \d+ —/)) {
       const url = extractSheetUrl(captionText) || '#';
-      newCaption = `  <figcaption>Figure ${figureNum} — [Add description]<br><a href="${url}">View full data table</a></figcaption>`;
+      const linkHtml = `<a href="${url}">View full data table</a>`;
+      const description = captionText
+        .replace(linkHtml, '')
+        .replace(/<br\s*\/?>/i, '')
+        .replace(/^Figure\s*(\d+)?\s*[—:-]?\s*/, '')
+        .trim();
+      newCaption = `  <figcaption>Figure ${figureNum} — ${description || '[Add description]'}<br><a href="${url}">View full data table</a></figcaption>`;
     } else if (captionText.match(/^Figure \d+/)) {
       const rest = captionText.replace(/^Figure \d+[\s:—]+/, '');
       newCaption = `  <figcaption>Figure ${figureNum} — ${rest}</figcaption>`;

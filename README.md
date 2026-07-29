@@ -70,26 +70,43 @@ Commands:
 1. Calls the Cloudflare Worker (`oat-promote-tables`) to create a styled Google Sheet
 2. Screenshots the table as a PNG via a local HTML render and headless browser
 3. Commits and pushes the PNG to the `owencorpening/images` repo
-4. Replaces the markdown table in the editor with a `<figure>` embed
+4. Replaces the markdown table in the editor with a `<figure>` embed, captioned
+   with a brief structurally-inferred description (`"{first header} vs. {last
+   header}"` — never a fabricated interpretation of the data, just the column
+   names) plus the "View full data table" link
+5. Auto-runs figure renumbering (see below) across the whole document, so
+   every figure — old and new — ends up sequentially numbered without a
+   separate step
+
+The inferred caption is meant as a starting point, not a final one — edit it
+by hand for anything that deserves real framing.
 
 **Repair and Renumber Figures** walks every `<figure>` block in the active markdown
 file and renumbers `Figure N —` captions sequentially. Any figure whose caption
-is just a "View full data table" link (i.e. freshly promoted, no description
-yet) gets a `Figure N — [Add description]` placeholder inserted for you to fill in.
+is just a bare "View full data table" link with no description gets a
+`Figure N — [Add description]` placeholder; a caption that already has
+descriptive text (whether inferred by Promote All Tables or hand-written)
+keeps that text and is just renumbered. `Promote All Tables` calls this
+automatically now, but it's still available standalone for fixing numbering
+drift from manual edits.
 
 **Promote Selection as Pullquote** takes the current editor selection (a
 blockquote or any short passage, `>` markdown prefix optional), renders it as a
 styled PNG — light-teal background, navy italic text, decorative quote mark,
-`owencorpening.substack.com` watermark — pushes it to the images repo the same
-way tables are pushed, and replaces the selection with an `<img>` tag (alt text
-= verbatim quote).
+`owencorpening.substack.com` watermark — and pushes it to the images repo the
+same way tables are pushed. The original selected text is left untouched; the
+`<img>` tag (alt text = verbatim quote) is inserted as a new paragraph
+immediately after the paragraph containing the selection.
 
 **Promote All Pullquotes in Document** is the batch counterpart: scans the
 active markdown file for every `>` blockquote (multi-line blockquotes are
-joined into one quote) and promotes each one in place, same as Promote All
-Tables does for tables. This replaced the old `tools/blockquotes/blockquote-renderer.py`
-CLI, which required manually copying each rendered PNG's URL into the doc —
-these commands do the replacement automatically.
+joined into one quote) and promotes each one, same as Promote All Tables does
+for tables — except, like the single-selection command, it leaves each
+blockquote's text in place and inserts the rendered `<img>` right after it,
+rather than replacing it. This replaced the old
+`tools/blockquotes/blockquote-renderer.py` CLI, which required manually
+copying each rendered PNG's URL into the doc — these commands do that part
+automatically.
 
 Settings:
 
