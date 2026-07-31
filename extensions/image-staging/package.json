@@ -72,15 +72,15 @@
       },
       {
         "command": "oatImages.findNextPullquote",
-        "title": "OAT: Find Next Pullquote"
+        "title": "OAT Images: Find Next Pullquote"
       },
       {
         "command": "oatImages.insertPullquote",
-        "title": "OAT: Insert Pullquote"
+        "title": "OAT Images: Insert Pullquote"
       },
       {
         "command": "oatImages.insertPullquoteAndContinue",
-        "title": "OAT: Insert Pullquote & Continue"
+        "title": "OAT Images: Insert Pullquote & Continue"
       }
     ],
     "menus": {
@@ -144,15 +144,15 @@
           "default": "",
           "description": "Optional bearer token for oatImages.ledgerApiUrl."
         },
-        "oatImages.anthropicApiKey": {
+        "oatImages.claudeCliPath": {
           "type": "string",
-          "default": "",
-          "description": "Anthropic API key used by the pullquote-suggestion commands (Claude Messages API)."
+          "default": "claude",
+          "description": "Path or command name for the Claude Code CLI binary used by the pullquote-suggestion commands. Runs headless (`claude -p`) under your logged-in Claude Code session, so usage draws from your Claude subscription instead of separate Anthropic API billing."
         },
         "oatImages.pullquoteModel": {
           "type": "string",
           "default": "claude-sonnet-5",
-          "description": "Claude model id used for pullquote candidate selection."
+          "description": "Claude model id passed to `claude -p --model` for pullquote candidate selection."
         },
         "oatImages.pullquoteSopPath": {
           "type": "string",

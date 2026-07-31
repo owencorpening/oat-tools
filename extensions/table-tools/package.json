@@ -18,21 +18,53 @@
     "commands": [
       {
         "command": "oatTables.promoteAllTables",
-        "title": "OAT Tables: Promote All Tables in Document"
+        "title": "OAT Tables: Promote All Tables in Document",
+        "icon": "$(table)"
       },
       {
         "command": "oatTables.repairFigures",
-        "title": "OAT Tables: Repair and Renumber Figures"
+        "title": "OAT Tables: Repair and Renumber Figures",
+        "icon": "$(wrench)"
       },
       {
         "command": "oatTables.promotePullquote",
-        "title": "OAT Tables: Promote Selection as Pullquote"
+        "title": "OAT Tables: Promote Selection as Pullquote",
+        "icon": "$(quote)"
       },
       {
         "command": "oatTables.promoteAllPullquotes",
-        "title": "OAT Tables: Promote All Pullquotes in Document"
+        "title": "OAT Tables: Promote All Pullquotes in Document",
+        "icon": "$(list-selection)"
+      },
+      {
+        "command": "oatTables.jumpToPullquoteSource",
+        "title": "OAT Tables: Jump to Pullquote Source"
       }
     ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "oatTables.promoteAllTables",
+          "when": "resourceLangId == markdown",
+          "group": "navigation@1"
+        },
+        {
+          "command": "oatTables.repairFigures",
+          "when": "resourceLangId == markdown",
+          "group": "navigation@2"
+        },
+        {
+          "command": "oatTables.promotePullquote",
+          "when": "resourceLangId == markdown",
+          "group": "navigation@3"
+        },
+        {
+          "command": "oatTables.promoteAllPullquotes",
+          "when": "resourceLangId == markdown",
+          "group": "navigation@4"
+        }
+      ]
+    },
     "configuration": {
       "title": "OAT Table Tools",
       "properties": {
@@ -57,7 +89,8 @@
           "description": "Directory containing a node_modules/puppeteer install, used by screenshot-html.sh to render table PNGs. Defaults to this extension's dev repo checkout (~/dev/oat-tools/extensions/table-tools)."
         }
       }
-    }
+    },
+    "markdown.markdownItPlugins": true
   },
   "dependencies": {
     "puppeteer": "^25.3.0"

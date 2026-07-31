@@ -1,8 +1,8 @@
 'use strict';
 
-const { callClaude } = require('./claudeApiClient');
+const { callClaudeCli } = require('./claudeCliClient');
 const { findQuoteRange } = require('./findQuoteRange');
-const { loadPullquoteSop } = require('./pullquoteSop');
+const { resolvePullquoteSopPath } = require('./pullquoteSop');
 
 const USER_PROMPT_HEADER = `Scan the article excerpt below for the single next best pullquote candidate, per the SOP above. Start scanning from the beginning of the excerpt and return only the strongest candidate you find — do not return more than one, even if several qualify.
 
@@ -39,8 +39,8 @@ function registerPullquoteCommands(context, vscode, options = {}) {
 // up past the last candidate with no separate scan-position bookkeeping.
 async function findNextPullquote({
   vscode,
-  callClaudeApi = callClaude,
-  loadSop = loadPullquoteSop,
+  callClaudeCliFn = callClaudeCli,
+  resolveSopPath = resolvePullquoteSopPath,
   findRange = findQuoteRange
 } = {}) {
   const editor = vscode.window.activeTextEditor;
@@ -54,17 +54,13 @@ async function findNextPullquote({
   }
 
   const config = vscode.workspace.getConfiguration('oatImages');
-  const apiKey = config.get('anthropicApiKey', '');
-  if (!apiKey) {
-    vscode.window.showErrorMessage('OAT: Set oatImages.anthropicApiKey in VS Code settings before finding pullquotes.');
-    return null;
-  }
   const model = config.get('pullquoteModel', 'claude-sonnet-5');
+  const cliBin = config.get('claudeCliPath', 'claude');
   const windowChars = config.get('pullquoteScanWindowChars', 8000);
 
-  let system;
+  let systemPromptFile;
   try {
-    system = loadSop(vscode);
+    systemPromptFile = resolveSopPath(vscode);
   } catch (err) {
     vscode.window.showErrorMessage(`OAT: ${err.message}`);
     return null;
@@ -84,7 +80,7 @@ async function findNextPullquote({
   try {
     responseText = await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title: 'OAT: Scanning for next pullquote', cancellable: false },
-      () => callClaudeApi({ apiKey, model, system, userText })
+      () => callClaudeCliFn({ model, systemPromptFile, userText, cliBin })
     );
   } catch (err) {
     vscode.window.showErrorMessage(`OAT: Pullquote scan failed — ${err.message}`);

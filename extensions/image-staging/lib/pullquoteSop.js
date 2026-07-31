@@ -10,13 +10,15 @@ function pullquoteSopPath(vscode) {
   return path.join(os.homedir(), 'dev', 'oat-standards', 'sops', 'sop-pullquote-selection.md');
 }
 
-function loadPullquoteSop(vscode, { readFile = fs.readFileSync } = {}) {
+// Returns the SOP path after confirming it exists — the CLI reads the file
+// itself via --system-prompt-file, so the extension no longer needs the
+// content in memory.
+function resolvePullquoteSopPath(vscode, { existsSync = fs.existsSync } = {}) {
   const sopPath = pullquoteSopPath(vscode);
-  try {
-    return readFile(sopPath, 'utf8');
-  } catch (err) {
-    throw new Error(`Could not read pullquote SOP at ${sopPath}: ${err.message}`);
+  if (!existsSync(sopPath)) {
+    throw new Error(`Could not find pullquote SOP at ${sopPath}`);
   }
+  return sopPath;
 }
 
-module.exports = { pullquoteSopPath, loadPullquoteSop };
+module.exports = { pullquoteSopPath, resolvePullquoteSopPath };

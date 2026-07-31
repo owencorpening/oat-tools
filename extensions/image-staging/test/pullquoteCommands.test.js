@@ -22,21 +22,20 @@ const DOC_TEXT = [
 async function testSelectsReturnedCandidateFromCursor() {
   const document = fakeDocument(DOC_TEXT);
   const editor = fakeEditor(document, pos(0, 0));
-  const vscode = fakeVscode(editor, { settings: { anthropicApiKey: 'sk-test' } });
+  const vscode = fakeVscode(editor, {});
   const calls = [];
 
   const result = await findNextPullquote({
     vscode,
-    loadSop: () => 'SOP TEXT',
-    callClaudeApi: async args => {
+    resolveSopPath: () => '/tmp/sop.md',
+    callClaudeCliFn: async args => {
       calls.push(args);
       return JSON.stringify({ quote: 'It is not activism. It is not theory. It is engineering.', type: 'thesis', why: 'compressed thesis' });
     }
   });
 
   assert.strictEqual(calls.length, 1);
-  assert.strictEqual(calls[0].apiKey, 'sk-test');
-  assert.strictEqual(calls[0].system, 'SOP TEXT');
+  assert.strictEqual(calls[0].systemPromptFile, '/tmp/sop.md');
   assert.ok(calls[0].userText.includes('It is not activism'));
 
   const selected = document.getText(editor.selection);
@@ -49,13 +48,13 @@ async function testSelectsReturnedCandidateFromCursor() {
 async function testSecondCallScansPastFirstFoundCandidate() {
   const document = fakeDocument(DOC_TEXT);
   const editor = fakeEditor(document, pos(0, 0));
-  const vscode = fakeVscode(editor, { settings: { anthropicApiKey: 'sk-test' } });
+  const vscode = fakeVscode(editor, {});
   const excerpts = [];
 
   await findNextPullquote({
     vscode,
-    loadSop: () => 'SOP TEXT',
-    callClaudeApi: async args => {
+    resolveSopPath: () => '/tmp/sop.md',
+    callClaudeCliFn: async args => {
       excerpts.push(args.userText);
       return JSON.stringify({ quote: 'It is not activism. It is not theory. It is engineering.', type: 'thesis', why: 'x' });
     }
@@ -66,8 +65,8 @@ async function testSecondCallScansPastFirstFoundCandidate() {
   // back over it.
   await findNextPullquote({
     vscode,
-    loadSop: () => 'SOP TEXT',
-    callClaudeApi: async args => {
+    resolveSopPath: () => '/tmp/sop.md',
+    callClaudeCliFn: async args => {
       excerpts.push(args.userText);
       return '{"quote": null}';
     }
@@ -79,32 +78,32 @@ async function testSecondCallScansPastFirstFoundCandidate() {
   assert.ok(excerpts[1].includes('closing paragraph'));
 }
 
-async function testMissingApiKeyStopsBeforeCallingApi() {
+async function testMissingSopStopsBeforeCallingCli() {
   const document = fakeDocument(DOC_TEXT);
   const editor = fakeEditor(document, pos(0, 0));
-  const vscode = fakeVscode(editor, { settings: {} });
+  const vscode = fakeVscode(editor, {});
   let called = false;
 
   const result = await findNextPullquote({
     vscode,
-    loadSop: () => 'SOP TEXT',
-    callClaudeApi: async () => { called = true; return '{"quote": null}'; }
+    resolveSopPath: () => { throw new Error('Could not find pullquote SOP at /tmp/missing.md'); },
+    callClaudeCliFn: async () => { called = true; return '{"quote": null}'; }
   });
 
   assert.strictEqual(result, null);
   assert.strictEqual(called, false);
-  assert.ok(vscode.window._messages.some(m => m[0] === 'error' && m[1].includes('anthropicApiKey')));
+  assert.ok(vscode.window._messages.some(m => m[0] === 'error' && m[1].includes('Could not find pullquote SOP')));
 }
 
 async function testQuoteNotFoundVerbatimSurfacesError() {
   const document = fakeDocument(DOC_TEXT);
   const editor = fakeEditor(document, pos(0, 0));
-  const vscode = fakeVscode(editor, { settings: { anthropicApiKey: 'sk-test' } });
+  const vscode = fakeVscode(editor, {});
 
   const result = await findNextPullquote({
     vscode,
-    loadSop: () => 'SOP TEXT',
-    callClaudeApi: async () => JSON.stringify({ quote: 'This text does not appear anywhere in the doc.' })
+    resolveSopPath: () => '/tmp/sop.md',
+    callClaudeCliFn: async () => JSON.stringify({ quote: 'This text does not appear anywhere in the doc.' })
   });
 
   assert.strictEqual(result, null);
@@ -166,14 +165,14 @@ async function testInsertAndContinueChainsFindNextAfterSuccessfulInsert() {
   const start = document.positionAt(DOC_TEXT.indexOf('It is not activism'));
   const end = document.positionAt(DOC_TEXT.indexOf('It is not activism') + 'It is not activism. It is not theory. It is engineering.'.length);
   const editor = fakeEditor(document, start, end);
-  const vscode = fakeVscode(editor, { settings: { anthropicApiKey: 'sk-test' } });
+  const vscode = fakeVscode(editor, {});
   let findCalls = 0;
 
   const result = await insertPullquoteAndContinue({
     vscode,
     executeCommand: async () => {},
-    loadSop: () => 'SOP TEXT',
-    callClaudeApi: async () => { findCalls++; return '{"quote": null}'; }
+    resolveSopPath: () => '/tmp/sop.md',
+    callClaudeCliFn: async () => { findCalls++; return '{"quote": null}'; }
   });
 
   assert.strictEqual(findCalls, 1);
@@ -183,13 +182,13 @@ async function testInsertAndContinueChainsFindNextAfterSuccessfulInsert() {
 async function testInsertAndContinueSkipsFindNextWhenInsertFails() {
   const document = fakeDocument(DOC_TEXT);
   const editor = fakeEditor(document, pos(0, 0), pos(0, 0));
-  const vscode = fakeVscode(editor, { settings: { anthropicApiKey: 'sk-test' } });
+  const vscode = fakeVscode(editor, {});
   let findCalls = 0;
 
   await insertPullquoteAndContinue({
     vscode,
     executeCommand: async () => {},
-    callClaudeApi: async () => { findCalls++; return '{"quote": null}'; }
+    callClaudeCliFn: async () => { findCalls++; return '{"quote": null}'; }
   });
 
   assert.strictEqual(findCalls, 0);
@@ -299,7 +298,7 @@ function comparePositions(a, b) {
 (async () => {
   await testSelectsReturnedCandidateFromCursor();
   await testSecondCallScansPastFirstFoundCandidate();
-  await testMissingApiKeyStopsBeforeCallingApi();
+  await testMissingSopStopsBeforeCallingCli();
   await testQuoteNotFoundVerbatimSurfacesError();
   await testInsertPullquoteRequiresSelection();
   await testInsertPullquoteDelegatesToTableToolsAndRestoresSelection();

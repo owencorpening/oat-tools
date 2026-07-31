@@ -9,14 +9,22 @@ const { parseTables } = require('./lib/parseTables');
 const { estimateTableImageWidth } = require('./lib/tableImageWidth');
 const { findFigures, extractSheetUrl, computeRepairs } = require('./lib/figureRepair');
 const { parseBlockquotes } = require('./lib/parseBlockquotes');
+const { findQuoteRange } = require('./lib/findQuoteRange');
 
 function activate(context) {
   context.subscriptions.push(
     vscode.commands.registerCommand('oatTables.promoteAllTables', promoteAllTables),
     vscode.commands.registerCommand('oatTables.repairFigures', repairFigures),
     vscode.commands.registerCommand('oatTables.promotePullquote', promotePullquote),
-    vscode.commands.registerCommand('oatTables.promoteAllPullquotes', promoteAllPullquotes)
+    vscode.commands.registerCommand('oatTables.promoteAllPullquotes', promoteAllPullquotes),
+    vscode.commands.registerCommand('oatTables.jumpToPullquoteSource', jumpToPullquoteSource)
   );
+
+  return {
+    extendMarkdownIt(md) {
+      return md.use(require('./lib/pullquoteMarkdownItPlugin'));
+    }
+  };
 }
 
 // ── Promote All Tables ───────────────────────────────────────────────────────
@@ -377,7 +385,7 @@ async function promotePullquote() {
       () => renderAndPushPng(renderPullquoteHtml(text), title, partNum.trim(), series.trim(), 900, '.pullquote-frame')
     );
 
-    const embed = `<img src="${pngUrl}" width="900" alt="${escapeHtml(text)}">`;
+    const embed = `<img class="oat-pullquote" src="${pngUrl}" width="900" alt="${escapeHtml(text)}">`;
     const insertLine = findParagraphEndLine(editor.document, selection.end.line);
     const insertPos = editor.document.lineAt(insertLine).range.end;
 
@@ -405,6 +413,32 @@ function findParagraphEndLine(document, startLine) {
     line++;
   }
   return line;
+}
+
+// Invoked from a command: link clicked on a pullquote image in the Markdown
+// preview (see lib/pullquoteMarkdownItPlugin.js). Finds the quote in whichever
+// open markdown document contains it, selects it, and copies it to the
+// clipboard so the click feels like selecting the text directly off the image.
+async function jumpToPullquoteSource(quoteText) {
+  if (!quoteText) return;
+
+  for (const document of vscode.workspace.textDocuments) {
+    if (document.languageId !== 'markdown') continue;
+
+    const range = findQuoteRange(document.getText(), quoteText);
+    if (!range) continue;
+
+    const startPos = document.positionAt(range.start);
+    const endPos = document.positionAt(range.end);
+
+    await vscode.window.showTextDocument(document, {
+      selection: new vscode.Range(startPos, endPos)
+    });
+    await vscode.env.clipboard.writeText(document.getText(new vscode.Range(startPos, endPos)));
+    return;
+  }
+
+  vscode.window.showWarningMessage('OAT: Could not find that pullquote\'s source text in an open document.');
 }
 
 // ── Promote All Pullquotes ───────────────────────────────────────────────────
@@ -491,7 +525,7 @@ async function promoteAllPullquotes() {
           const { pngUrl } = await renderAndPushPng(
             renderPullquoteHtml(quote.text), title, partNum.trim(), series.trim(), 900, '.pullquote-frame'
           );
-          const embed = `<img src="${pngUrl}" width="900" alt="${escapeHtml(quote.text)}">`;
+          const embed = `<img class="oat-pullquote" src="${pngUrl}" width="900" alt="${escapeHtml(quote.text)}">`;
           replacements.push({ endLine: quote.endLine, embed });
         } catch (err) {
           vscode.window.showWarningMessage(`OAT: Pullquote ${i + 1} failed — ${err.message}`);
