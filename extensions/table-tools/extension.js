@@ -608,7 +608,7 @@ function renderPullquoteHtml(text) {
     box-sizing:border-box;
     background:#d2e8ee;
     border-left:8px solid #005f73;
-    padding:10px 40px 8px 36px;
+    padding:10px 44px 8px 52px;
     position:relative;
   }
   .quote-line{
