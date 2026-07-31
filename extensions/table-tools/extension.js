@@ -606,7 +606,7 @@ function renderPullquoteHtml(text) {
     box-sizing:border-box;
     background:#d2e8ee;
     border-left:8px solid #005f73;
-    padding:18px 26px 12px 22px;
+    padding:10px 40px 8px 36px;
     position:relative;
   }
   .quote-line{
@@ -627,7 +627,7 @@ function renderPullquoteHtml(text) {
     font-size:24px;
     font-style:italic;
     color:#003366;
-    line-height:1.3;
+    line-height:1.15;
     margin:0;
   }
   .quote-close{
@@ -638,7 +638,7 @@ function renderPullquoteHtml(text) {
     font-family:Georgia,'Times New Roman',serif;
   }
   .watermark{
-    margin-top:8px;
+    margin-top:4px;
     text-align:right;
     font-size:11px;
     color:#5a7a8f;
