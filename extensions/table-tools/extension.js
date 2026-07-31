@@ -263,7 +263,9 @@ function callWorker(url, payload) {
 function execFile(command, args, options = {}) {
   return new Promise((resolve, reject) => {
     cp.execFile(command, args, options, (err, stdout, stderr) => {
-      if (err) reject(new Error((stderr || '').trim() || err.message));
+      // git writes some "errors" (e.g. "nothing to commit") to stdout rather
+      // than stderr, so callers matching on the message need both streams.
+      if (err) reject(new Error([stderr, stdout].map(s => (s || '').trim()).filter(Boolean).join('\n') || err.message));
       else resolve(stdout);
     });
   });
