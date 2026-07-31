@@ -602,40 +602,53 @@ function renderPullquoteHtml(text) {
 <style>
   body{margin:0;background:transparent;font-family:Arial,'Helvetica Neue',sans-serif;}
   .pullquote-frame{
-    width:900px;
+    display:inline-block;
     box-sizing:border-box;
     background:#d2e8ee;
     border-left:8px solid #005f73;
-    padding:40px 48px 40px 40px;
+    padding:18px 26px 12px 22px;
     position:relative;
   }
-  .quote-mark{
-    font-size:64px;
+  .quote-line{
+    display:flex;
+    align-items:baseline;
+    white-space:nowrap;
+  }
+  .quote-open{
+    font-size:48px;
     font-weight:bold;
     color:#005f73;
-    line-height:1;
-    margin:0 0 4px 0;
+    line-height:0.8;
+    align-self:flex-start;
+    margin-right:6px;
     font-family:Georgia,'Times New Roman',serif;
   }
   .quote-text{
-    font-size:26px;
+    font-size:24px;
     font-style:italic;
     color:#003366;
-    line-height:1.45;
+    line-height:1.3;
     margin:0;
   }
+  .quote-close{
+    font-size:20px;
+    font-weight:bold;
+    color:#005f73;
+    margin-left:4px;
+    font-family:Georgia,'Times New Roman',serif;
+  }
   .watermark{
-    position:absolute;
-    bottom:16px;
-    right:24px;
-    font-size:13px;
+    margin-top:8px;
+    text-align:right;
+    font-size:11px;
     color:#5a7a8f;
   }
 </style></head>
 <body>
 <div class="pullquote-frame">
-  <div class="quote-mark">&rdquo;</div>
-  <p class="quote-text">${escapeHtml(text)}</p>
+  <div class="quote-line">
+    <span class="quote-open">&ldquo;</span><span class="quote-text">${escapeHtml(text)}</span><span class="quote-close">&rdquo;</span>
+  </div>
   <div class="watermark">owencorpening.substack.com</div>
 </div>
 </body></html>`;
