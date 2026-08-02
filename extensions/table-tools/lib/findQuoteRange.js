@@ -1,8 +1,9 @@
 'use strict';
 
-// Kept in sync by hand with extensions/image-staging/lib/findQuoteRange.js —
-// each extension is vsce-packaged from its own directory, so this can't be a
-// shared cross-extension require. If you fix a bug here, fix it there too.
+// Duplicated by hand in the other extension's lib/findQuoteRange.js — each
+// extension is vsce-packaged from its own directory, so this can't be a
+// shared cross-extension require. This file must stay byte-identical to its
+// counterpart; test/sharedLibsInSync.test.js enforces that.
 //
 // Locates a model-returned quote inside the document text, searching only
 // from fromOffset forward (so "Find Next" never re-surfaces something
