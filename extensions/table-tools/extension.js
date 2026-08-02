@@ -387,7 +387,7 @@ async function promotePullquote() {
       () => renderAndPushPng(renderPullquoteHtml(text), title, partNum.trim(), series.trim(), 900, '.pullquote-frame')
     );
 
-    const embed = `<img class="oat-pullquote" src="${pngUrl}" width="600" alt="${escapeHtml(text)}">`;
+    const embed = `<figure>\n  <img class="oat-pullquote" src="${pngUrl}" width="600" alt="${escapeHtml(text)}">\n</figure>`;
     const insertLine = findParagraphEndLine(editor.document, selection.end.line);
     const insertPos = editor.document.lineAt(insertLine).range.end;
 
@@ -527,7 +527,7 @@ async function promoteAllPullquotes() {
           const { pngUrl } = await renderAndPushPng(
             renderPullquoteHtml(quote.text), title, partNum.trim(), series.trim(), 900, '.pullquote-frame'
           );
-          const embed = `<img class="oat-pullquote" src="${pngUrl}" width="600" alt="${escapeHtml(quote.text)}">`;
+          const embed = `<figure>\n  <img class="oat-pullquote" src="${pngUrl}" width="600" alt="${escapeHtml(quote.text)}">\n</figure>`;
           replacements.push({ endLine: quote.endLine, embed });
         } catch (err) {
           vscode.window.showWarningMessage(`OAT: Pullquote ${i + 1} failed — ${err.message}`);
