@@ -89,7 +89,7 @@ async function findNextPullquote({
 
   const parsed = parseCandidateResponse(responseText);
   if (!parsed) {
-    vscode.window.showErrorMessage(`OAT: Could not parse model response as a pullquote candidate: ${String(responseText).slice(0, 200)}`);
+    vscode.window.showErrorMessage(`OAT: Could not parse model response as a pullquote candidate: ${String(responseText).slice(0, 800)}`);
     return null;
   }
   if (!parsed.quote) {
@@ -160,8 +160,25 @@ function parseCandidateResponse(responseText) {
     if (typeof parsed.quote !== 'string') return null;
     return { quote: parsed.quote, type: parsed.type, why: parsed.why };
   } catch {
-    return null;
+    return parseCandidateFieldsLeniently(jsonText);
   }
+}
+
+// Strict JSON.parse fails whenever the model's "why" line quotes a term
+// ("the '8:1' ratio") without escaping the inner quote mark, or the verbatim
+// "quote" span contains a raw control character — cases sanitizeInvalidEscapes
+// can't fix since it only targets malformed backslash escapes. This recovers
+// the three known fields positionally instead of requiring valid JSON.
+const LENIENT_CANDIDATE_RE = /"quote"\s*:\s*"([\s\S]*?)"\s*,\s*"type"\s*:\s*"(thesis|mechanism|number|reversal)"\s*,\s*"why"\s*:\s*"([\s\S]*?)"\s*}/;
+
+function parseCandidateFieldsLeniently(jsonText) {
+  const match = jsonText.match(LENIENT_CANDIDATE_RE);
+  if (!match) return null;
+  return { quote: unescapeLenientMatch(match[1]), type: match[2], why: unescapeLenientMatch(match[3]) };
+}
+
+function unescapeLenientMatch(text) {
+  return text.replace(/\\\\/g, '\\').replace(/\\"/g, '"').replace(/\\n/g, '\n');
 }
 
 function extractJson(text) {
@@ -171,7 +188,15 @@ function extractJson(text) {
   const firstBrace = candidate.indexOf('{');
   const lastBrace = candidate.lastIndexOf('}');
   if (firstBrace === -1 || lastBrace === -1 || lastBrace < firstBrace) return null;
-  return candidate.slice(firstBrace, lastBrace + 1);
+  return sanitizeInvalidEscapes(candidate.slice(firstBrace, lastBrace + 1));
+}
+
+// Article source uses markdown escapes like \$3 billion that a verbatim-quote
+// response echoes back inside the JSON string. \$ isn't a valid JSON escape,
+// so JSON.parse rejects the whole response. Double any backslash that isn't
+// starting a real JSON escape so it parses as a literal backslash instead.
+function sanitizeInvalidEscapes(jsonText) {
+  return jsonText.replace(/\\(?!["\\/bfnrtu])/g, '\\\\');
 }
 
 module.exports = {

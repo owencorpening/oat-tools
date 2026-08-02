@@ -211,6 +211,28 @@ function testExtractJsonStripsSurroundingProse() {
   assert.strictEqual(extractJson('Sure, here you go:\n{"quote": "x"}\nHope that helps!'), '{"quote": "x"}');
 }
 
+function testParseCandidateResponseRepairsMarkdownDollarEscape() {
+  const responseText = '{"quote": "the Jordan pilot \\$3 billion", "type": "number", "why": "y"}';
+  const parsed = parseCandidateResponse(responseText);
+  assert.deepStrictEqual(parsed, { quote: 'the Jordan pilot \\$3 billion', type: 'number', why: 'y' });
+}
+
+function testParseCandidateResponseRecoversUnescapedQuoteInWhy() {
+  // Model quoted a term inside "why" without escaping the inner " marks —
+  // invalid JSON, but the lenient fallback should still recover all three fields.
+  const responseText = '{"quote": "8:1 national ROI turns the model into a number.", "type": "number", "why": "Names the "8:1" ratio directly, per the SOP number criterion."}';
+  const parsed = parseCandidateResponse(responseText);
+  assert.deepStrictEqual(parsed, {
+    quote: '8:1 national ROI turns the model into a number.',
+    type: 'number',
+    why: 'Names the "8:1" ratio directly, per the SOP number criterion.'
+  });
+}
+
+function testParseCandidateResponseRejectsGarbageEvenWithFallback() {
+  assert.strictEqual(parseCandidateResponse('not json at all, no quote/type/why fields here'), null);
+}
+
 function pos(line, character) {
   return { line, character };
 }
@@ -308,6 +330,8 @@ function comparePositions(a, b) {
   testParseCandidateResponseHandlesFencedJson();
   testParseCandidateResponseHandlesNullQuote();
   testParseCandidateResponseRejectsGarbage();
+  testParseCandidateResponseRecoversUnescapedQuoteInWhy();
+  testParseCandidateResponseRejectsGarbageEvenWithFallback();
   testExtractJsonStripsSurroundingProse();
   console.log('pullquoteCommands tests passed');
 })().catch(err => {
