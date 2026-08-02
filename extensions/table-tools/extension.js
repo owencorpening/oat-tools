@@ -387,7 +387,7 @@ async function promotePullquote() {
       () => renderAndPushPng(renderPullquoteHtml(text), title, partNum.trim(), series.trim(), 900, '.pullquote-frame')
     );
 
-    const embed = `<img class="oat-pullquote" src="${pngUrl}" width="900" alt="${escapeHtml(text)}">`;
+    const embed = `<img class="oat-pullquote" src="${pngUrl}" width="600" alt="${escapeHtml(text)}">`;
     const insertLine = findParagraphEndLine(editor.document, selection.end.line);
     const insertPos = editor.document.lineAt(insertLine).range.end;
 
@@ -527,7 +527,7 @@ async function promoteAllPullquotes() {
           const { pngUrl } = await renderAndPushPng(
             renderPullquoteHtml(quote.text), title, partNum.trim(), series.trim(), 900, '.pullquote-frame'
           );
-          const embed = `<img class="oat-pullquote" src="${pngUrl}" width="900" alt="${escapeHtml(quote.text)}">`;
+          const embed = `<img class="oat-pullquote" src="${pngUrl}" width="600" alt="${escapeHtml(quote.text)}">`;
           replacements.push({ endLine: quote.endLine, embed });
         } catch (err) {
           vscode.window.showWarningMessage(`OAT: Pullquote ${i + 1} failed — ${err.message}`);
@@ -610,34 +610,33 @@ function renderPullquoteHtml(text) {
     border-left:8px solid #005f73;
     padding:10px 44px 8px 52px;
     position:relative;
-  }
-  .quote-line{
-    display:flex;
-    align-items:baseline;
-    white-space:nowrap;
-  }
-  .quote-open{
-    font-size:48px;
-    font-weight:bold;
-    color:#005f73;
-    line-height:0.8;
-    align-self:flex-start;
-    margin-right:6px;
-    font-family:Georgia,'Times New Roman',serif;
+    max-width:640px;
   }
   .quote-text{
     font-size:24px;
     font-style:italic;
     color:#003366;
-    line-height:1.15;
+    line-height:1.3;
     margin:0;
+    text-align:center;
   }
-  .quote-close{
+  .quote-text::before{
+    content:'\\201C';
+    font-size:48px;
+    font-weight:bold;
+    color:#005f73;
+    font-family:Georgia,'Times New Roman',serif;
+    line-height:0;
+    vertical-align:-0.32em;
+    margin-right:4px;
+  }
+  .quote-text::after{
+    content:'\\201D';
     font-size:20px;
     font-weight:bold;
     color:#005f73;
-    margin-left:4px;
     font-family:Georgia,'Times New Roman',serif;
+    margin-left:2px;
   }
   .watermark{
     margin-top:4px;
@@ -648,9 +647,7 @@ function renderPullquoteHtml(text) {
 </style></head>
 <body>
 <div class="pullquote-frame">
-  <div class="quote-line">
-    <span class="quote-open">&ldquo;</span><span class="quote-text">${escapeHtml(text)}</span><span class="quote-close">&rdquo;</span>
-  </div>
+  <p class="quote-text">${escapeHtml(text)}</p>
   <div class="watermark">owencorpening.substack.com</div>
 </div>
 </body></html>`;
