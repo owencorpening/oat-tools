@@ -579,6 +579,7 @@ function cleanQuoteText(raw) {
     .filter(Boolean)
     .join(' ')
     .replace(/^["'“‘]+|["'”’]+$/g, '')
+    .replace(/\*\*?|__?/g, '')
     .trim();
 }
 
