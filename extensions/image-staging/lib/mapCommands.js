@@ -46,7 +46,7 @@ function parseCorridorDescription(text) {
     .filter(Boolean);
 
   if (segments.length < 2) {
-    throw new Error('Need at least two places separated by "→" or "->", e.g. "Alexandria (desal) → Cairo → Aswan".');
+    throw new Error('Need at least two places separated by "→" or "->", e.g. "Alexandria, Egypt (desal) → Cairo → Aswan".');
   }
 
   return segments.map(segment => {

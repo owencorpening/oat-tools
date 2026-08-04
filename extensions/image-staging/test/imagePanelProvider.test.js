@@ -690,6 +690,63 @@ async function testMapPreviewSendsRenderedPngDataUri() {
   assert.ok(ready.pngPath, 'hands back pngPath so accept can reuse the render');
 }
 
+// The map grade settings must declare a non-number default. VS Code fills in
+// an implicit default by declared type when the manifest omits one, and for
+// "number" that implicit default is 0 — it wins over get()'s fallback
+// argument, so an untouched mapContrast read back as 0 instead of undefined.
+// sharp's linear(0, 128) then flattens every pixel to 128, and the preview
+// shipped as a solid #808080 rectangle with no error anywhere to explain it.
+function testMapGradeSettingsDeclareNullDefaults() {
+  const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
+  const properties = manifest.contributes.configuration.properties;
+
+  for (const key of ['oatImages.mapBrightness', 'oatImages.mapSaturation', 'oatImages.mapContrast']) {
+    assert.strictEqual(properties[key].default, null, `${key} declares an explicit null default`);
+    assert.ok(properties[key].type.includes('null'), `${key} accepts null as its unset value`);
+  }
+}
+
+// The other half of the same guard: whatever "unset" reads back as, it must
+// not reach sharp as a grade multiplier.
+async function testUnsetGradeSettingsSkipTheColorGrade() {
+  const realGeocode = mapCommands.geocodeWaypoints;
+  const realGetConfiguration = fakeVscode.workspace.getConfiguration;
+  mapCommands.geocodeWaypoints = async waypoints => ({
+    nodes: waypoints.map((w, i) => ({ name: w.name, label: w.label, lat: 30 + i, lng: 31 + i })),
+    unresolved: []
+  });
+  fakeVscode.workspace.getConfiguration = () => ({
+    get: key => (key.startsWith('map') ? null : '')
+  });
+
+  const screenshotOptions = [];
+  const provider = new ImagePanelProvider({ subscriptions: [] }, {
+    runScreenshot: async options => {
+      screenshotOptions.push(options);
+      fs.writeFileSync(options.outputPath, Buffer.from('fake-png-bytes'));
+      return { outputPath: options.outputPath };
+    }
+  });
+  provider._view = { webview: { postMessage: () => {} } };
+  provider._send = () => {};
+
+  try {
+    await provider._handleMapPreview({
+      corridorName: 'Egypt Sovereignty Corridor',
+      description: 'Alexandria → Cairo'
+    });
+  } finally {
+    mapCommands.geocodeWaypoints = realGeocode;
+    fakeVscode.workspace.getConfiguration = realGetConfiguration;
+  }
+
+  assert.strictEqual(screenshotOptions.length, 1, 'renders the map once');
+  const { brightness, saturation, contrast } = screenshotOptions[0];
+  assert.strictEqual(brightness, undefined, 'no brightness grade from an unset setting');
+  assert.strictEqual(saturation, undefined, 'no saturation grade from an unset setting');
+  assert.strictEqual(contrast, undefined, 'no contrast grade from an unset setting');
+}
+
 // Nudging the zoom re-renders the same corridor. Nominatim is throttled to
 // ~1 req/sec, so re-geocoding per nudge would stall the tweak-and-look loop
 // by seconds and burn rate limit on names that provably haven't changed.
@@ -768,6 +825,8 @@ async function testMapAcceptReusesPreviewPng() {
 async function run() {
   await testMapPreviewSendsRenderedPngDataUri();
   await testMapPreviewReusesCachedNodesInsteadOfGeocoding();
+  await testUnsetGradeSettingsSkipTheColorGrade();
+  testMapGradeSettingsDeclareNullDefaults();
   await testMapAcceptReusesPreviewPng();
   await testLoadsD1StagedAssets();
   await testD1ActionsAreGuarded();

@@ -500,12 +500,20 @@ class ImagePanelProvider {
   // the ones the user actually set — screenshotCorridorMap skips the sharp
   // pass entirely when all three are undefined, so leaving them unset costs
   // nothing.
+  //
+  // The unset case has to be normalized here, not just trusted from get()'s
+  // fallback: VS Code fills in an implicit default by declared type when the
+  // manifest omits one, and for "number" that implicit default is 0 — which
+  // wins over the fallback argument, so an untouched mapContrast came back as
+  // 0 rather than undefined and graded every map to flat #808080. The manifest
+  // now declares "default": null, and unsetGrade turns that null — or any
+  // other non-numeric value — back into a skipped grade.
   _mapGradeOptions() {
     const config = vscode.workspace.getConfiguration('oatImages');
     return {
-      brightness: config.get('mapBrightness', undefined),
-      saturation: config.get('mapSaturation', undefined),
-      contrast: config.get('mapContrast', undefined)
+      brightness: unsetGrade(config.get('mapBrightness')),
+      saturation: unsetGrade(config.get('mapSaturation')),
+      contrast: unsetGrade(config.get('mapContrast'))
     };
   }
 
@@ -797,7 +805,7 @@ body {
 <div class="tab-content" id="map-tab" style="display:none">
   <form class="map-form" id="mapForm">
     <input id="mapCorridorName" type="text" placeholder="Corridor name (e.g. Egypt Sovereignty Corridor)">
-    <input id="mapDescription" type="text" placeholder="Alexandria (desal) → Cairo → Aswan">
+    <input id="mapDescription" type="text" placeholder="Alexandria, Egypt (desal) → Cairo → Aswan" title="Include a country with each place — Nominatim's top hit for a bare city name is often the wrong continent (&quot;Alexandria&quot; resolves to Alessandria, Italy).">
     <div class="map-form-row">
       <label class="map-zoom">Zoom
         <input id="mapZoom" type="number" value="0" step="0.25" min="-4" max="4" title="0 fits the corridor. Positive tightens, negative pulls back.">
@@ -1574,6 +1582,13 @@ function sagaId(placementIdValue) {
 
 function shortHash(value) {
   return crypto.createHash('sha1').update(String(value)).digest('hex').slice(0, 16);
+}
+
+// A map grade knob only counts as set when it's a finite number; null (the
+// manifest's declared default) and anything else mean "skip the grade". See
+// _mapGradeOptions for why the read can't just lean on get()'s fallback.
+function unsetGrade(value) {
+  return Number.isFinite(value) ? value : undefined;
 }
 
 function getSetting(key, defaultValue) {

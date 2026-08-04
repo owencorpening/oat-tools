@@ -180,15 +180,27 @@
           "description": "Path to a Chrome/Chromium executable, used headlessly (via puppeteer-core) to screenshot generated corridor maps for the Map tab. No browser is bundled with the extension — this must point at an existing install."
         },
         "oatImages.mapBrightness": {
-          "type": "number",
+          "type": [
+            "number",
+            "null"
+          ],
+          "default": null,
           "description": "Brightness multiplier applied to corridor map screenshots after capture (1 = unchanged, <1 darker, >1 brighter). Left unset, no color grade runs at all."
         },
         "oatImages.mapSaturation": {
-          "type": "number",
+          "type": [
+            "number",
+            "null"
+          ],
+          "default": null,
           "description": "Saturation multiplier applied to corridor map screenshots after capture (1 = unchanged, 0 = grayscale, >1 more saturated). Left unset, no color grade runs at all."
         },
         "oatImages.mapContrast": {
-          "type": "number",
+          "type": [
+            "number",
+            "null"
+          ],
+          "default": null,
           "description": "Contrast slope applied to corridor map screenshots after capture, around the midtone (1 = unchanged, >1 punchier, <1 flatter). Left unset, no color grade runs at all."
         }
       }
