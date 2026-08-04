@@ -80,7 +80,7 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// Same Leaflet + CARTO Positron template used for the one-off corridor maps
+// Same Leaflet + CARTO Voyager template used for the one-off corridor maps
 // generated earlier (egyptSovereigntyCorridor.html etc.), parameterized.
 // Stamps window.__mapReady once tiles finish loading so a headless capture
 // can wait for it instead of guessing a fixed delay.
@@ -145,7 +145,7 @@ function buildCorridorMapHtml({ corridorName, nodes, width = 700, height = 440 }
 
   const map = L.map('map', { zoomControl: false, attributionControl: true });
 
-  const tileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  const tileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
     attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
     subdomains: 'abcd',
     maxZoom: 19

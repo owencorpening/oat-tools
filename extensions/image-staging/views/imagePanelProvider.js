@@ -303,7 +303,7 @@ class ImagePanelProvider {
       const figureNumber = await nextFigureNumber({ editor, ledgerWriter: this._ledgerWriter, contentDraftId: contentDraft.id });
       this._log('[OAT] Figure number: ' + figureNumber);
 
-      const caption = captionSuggestionForImage(image);
+      const caption = image.caption || captionSuggestionForImage(image);
       this._log('[OAT] Caption: ' + caption);
 
       const placement = {
@@ -407,8 +407,15 @@ class ImagePanelProvider {
     const htmlPath = path.join(MAP_PREVIEW_DIR, `${crypto.randomUUID()}.html`);
     fs.writeFileSync(htmlPath, html, 'utf8');
 
-    const previewUri = this._view.webview.asWebviewUri(vscode.Uri.file(htmlPath)).toString();
-    this._send({ type: 'mapPreviewReady', previewUri, corridorName: name, nodes, htmlPath });
+    // The preview iframe is fed via srcdoc rather than navigating it to the
+    // htmlPath's asWebviewUri: nested-iframe navigation to a vscode-resource
+    // URI isn't reliably intercepted by VS Code's webview resource loader
+    // (it falls through to real DNS for the vscode-cdn.net host and fails
+    // with ERR_NAME_NOT_RESOLVED), while srcdoc content is same-origin to
+    // the panel and needs no resource-URI resolution at all. htmlPath itself
+    // is still written and returned for the later file://-based screenshot
+    // step in _handleMapAccept.
+    this._send({ type: 'mapPreviewReady', html, corridorName: name, nodes, htmlPath });
     return { htmlPath, nodes };
   }
 
@@ -436,6 +443,9 @@ class ImagePanelProvider {
         license: attribution,
         attribution
       });
+      // Attribution is already watermarked into the screenshot by Leaflet's
+      // attribution control, so the figcaption doesn't need to repeat it.
+      asset.caption = `${corridorName}.`;
 
       if (!this._ledgerWriter || !this._ledgerWriter.saveAsset) {
         this._send({ type: 'mapAcceptError', message: 'Set oatImages.ledgerApiUrl before placing maps.' });
@@ -502,7 +512,7 @@ class ImagePanelProvider {
 <head>
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy"
-  content="default-src 'none'; img-src ${webview.cspSource} https: data:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
+  content="default-src 'none'; img-src ${webview.cspSource} https: data:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'; frame-src ${webview.cspSource};">
 
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -834,6 +844,7 @@ document.getElementById('mapForm').addEventListener('submit', event => {
   _lastMapPreview = null;
   document.getElementById('mapPreviewWrap').style.display = 'none';
   document.getElementById('mapAcceptRow').style.display = 'none';
+  document.getElementById('mapPreviewBtn').disabled = true;
   setMapStatus('Geocoding and rendering…', false);
   vscode.postMessage({ type: 'mapPreview', corridorName, description });
 });
@@ -949,13 +960,15 @@ window.addEventListener('message', e => {
     renderProviderResults(msg.message || '');
   } else if (msg.type === 'mapPreviewReady') {
     _lastMapPreview = { corridorName: msg.corridorName, nodes: msg.nodes, htmlPath: msg.htmlPath };
+    document.getElementById('mapPreviewBtn').disabled = false;
     setMapStatus('', false);
-    document.getElementById('mapPreviewFrame').src = msg.previewUri;
+    document.getElementById('mapPreviewFrame').srcdoc = msg.html;
     document.getElementById('mapPreviewWrap').style.display = 'block';
     document.getElementById('mapAcceptRow').style.display = 'block';
     document.getElementById('mapAcceptBtn').disabled = false;
   } else if (msg.type === 'mapPreviewError') {
     _lastMapPreview = null;
+    document.getElementById('mapPreviewBtn').disabled = false;
     document.getElementById('mapPreviewWrap').style.display = 'none';
     document.getElementById('mapAcceptRow').style.display = 'none';
     setMapStatus('⚠ ' + msg.message, true);
