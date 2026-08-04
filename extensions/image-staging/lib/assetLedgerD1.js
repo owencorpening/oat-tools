@@ -190,6 +190,8 @@ async function markPlacementPublishing(db, placementId) {
 async function updateAssetPublication(db, { assetId, assetPath, rawAssetUrl } = {}) {
   if (!assetId) throw new Error('updateAssetPublication requires assetId');
 
+  if (assetPath) await reclaimAssetPath(db, assetPath, assetId);
+
   await updateById(db, 'asset', assetId, {
     asset_path: assetPath,
     raw_asset_url: rawAssetUrl,
@@ -200,12 +202,32 @@ async function updateAssetPublication(db, { assetId, assetPath, rawAssetUrl } = 
 async function markAssetPublished(db, { assetId, assetPath, rawAssetUrl } = {}) {
   if (!assetId) throw new Error('markAssetPublished requires assetId');
 
+  if (assetPath) await reclaimAssetPath(db, assetPath, assetId);
+
   await updateById(db, 'asset', assetId, {
     status: 'published',
     asset_path: assetPath,
     raw_asset_url: rawAssetUrl,
     updated_at: now()
   });
+}
+
+// Placing a new asset at a slug that was already published overwrites the
+// file on disk (see imagePipeline.placeAsset), so the old ledger row's
+// asset_path is stale the moment the new write starts. Free it here so the
+// UNIQUE constraint doesn't reject the new row for a file that's already gone.
+async function reclaimAssetPath(db, assetPath, excludeAssetId) {
+  const holders = await all(db.prepare(
+    'SELECT id FROM asset WHERE asset_path = ? AND id != ?'
+  ).bind(assetPath, excludeAssetId));
+
+  for (const holder of holders) {
+    await updateById(db, 'asset', holder.id, {
+      asset_path: null,
+      status: 'discarded',
+      updated_at: now()
+    });
+  }
 }
 
 async function markAssetDiscarded(db, assetId) {

@@ -187,6 +187,34 @@ async function testProviderMetadataAndDownloadPing() {
   );
 }
 
+async function testReplacingAssetPathDiscardsPriorHolder() {
+  const db = new FakeD1();
+  db.insert('asset', {
+    id: 'asset-old',
+    status: 'published',
+    asset_path: 'water-series/part-10/egypt-sovereignty-corridor',
+    created_at: '2026-08-04T14:25:16.000Z'
+  });
+  db.insert('asset', {
+    id: 'asset-new',
+    status: 'publishing',
+    created_at: '2026-08-04T16:44:29.000Z'
+  });
+
+  await ledger.updateAssetPublication(db, {
+    assetId: 'asset-new',
+    assetPath: 'water-series/part-10/egypt-sovereignty-corridor',
+    rawAssetUrl: 'https://raw.example.com/egypt.png'
+  });
+
+  assert.strictEqual(db.one('asset', 'asset-old').status, 'discarded');
+  assert.strictEqual(db.one('asset', 'asset-old').asset_path, null);
+  assert.strictEqual(
+    db.one('asset', 'asset-new').asset_path,
+    'water-series/part-10/egypt-sovereignty-corridor'
+  );
+}
+
 function seedAssetGraph(db) {
   db.insert('content_draft', { id: 'draft-1', draft_path: 'part-09.md', status: 'active' });
   db.insert('asset', { id: 'asset-1', status: 'staged', display_name: 'River Map', source_path: '/home/owen/Downloads/river-map.jpg', source_kind: 'downloads', created_at: '2026-01-01T00:00:00.000Z' });
@@ -279,6 +307,14 @@ class FakeStatement {
       return { results: row ? [row] : [] };
     }
 
+    if (/FROM\s+asset\s+WHERE\s+asset_path\s*=\s*\?\s+AND\s+id\s*!=\s*\?/i.test(this.sql)) {
+      const [assetPath, excludeId] = this.values;
+      const rows = (this.db.tables.get('asset') || [])
+        .filter(row => row.asset_path === assetPath && row.id !== excludeId)
+        .map(row => ({ id: row.id }));
+      return { results: rows };
+    }
+
     if (/FROM\s+asset\b/i.test(this.sql)) {
       const rows = [...(this.db.tables.get('asset') || [])]
         .filter(row => row.status === 'staged')
@@ -344,6 +380,7 @@ function byCreatedAt(a, b) {
   await testUpdatesAndFailureState();
   await testListQueries();
   await testProviderMetadataAndDownloadPing();
+  await testReplacingAssetPathDiscardsPriorHolder();
   console.log('assetLedgerD1 tests passed');
 })().catch(error => {
   console.error(error);
