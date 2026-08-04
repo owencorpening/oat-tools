@@ -8,6 +8,9 @@
   "categories": ["Other"],
   "main": "./extension.js",
   "extensionDependencies": ["owencorpening.oat-table-tools"],
+  "dependencies": {
+    "puppeteer-core": "^23.0.0"
+  },
   "contributes": {
     "viewsContainers": {
       "activitybar": [
@@ -163,6 +166,11 @@
           "type": "number",
           "default": 8000,
           "description": "How many characters of document text (from the cursor forward) to send to Claude per Find Next Pullquote scan."
+        },
+        "oatImages.chromePath": {
+          "type": "string",
+          "default": "/usr/bin/google-chrome",
+          "description": "Path to a Chrome/Chromium executable, used headlessly (via puppeteer-core) to screenshot generated corridor maps for the Map tab. No browser is bundled with the extension — this must point at an existing install."
         }
       }
     }

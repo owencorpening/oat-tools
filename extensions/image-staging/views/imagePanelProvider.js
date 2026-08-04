@@ -1,6 +1,7 @@
 'use strict';
 const vscode = require('vscode');
 const crypto = require('crypto');
+const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const downloadsProvider = require('../lib/downloadsProvider');
@@ -10,6 +11,11 @@ const {
   buildContentDraftRecord,
   buildDraftLocation
 } = require('../lib/reviewImageNeedCommand');
+const mapCommands = require('../lib/mapCommands');
+const { screenshotCorridorMap } = require('../lib/mapScreenshot');
+const imageIntake = require('../lib/imageIntake');
+
+const MAP_PREVIEW_DIR = path.join(os.tmpdir(), 'oat-map-preview');
 
 class ImagePanelProvider {
   static viewId = 'oatImages.panel';
@@ -18,6 +24,7 @@ class ImagePanelProvider {
     ledgerWriter,
     localDownloadsProvider = downloadsProvider,
     runPlacement = placeAsset,
+    runScreenshot = screenshotCorridorMap,
     getImagesRepoPath = imagesRepoPath,
     writeSnippet = writeSnippetToActiveEditor,
     outputChannel
@@ -26,6 +33,7 @@ class ImagePanelProvider {
     this._ledgerWriter = ledgerWriter;
     this._downloadsProvider = localDownloadsProvider;
     this._runPlacement = runPlacement;
+    this._runScreenshot = runScreenshot;
     this._getImagesRepoPath = getImagesRepoPath;
     this._writeSnippet = writeSnippet;
     this._outputChannel = outputChannel;
@@ -42,10 +50,12 @@ class ImagePanelProvider {
   resolveWebviewView(webviewView) {
     this._log('[OAT] resolveWebviewView called');
     this._view = webviewView;
+    fs.mkdirSync(MAP_PREVIEW_DIR, { recursive: true });
     webviewView.webview.options = {
       enableScripts: true,
       ...(vscode.Uri?.file ? { localResourceRoots: [
-        vscode.Uri.file(path.join(os.homedir(), 'Downloads'))
+        vscode.Uri.file(path.join(os.homedir(), 'Downloads')),
+        vscode.Uri.file(MAP_PREVIEW_DIR)
       ] } : {})
     };
     webviewView.webview.html = this._html(webviewView.webview);
@@ -73,6 +83,8 @@ class ImagePanelProvider {
           case 'stageProviderImage': return await this._handleStageProviderImage(msg.result);
           case 'place':   return await this._handlePlace(msg.image);
           case 'discard': return await this._handleDiscard(msg.image);
+          case 'mapPreview': return await this._handleMapPreview(msg);
+          case 'mapAccept': return await this._handleMapAccept(msg);
         }
       } catch (err) {
         console.error('[OAT] Error handling message:', err);
@@ -372,6 +384,76 @@ class ImagePanelProvider {
     return { assetId: image.id };
   }
 
+  // ── Map ───────────────────────────────────────────────────────────────────
+
+  async _handleMapPreview({ corridorName, description } = {}) {
+    let waypoints;
+    try {
+      waypoints = mapCommands.parseCorridorDescription(description);
+    } catch (err) {
+      this._send({ type: 'mapPreviewError', message: err.message });
+      return null;
+    }
+
+    const { nodes, unresolved } = await mapCommands.geocodeWaypoints(waypoints);
+    if (unresolved.length > 0) {
+      const names = unresolved.map(n => n.name).join(', ');
+      this._send({ type: 'mapPreviewError', message: `Couldn't find: ${names}. Try a more specific name (e.g. add a country).`, unresolved });
+      return null;
+    }
+
+    const name = (corridorName || '').trim() || waypoints.map(w => w.name).join(' – ');
+    const html = mapCommands.buildCorridorMapHtml({ corridorName: name, nodes });
+    const htmlPath = path.join(MAP_PREVIEW_DIR, `${crypto.randomUUID()}.html`);
+    fs.writeFileSync(htmlPath, html, 'utf8');
+
+    const previewUri = this._view.webview.asWebviewUri(vscode.Uri.file(htmlPath)).toString();
+    this._send({ type: 'mapPreviewReady', previewUri, corridorName: name, nodes, htmlPath });
+    return { htmlPath, nodes };
+  }
+
+  async _handleMapAccept({ corridorName, nodes, htmlPath } = {}) {
+    try {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor || !isMarkdownDraft(editor)) {
+        this._send({ type: 'mapAcceptError', message: 'Open the target markdown draft before placing a map.' });
+        return null;
+      }
+      if (!htmlPath || !fs.existsSync(htmlPath)) {
+        this._send({ type: 'mapAcceptError', message: 'Preview expired — click Preview again before placing.' });
+        return null;
+      }
+
+      const chromePath = vscode.workspace.getConfiguration('oatImages').get('chromePath', undefined);
+      const tempPng = path.join(MAP_PREVIEW_DIR, `${crypto.randomUUID()}.png`);
+      await this._runScreenshot({ htmlPath, outputPath: tempPng, chromePath });
+
+      const attribution = 'Map data © OpenStreetMap contributors, © CARTO';
+      const asset = await imageIntake.fromAiGeneratedFile({
+        id: `asset_${crypto.randomUUID()}`,
+        filePath: tempPng,
+        displayName: corridorName,
+        license: attribution,
+        attribution
+      });
+
+      if (!this._ledgerWriter || !this._ledgerWriter.saveAsset) {
+        this._send({ type: 'mapAcceptError', message: 'Set oatImages.ledgerApiUrl before placing maps.' });
+        return null;
+      }
+      await this._ledgerWriter.saveAsset({ asset });
+
+      const placed = await this._handlePlace(asset);
+      this._send({ type: 'mapAcceptDone' });
+      return placed;
+    } catch (err) {
+      this._log('[OAT] ERROR in _handleMapAccept: ' + (err?.message || err?.toString()));
+      this._send({ type: 'mapAcceptError', message: err?.message || 'Unknown error placing map.' });
+      vscode.window.showErrorMessage('OAT: ' + (err?.message || 'Unknown error placing map'));
+      return null;
+    }
+  }
+
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   _send(msg) {
@@ -517,6 +599,25 @@ body {
 #status { padding: 16px; text-align: center; opacity: 0.6; font-size: 12px; }
 .search-status { padding: 8px; opacity: 0.6; font-size: 11px; }
 .error { color: var(--vscode-errorForeground); }
+.map-form { display: flex; flex-direction: column; gap: 6px; padding: 8px; }
+.map-form input {
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border, transparent);
+  padding: 4px 6px;
+  font-size: 12px;
+}
+.map-form-row { display: flex; gap: 6px; }
+.map-form-row button { flex-shrink: 0; }
+.map-status { padding: 0 8px 8px; font-size: 11px; opacity: 0.8; }
+.map-preview-wrap { display: none; padding: 0 8px 8px; }
+.map-preview-wrap iframe {
+  width: 100%;
+  height: 300px;
+  border: 1px solid var(--vscode-panel-border);
+  background: #fff;
+}
+.map-accept-row { display: none; padding: 0 8px 8px; }
 .card { border-bottom: 1px solid var(--vscode-panel-border); }
 .card-content {
   display: grid;
@@ -614,6 +715,7 @@ body {
 <div class="tabs" id="tabBar">
   <button class="tab-btn active" data-tab="downloads">Downloads</button>
   <button class="tab-btn" data-tab="staged">Staged</button>
+  <button class="tab-btn" data-tab="map">Map</button>
 </div>
 
 <div class="tab-content" id="downloads-tab">
@@ -631,6 +733,23 @@ body {
 
 <div class="tab-content" id="staged-tab" style="display:none">
   <div id="list"></div>
+</div>
+
+<div class="tab-content" id="map-tab" style="display:none">
+  <form class="map-form" id="mapForm">
+    <input id="mapCorridorName" type="text" placeholder="Corridor name (e.g. Egypt Sovereignty Corridor)">
+    <input id="mapDescription" type="text" placeholder="Alexandria (desal) → Cairo → Aswan">
+    <div class="map-form-row">
+      <button class="btn btn-stage" id="mapPreviewBtn" type="submit">Preview</button>
+    </div>
+  </form>
+  <div id="mapStatus" class="map-status" style="display:none"></div>
+  <div id="mapPreviewWrap" class="map-preview-wrap">
+    <iframe id="mapPreviewFrame" title="Map preview"></iframe>
+  </div>
+  <div id="mapAcceptRow" class="map-accept-row">
+    <button class="btn btn-place" id="mapAcceptBtn" type="button">Accept &amp; Place</button>
+  </div>
 </div>
 
 <script nonce="${nonce}">
@@ -685,6 +804,46 @@ if (document.getElementById('browseBtn')) {
     vscode.postMessage({ type: 'providerSearch', query: '*', providers: ['downloads'] });
   });
 }
+
+// ── Map tab ──────────────────────────────────────────────────────────────
+// Unlike the provider tabs (search → many thumbnails → stage), a map
+// description generates exactly one preview; accepting it runs the whole
+// screenshot → stage → place pipeline in one step. _lastMapPreview holds
+// the htmlPath from the last mapPreviewReady so it can be echoed back on
+// accept — the extension host keeps no server-side session state for this.
+let _lastMapPreview = null;
+
+function setMapStatus(message, isError) {
+  const status = document.getElementById('mapStatus');
+  if (!message) {
+    status.style.display = 'none';
+    status.textContent = '';
+    return;
+  }
+  status.textContent = message;
+  status.className = 'map-status' + (isError ? ' error' : '');
+  status.style.display = 'block';
+}
+
+document.getElementById('mapForm').addEventListener('submit', event => {
+  event.preventDefault();
+  const corridorName = document.getElementById('mapCorridorName').value.trim();
+  const description = document.getElementById('mapDescription').value.trim();
+  if (!description) return;
+
+  _lastMapPreview = null;
+  document.getElementById('mapPreviewWrap').style.display = 'none';
+  document.getElementById('mapAcceptRow').style.display = 'none';
+  setMapStatus('Geocoding and rendering…', false);
+  vscode.postMessage({ type: 'mapPreview', corridorName, description });
+});
+
+document.getElementById('mapAcceptBtn').addEventListener('click', () => {
+  if (!_lastMapPreview) return;
+  document.getElementById('mapAcceptBtn').disabled = true;
+  setMapStatus('Rendering, screenshotting, and placing…', false);
+  vscode.postMessage({ type: 'mapAccept', ..._lastMapPreview });
+});
 
 // Provider tabs (Pexels, Unsplash, Pixabay, ...) are built dynamically from
 // the "providers" message rather than hardcoded per provider — see
@@ -788,6 +947,26 @@ window.addEventListener('message', e => {
     }
   } else if (msg.type === 'providerNotice') {
     renderProviderResults(msg.message || '');
+  } else if (msg.type === 'mapPreviewReady') {
+    _lastMapPreview = { corridorName: msg.corridorName, nodes: msg.nodes, htmlPath: msg.htmlPath };
+    setMapStatus('', false);
+    document.getElementById('mapPreviewFrame').src = msg.previewUri;
+    document.getElementById('mapPreviewWrap').style.display = 'block';
+    document.getElementById('mapAcceptRow').style.display = 'block';
+    document.getElementById('mapAcceptBtn').disabled = false;
+  } else if (msg.type === 'mapPreviewError') {
+    _lastMapPreview = null;
+    document.getElementById('mapPreviewWrap').style.display = 'none';
+    document.getElementById('mapAcceptRow').style.display = 'none';
+    setMapStatus('⚠ ' + msg.message, true);
+  } else if (msg.type === 'mapAcceptDone') {
+    setMapStatus('Placed.', false);
+    document.getElementById('mapPreviewWrap').style.display = 'none';
+    document.getElementById('mapAcceptRow').style.display = 'none';
+    _lastMapPreview = null;
+  } else if (msg.type === 'mapAcceptError') {
+    document.getElementById('mapAcceptBtn').disabled = false;
+    setMapStatus('⚠ ' + msg.message, true);
   } else if (msg.type === 'error') {
     clearTimeout(_timeoutId);
     document.getElementById('status').textContent = '⚠ ' + msg.message;
