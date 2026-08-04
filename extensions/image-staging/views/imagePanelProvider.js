@@ -386,7 +386,7 @@ class ImagePanelProvider {
 
   // ── Map ───────────────────────────────────────────────────────────────────
 
-  async _handleMapPreview({ corridorName, description } = {}) {
+  async _handleMapPreview({ corridorName, description, nodes: cachedNodes, zoomDelta } = {}) {
     let waypoints;
     try {
       waypoints = mapCommands.parseCorridorDescription(description);
@@ -395,31 +395,55 @@ class ImagePanelProvider {
       return null;
     }
 
-    const { nodes, unresolved } = await mapCommands.geocodeWaypoints(waypoints);
-    if (unresolved.length > 0) {
-      const names = unresolved.map(n => n.name).join(', ');
-      this._send({ type: 'mapPreviewError', message: `Couldn't find: ${names}. Try a more specific name (e.g. add a country).`, unresolved });
-      return null;
+    // Re-rendering at a new zoom reuses the nodes the previous preview already
+    // resolved. Nominatim's usage policy caps us at ~1 req/sec, so geocoding
+    // afresh on every zoom nudge would put a multi-second stall behind each
+    // step of what is meant to be a tweak-and-look loop — and burn rate limit
+    // re-resolving place names that provably haven't changed.
+    let nodes;
+    if (Array.isArray(cachedNodes) && cachedNodes.length >= 2) {
+      nodes = cachedNodes;
+    } else {
+      const geocoded = await mapCommands.geocodeWaypoints(waypoints);
+      if (geocoded.unresolved.length > 0) {
+        const names = geocoded.unresolved.map(n => n.name).join(', ');
+        this._send({ type: 'mapPreviewError', message: `Couldn't find: ${names}. Try a more specific name (e.g. add a country).`, unresolved: geocoded.unresolved });
+        return null;
+      }
+      nodes = geocoded.nodes;
     }
 
     const name = (corridorName || '').trim() || waypoints.map(w => w.name).join(' – ');
-    const html = mapCommands.buildCorridorMapHtml({ corridorName: name, nodes });
+    const html = mapCommands.buildCorridorMapHtml({ corridorName: name, nodes, zoomDelta });
     const htmlPath = path.join(MAP_PREVIEW_DIR, `${crypto.randomUUID()}.html`);
     fs.writeFileSync(htmlPath, html, 'utf8');
 
-    // The preview iframe is fed via srcdoc rather than navigating it to the
-    // htmlPath's asWebviewUri: nested-iframe navigation to a vscode-resource
-    // URI isn't reliably intercepted by VS Code's webview resource loader
-    // (it falls through to real DNS for the vscode-cdn.net host and fails
-    // with ERR_NAME_NOT_RESOLVED), while srcdoc content is same-origin to
-    // the panel and needs no resource-URI resolution at all. htmlPath itself
-    // is still written and returned for the later file://-based screenshot
-    // step in _handleMapAccept.
-    this._send({ type: 'mapPreviewReady', html, corridorName: name, nodes, htmlPath });
-    return { htmlPath, nodes };
+    // The preview is the headless-Chrome screenshot rendered as a data: URI
+    // <img>, not a live Leaflet map in a nested iframe. Leaflet can't run
+    // inside the panel at all: a nested iframe navigated to a vscode-resource
+    // URI fails DNS on the vscode-cdn.net host, and the srcdoc fallback
+    // inherits the panel's own CSP/sandbox, which silently drops the map's
+    // scripts and leaves a blank white frame. Screenshotting the same
+    // htmlPath that _handleMapAccept places also makes the preview WYSIWYG —
+    // it is literally the PNG that will be staged. pngPath is handed back so
+    // accept can reuse this render instead of launching Chrome a second time.
+    const chromePath = vscode.workspace.getConfiguration('oatImages').get('chromePath', undefined);
+    const grade = this._mapGradeOptions();
+    const pngPath = path.join(MAP_PREVIEW_DIR, `${crypto.randomUUID()}.png`);
+    try {
+      await this._runScreenshot({ htmlPath, outputPath: pngPath, chromePath, ...grade });
+    } catch (err) {
+      this._log('[OAT] ERROR rendering map preview: ' + (err?.message || err));
+      this._send({ type: 'mapPreviewError', message: err?.message || 'Could not render the map preview.' });
+      return null;
+    }
+
+    const dataUri = `data:image/png;base64,${fs.readFileSync(pngPath).toString('base64')}`;
+    this._send({ type: 'mapPreviewReady', dataUri, corridorName: name, nodes, htmlPath, pngPath, zoomDelta });
+    return { htmlPath, pngPath, nodes };
   }
 
-  async _handleMapAccept({ corridorName, nodes, htmlPath } = {}) {
+  async _handleMapAccept({ corridorName, nodes, htmlPath, pngPath } = {}) {
     try {
       const editor = vscode.window.activeTextEditor;
       if (!editor || !isMarkdownDraft(editor)) {
@@ -431,9 +455,15 @@ class ImagePanelProvider {
         return null;
       }
 
-      const chromePath = vscode.workspace.getConfiguration('oatImages').get('chromePath', undefined);
-      const tempPng = path.join(MAP_PREVIEW_DIR, `${crypto.randomUUID()}.png`);
-      await this._runScreenshot({ htmlPath, outputPath: tempPng, chromePath });
+      // The preview already rendered this map to PNG, and it's the image the
+      // user just approved — reuse it rather than launching Chrome again and
+      // risking a placed image that differs from what was previewed.
+      let tempPng = pngPath;
+      if (!tempPng || !fs.existsSync(tempPng)) {
+        const chromePath = vscode.workspace.getConfiguration('oatImages').get('chromePath', undefined);
+        tempPng = path.join(MAP_PREVIEW_DIR, `${crypto.randomUUID()}.png`);
+        await this._runScreenshot({ htmlPath, outputPath: tempPng, chromePath, ...this._mapGradeOptions() });
+      }
 
       const attribution = 'Map data © OpenStreetMap contributors, © CARTO';
       const asset = await imageIntake.fromAiGeneratedFile({
@@ -465,6 +495,19 @@ class ImagePanelProvider {
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
+
+  // Reads the three oatImages.map* grade settings and passes through only
+  // the ones the user actually set — screenshotCorridorMap skips the sharp
+  // pass entirely when all three are undefined, so leaving them unset costs
+  // nothing.
+  _mapGradeOptions() {
+    const config = vscode.workspace.getConfiguration('oatImages');
+    return {
+      brightness: config.get('mapBrightness', undefined),
+      saturation: config.get('mapSaturation', undefined),
+      contrast: config.get('mapContrast', undefined)
+    };
+  }
 
   _send(msg) {
     if (this._view) this._view.webview.postMessage(msg);
@@ -512,7 +555,7 @@ class ImagePanelProvider {
 <head>
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy"
-  content="default-src 'none'; img-src ${webview.cspSource} https: data:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'; frame-src ${webview.cspSource};">
+  content="default-src 'none'; img-src ${webview.cspSource} https: data:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
 
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -617,13 +660,19 @@ body {
   padding: 4px 6px;
   font-size: 12px;
 }
-.map-form-row { display: flex; gap: 6px; }
+.map-form-row { display: flex; gap: 6px; align-items: center; }
 .map-form-row button { flex-shrink: 0; }
+.map-zoom {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 11px; opacity: 0.8; flex-shrink: 0;
+}
+.map-zoom input { width: 56px; }
 .map-status { padding: 0 8px 8px; font-size: 11px; opacity: 0.8; }
 .map-preview-wrap { display: none; padding: 0 8px 8px; }
-.map-preview-wrap iframe {
+.map-preview-wrap img {
+  display: block;
   width: 100%;
-  height: 300px;
+  height: auto;
   border: 1px solid var(--vscode-panel-border);
   background: #fff;
 }
@@ -750,12 +799,15 @@ body {
     <input id="mapCorridorName" type="text" placeholder="Corridor name (e.g. Egypt Sovereignty Corridor)">
     <input id="mapDescription" type="text" placeholder="Alexandria (desal) → Cairo → Aswan">
     <div class="map-form-row">
+      <label class="map-zoom">Zoom
+        <input id="mapZoom" type="number" value="0" step="0.25" min="-4" max="4" title="0 fits the corridor. Positive tightens, negative pulls back.">
+      </label>
       <button class="btn btn-stage" id="mapPreviewBtn" type="submit">Preview</button>
     </div>
   </form>
   <div id="mapStatus" class="map-status" style="display:none"></div>
   <div id="mapPreviewWrap" class="map-preview-wrap">
-    <iframe id="mapPreviewFrame" title="Map preview"></iframe>
+    <img id="mapPreviewImg" alt="Map preview" />
   </div>
   <div id="mapAcceptRow" class="map-accept-row">
     <button class="btn btn-place" id="mapAcceptBtn" type="button">Accept &amp; Place</button>
@@ -817,11 +869,23 @@ if (document.getElementById('browseBtn')) {
 
 // ── Map tab ──────────────────────────────────────────────────────────────
 // Unlike the provider tabs (search → many thumbnails → stage), a map
-// description generates exactly one preview; accepting it runs the whole
-// screenshot → stage → place pipeline in one step. _lastMapPreview holds
-// the htmlPath from the last mapPreviewReady so it can be echoed back on
+// description generates exactly one preview; accepting it stages and places
+// the PNG the preview already rendered. _lastMapPreview holds the htmlPath
+// and pngPath from the last mapPreviewReady so they can be echoed back on
 // accept — the extension host keeps no server-side session state for this.
 let _lastMapPreview = null;
+
+// Geocoded nodes from the last successful preview, plus the description that
+// produced them. Re-previewing the same corridor at a different zoom sends
+// these back so the host can skip Nominatim (see _handleMapPreview). Editing
+// the description invalidates them by simple string comparison — the nodes
+// are only valid for the exact text that resolved them.
+let _lastMapNodes = null;
+let _lastMapNodesDescription = null;
+// The description of the in-flight preview, held so the cache is keyed to the
+// text that was actually submitted rather than whatever is in the input by
+// the time the reply lands — the user can keep typing while Chrome renders.
+let _pendingMapDescription = null;
 
 function setMapStatus(message, isError) {
   const status = document.getElementById('mapStatus');
@@ -841,12 +905,16 @@ document.getElementById('mapForm').addEventListener('submit', event => {
   const description = document.getElementById('mapDescription').value.trim();
   if (!description) return;
 
+  const zoomDelta = Number(document.getElementById('mapZoom').value) || 0;
+  const reusableNodes = description === _lastMapNodesDescription ? _lastMapNodes : null;
+
   _lastMapPreview = null;
+  _pendingMapDescription = description;
   document.getElementById('mapPreviewWrap').style.display = 'none';
   document.getElementById('mapAcceptRow').style.display = 'none';
   document.getElementById('mapPreviewBtn').disabled = true;
-  setMapStatus('Geocoding and rendering…', false);
-  vscode.postMessage({ type: 'mapPreview', corridorName, description });
+  setMapStatus(reusableNodes ? 'Rendering…' : 'Geocoding and rendering…', false);
+  vscode.postMessage({ type: 'mapPreview', corridorName, description, zoomDelta, nodes: reusableNodes });
 });
 
 document.getElementById('mapAcceptBtn').addEventListener('click', () => {
@@ -959,10 +1027,12 @@ window.addEventListener('message', e => {
   } else if (msg.type === 'providerNotice') {
     renderProviderResults(msg.message || '');
   } else if (msg.type === 'mapPreviewReady') {
-    _lastMapPreview = { corridorName: msg.corridorName, nodes: msg.nodes, htmlPath: msg.htmlPath };
+    _lastMapPreview = { corridorName: msg.corridorName, nodes: msg.nodes, htmlPath: msg.htmlPath, pngPath: msg.pngPath };
+    _lastMapNodes = msg.nodes;
+    _lastMapNodesDescription = _pendingMapDescription;
     document.getElementById('mapPreviewBtn').disabled = false;
     setMapStatus('', false);
-    document.getElementById('mapPreviewFrame').srcdoc = msg.html;
+    document.getElementById('mapPreviewImg').src = msg.dataUri;
     document.getElementById('mapPreviewWrap').style.display = 'block';
     document.getElementById('mapAcceptRow').style.display = 'block';
     document.getElementById('mapAcceptBtn').disabled = false;

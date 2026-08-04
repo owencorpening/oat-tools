@@ -2,6 +2,9 @@
 
 const assert = require('assert');
 const Module = require('module');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 
 const infoMessages = [];
 const warningMessages = [];
@@ -36,6 +39,7 @@ Module._load = function load(request, parent, isMain) {
 };
 
 const { ImagePanelProvider, placementTargetFromDraftPath } = require('../views/imagePanelProvider');
+const mapCommands = require('../lib/mapCommands');
 Module._load = originalLoad;
 
 async function testLoadsD1StagedAssets() {
@@ -638,7 +642,133 @@ function fakeEditor(fsPath = '/repo/substack-ideas/part-09.md', options = {}) {
   };
 }
 
+// The map preview renders server-side to a PNG and ships it as a data: URI.
+// It must never go back to embedding live Leaflet in a nested iframe: the
+// panel's own CSP/sandbox silently strips the map's scripts, which showed up
+// as an all-white preview frame with no console error to explain it.
+async function testMapPreviewSendsRenderedPngDataUri() {
+  const sent = [];
+  const screenshotCalls = [];
+  // Stub geocoding so the test doesn't depend on Nominatim being reachable
+  // (its rate limit and ambiguous single-word hits make it flaky).
+  const realGeocode = mapCommands.geocodeWaypoints;
+  mapCommands.geocodeWaypoints = async waypoints => ({
+    nodes: waypoints.map((w, i) => ({ name: w.name, label: w.label, lat: 30 + i, lng: 31 + i })),
+    unresolved: []
+  });
+  const provider = new ImagePanelProvider({ subscriptions: [] }, {
+    runScreenshot: async ({ htmlPath, outputPath }) => {
+      screenshotCalls.push({ htmlPath, outputPath });
+      fs.writeFileSync(outputPath, Buffer.from('fake-png-bytes'));
+      return { outputPath };
+    }
+  });
+  provider._view = { webview: { postMessage: msg => sent.push(msg) } };
+  provider._send = msg => sent.push(msg);
+
+  let result;
+  try {
+    result = await provider._handleMapPreview({
+      corridorName: 'Egypt Sovereignty Corridor',
+      description: 'Alexandria → Cairo'
+    });
+  } finally {
+    mapCommands.geocodeWaypoints = realGeocode;
+  }
+
+  assert.strictEqual(screenshotCalls.length, 1, 'renders the map once');
+  assert.strictEqual(screenshotCalls[0].htmlPath, result.htmlPath, 'screenshots the html it wrote');
+
+  const ready = sent.find(m => m.type === 'mapPreviewReady');
+  assert.ok(ready, 'sends mapPreviewReady');
+  assert.match(ready.dataUri, /^data:image\/png;base64,/, 'preview ships as a png data URI');
+  assert.strictEqual(
+    ready.dataUri,
+    'data:image/png;base64,' + Buffer.from('fake-png-bytes').toString('base64')
+  );
+  assert.strictEqual(ready.html, undefined, 'no raw html — that was the blank-iframe path');
+  assert.ok(ready.pngPath, 'hands back pngPath so accept can reuse the render');
+}
+
+// Nudging the zoom re-renders the same corridor. Nominatim is throttled to
+// ~1 req/sec, so re-geocoding per nudge would stall the tweak-and-look loop
+// by seconds and burn rate limit on names that provably haven't changed.
+async function testMapPreviewReusesCachedNodesInsteadOfGeocoding() {
+  const sent = [];
+  const realGeocode = mapCommands.geocodeWaypoints;
+  let geocodeCalls = 0;
+  mapCommands.geocodeWaypoints = async () => {
+    geocodeCalls++;
+    return { nodes: [], unresolved: [] };
+  };
+
+  const provider = new ImagePanelProvider({ subscriptions: [] }, {
+    runScreenshot: async ({ outputPath }) => {
+      fs.writeFileSync(outputPath, Buffer.from('fake-png-bytes'));
+      return { outputPath };
+    }
+  });
+  provider._view = { webview: { postMessage: msg => sent.push(msg) } };
+  provider._send = msg => sent.push(msg);
+
+  let result;
+  try {
+    result = await provider._handleMapPreview({
+      corridorName: 'Egypt Sovereignty Corridor',
+      description: 'Alexandria → Cairo',
+      zoomDelta: 1.5,
+      nodes: [
+        { name: 'Alexandria', label: '', lat: 31.2, lng: 29.9 },
+        { name: 'Cairo', label: '', lat: 30.0, lng: 31.2 }
+      ]
+    });
+  } finally {
+    mapCommands.geocodeWaypoints = realGeocode;
+  }
+
+  assert.strictEqual(geocodeCalls, 0, 'skips Nominatim when nodes are supplied');
+  assert.ok(sent.find(m => m.type === 'mapPreviewReady'), 'still renders a preview');
+  assert.match(
+    fs.readFileSync(result.htmlPath, 'utf8'),
+    /map\.setZoom\(map\.getZoom\(\) \+ 1\.5\)/,
+    'the requested zoom reaches the rendered map'
+  );
+}
+
+// Accept must not re-run Chrome: re-rendering risks placing an image that
+// differs from the one the user just approved in the preview.
+async function testMapAcceptReusesPreviewPng() {
+  const provider = new ImagePanelProvider({ subscriptions: [] }, {
+    runScreenshot: async () => { throw new Error('should not re-screenshot on accept'); },
+    ledgerWriter: { saveAsset: async () => ({}) }
+  });
+  const sent = [];
+  provider._send = msg => sent.push(msg);
+  provider._handlePlace = async asset => asset;
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'oat-map-accept-'));
+  const htmlPath = path.join(dir, 'm.html');
+  const pngPath = path.join(dir, 'm.png');
+  fs.writeFileSync(htmlPath, '<html></html>');
+  fs.writeFileSync(pngPath, Buffer.from('fake-png-bytes'));
+
+  fakeVscode.window.activeTextEditor = {
+    document: { languageId: 'markdown', uri: { fsPath: '/repo/substack-unpublished/s/a/a-post.md' } }
+  };
+
+  await provider._handleMapAccept({ corridorName: 'Egypt Corridor', nodes: [], htmlPath, pngPath });
+  fakeVscode.window.activeTextEditor = null;
+
+  assert.ok(
+    !sent.some(m => m.type === 'mapAcceptError' && /should not re-screenshot/.test(m.message)),
+    'reuses the preview PNG instead of re-rendering'
+  );
+}
+
 async function run() {
+  await testMapPreviewSendsRenderedPngDataUri();
+  await testMapPreviewReusesCachedNodesInsteadOfGeocoding();
+  await testMapAcceptReusesPreviewPng();
   await testLoadsD1StagedAssets();
   await testD1ActionsAreGuarded();
   await testD1PlacePlacesFigureDirectly();

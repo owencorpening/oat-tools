@@ -4,12 +4,19 @@
   "displayName": "OAT Image Staging",
   "description": "Owen's Applied Thinking image staging and placement panel for VS Code",
   "version": "0.1.0",
-  "engines": { "vscode": "^1.75.0" },
-  "categories": ["Other"],
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Other"
+  ],
   "main": "./extension.js",
-  "extensionDependencies": ["owencorpening.oat-table-tools"],
+  "extensionDependencies": [
+    "owencorpening.oat-table-tools"
+  ],
   "dependencies": {
-    "puppeteer-core": "^23.0.0"
+    "puppeteer-core": "^23.0.0",
+    "sharp": "^0.33.5"
   },
   "contributes": {
     "viewsContainers": {
@@ -171,6 +178,18 @@
           "type": "string",
           "default": "/usr/bin/google-chrome",
           "description": "Path to a Chrome/Chromium executable, used headlessly (via puppeteer-core) to screenshot generated corridor maps for the Map tab. No browser is bundled with the extension — this must point at an existing install."
+        },
+        "oatImages.mapBrightness": {
+          "type": "number",
+          "description": "Brightness multiplier applied to corridor map screenshots after capture (1 = unchanged, <1 darker, >1 brighter). Left unset, no color grade runs at all."
+        },
+        "oatImages.mapSaturation": {
+          "type": "number",
+          "description": "Saturation multiplier applied to corridor map screenshots after capture (1 = unchanged, 0 = grayscale, >1 more saturated). Left unset, no color grade runs at all."
+        },
+        "oatImages.mapContrast": {
+          "type": "number",
+          "description": "Contrast slope applied to corridor map screenshots after capture, around the midtone (1 = unchanged, >1 punchier, <1 flatter). Left unset, no color grade runs at all."
         }
       }
     }

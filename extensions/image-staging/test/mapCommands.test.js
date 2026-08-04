@@ -102,6 +102,69 @@ function testBuildCorridorMapHtmlRequiresAtLeastTwoNodes() {
   );
 }
 
+function twoNodes() {
+  return [
+    { name: 'A', label: '', lat: 1, lng: 1 },
+    { name: 'B', label: '', lat: 2, lng: 2 }
+  ];
+}
+
+// zoomSnap must stay 0. At Leaflet's default of 1 every zoom rounds to an
+// integer, which silently swallows fractional zoomDelta values and most
+// padding changes — the map comes back identical and the knob looks broken.
+function testBuildCorridorMapHtmlUsesContinuousZoom() {
+  const html = buildCorridorMapHtml({ corridorName: 'X', nodes: twoNodes() });
+  assert.ok(html.includes('zoomSnap: 0'), 'continuous zoom so fractional deltas survive');
+  assert.ok(html.includes('detectRetina: true'), 'pulls @2x tiles to offset fractional-scale softness');
+}
+
+// Two capture races, both of which produced a bad PNG with no error:
+// treating the first tile batch as done left unloaded white margins, and the
+// tile fade transition left the whole basemap washed out.
+function testBuildCorridorMapHtmlWaitsForTilesToSettle() {
+  const html = buildCorridorMapHtml({ corridorName: 'X', nodes: twoNodes() });
+  assert.ok(html.includes("tileLayer.on('loading'"), 'a new tile batch clears the ready flag');
+  assert.ok(html.includes('setTimeout(() => { window.__mapReady = true; }, 400)'), 'ready only after tiles settle');
+  assert.ok(html.includes('fadeAnimation: false'), 'no fade transition to capture mid-way through');
+}
+
+function testBuildCorridorMapHtmlDefaultsToPlainAutoFit() {
+  const html = buildCorridorMapHtml({ corridorName: 'X', nodes: twoNodes() });
+  assert.ok(html.includes('padding: [50, 50]'), 'keeps the original 50px fit padding');
+  assert.ok(html.includes('if (0 !== 0)'), 'no zoom adjustment applied by default');
+}
+
+function testBuildCorridorMapHtmlAppliesZoomDeltaAndPadding() {
+  const html = buildCorridorMapHtml({
+    corridorName: 'X',
+    nodes: twoNodes(),
+    padding: 80,
+    zoomDelta: 1.25
+  });
+  assert.ok(html.includes('padding: [80, 80]'));
+  assert.ok(html.includes('map.setZoom(map.getZoom() + 1.25)'), 'adjusts relative to the auto-fit');
+}
+
+function testBuildCorridorMapHtmlClampsZoomDelta() {
+  const html = buildCorridorMapHtml({ corridorName: 'X', nodes: twoNodes(), zoomDelta: 99 });
+  assert.ok(html.includes('+ 4)'), 'clamps runaway zoom to the supported range');
+}
+
+// A cleared number input arrives as '' and Number('') is 0, but NaN is one
+// keystroke away ('-', '1e'). A NaN zoom renders as a blank tile field with
+// no error, so it must never reach the template.
+function testBuildCorridorMapHtmlIgnoresNonNumericFraming() {
+  const html = buildCorridorMapHtml({
+    corridorName: 'X',
+    nodes: twoNodes(),
+    padding: 'abc',
+    zoomDelta: NaN
+  });
+  assert.ok(!html.includes('NaN'), 'never emits NaN into the map script');
+  assert.ok(html.includes('padding: [50, 50]'), 'falls back to the default padding');
+  assert.ok(html.includes('if (0 !== 0)'), 'falls back to no zoom adjustment');
+}
+
 function testBuildCorridorMapHtmlEscapesCorridorNameInTitle() {
   const html = buildCorridorMapHtml({
     corridorName: 'A & B <corridor>',
@@ -123,6 +186,12 @@ function testBuildCorridorMapHtmlEscapesCorridorNameInTitle() {
   await testGeocodeWaypointsHandlesHttpError();
   testBuildCorridorMapHtmlIncludesNodesAndStyling();
   testBuildCorridorMapHtmlRequiresAtLeastTwoNodes();
+  testBuildCorridorMapHtmlUsesContinuousZoom();
+  testBuildCorridorMapHtmlWaitsForTilesToSettle();
+  testBuildCorridorMapHtmlDefaultsToPlainAutoFit();
+  testBuildCorridorMapHtmlAppliesZoomDeltaAndPadding();
+  testBuildCorridorMapHtmlClampsZoomDelta();
+  testBuildCorridorMapHtmlIgnoresNonNumericFraming();
   testBuildCorridorMapHtmlEscapesCorridorNameInTitle();
   console.log('mapCommands tests passed');
 })().catch(err => {

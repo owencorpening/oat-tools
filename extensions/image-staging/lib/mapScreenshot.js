@@ -8,13 +8,21 @@ const MAP_READY_TIMEOUT_MS = 15000;
 // see oatImages.chromePath. launchFn is injectable so tests don't need a
 // real Chrome install (mirrors the spawnFn/callClaudeCliFn pattern used by
 // claudeCliClient.js and pullquoteCommands.js).
+//
+// brightness/saturation/contrast are an optional post-capture color grade
+// (see gradeScreenshot below) — omitted entirely unless the caller passes
+// at least one, so a plain screenshot never pays for a sharp round-trip.
 async function screenshotCorridorMap({
   htmlPath,
   outputPath,
   chromePath = DEFAULT_CHROME_PATH,
   width = 700,
   height = 440,
-  launchFn
+  brightness,
+  saturation,
+  contrast,
+  launchFn,
+  gradeFn = gradeScreenshot
 } = {}) {
   if (!htmlPath) throw new Error('screenshotCorridorMap requires htmlPath.');
   if (!outputPath) throw new Error('screenshotCorridorMap requires outputPath.');
@@ -45,10 +53,39 @@ async function screenshotCorridorMap({
     await browser.close();
   }
 
+  if (brightness !== undefined || saturation !== undefined || contrast !== undefined) {
+    await gradeFn({ path: outputPath, brightness, saturation, contrast });
+  }
+
   return { outputPath };
+}
+
+// Rewrites outputPath in place with a brightness/saturation/contrast grade.
+// brightness and saturation are sharp's modulate() multipliers (1 = no
+// change). contrast is a linear() slope around the 128 midpoint (1 = no
+// change, >1 punchier, <1 flatter) — same knob sharp itself calls "contrast"
+// in its docs even though it isn't exposed as a named option.
+async function gradeScreenshot({ path: filePath, brightness, saturation, contrast }) {
+  const sharp = require('sharp');
+  let pipeline = sharp(filePath);
+
+  if (brightness !== undefined || saturation !== undefined) {
+    pipeline = pipeline.modulate({
+      brightness: brightness !== undefined ? brightness : 1,
+      saturation: saturation !== undefined ? saturation : 1
+    });
+  }
+  if (contrast !== undefined) {
+    pipeline = pipeline.linear(contrast, 128 * (1 - contrast));
+  }
+
+  const buffer = await pipeline.toBuffer();
+  const fs = require('fs');
+  await fs.promises.writeFile(filePath, buffer);
 }
 
 module.exports = {
   screenshotCorridorMap,
+  gradeScreenshot,
   DEFAULT_CHROME_PATH
 };
