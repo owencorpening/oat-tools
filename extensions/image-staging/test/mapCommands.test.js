@@ -23,6 +23,15 @@ function testParseCorridorDescriptionAcceptsAsciiArrow() {
   assert.strictEqual(waypoints[0].label, 'desal');
 }
 
+function testParseCorridorDescriptionKeepsCountryInGeocodeQueryOnly() {
+  const waypoints = parseCorridorDescription('Alexandria, Egypt (Mediterranean desal) → Cairo → Aswan');
+  assert.deepStrictEqual(waypoints[0], {
+    name: 'Alexandria',
+    label: 'Mediterranean desal',
+    geocodeQuery: 'Alexandria, Egypt'
+  });
+}
+
 function testParseCorridorDescriptionRejectsSingleNode() {
   assert.throws(() => parseCorridorDescription('Just one place'), /at least two places/);
 }
@@ -179,6 +188,7 @@ function testBuildCorridorMapHtmlEscapesCorridorNameInTitle() {
 (async () => {
   testParseCorridorDescriptionSplitsOnArrowAndExtractsLabel();
   testParseCorridorDescriptionAcceptsAsciiArrow();
+  testParseCorridorDescriptionKeepsCountryInGeocodeQueryOnly();
   testParseCorridorDescriptionRejectsSingleNode();
   testParseCorridorDescriptionRejectsEmpty();
   await testGeocodeWaypointsResolvesInOrder();

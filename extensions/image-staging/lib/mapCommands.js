@@ -35,10 +35,19 @@ function clampNumber(value, min, max, fallback) {
   return Math.min(max, Math.max(min, num));
 }
 
-// Splits a corridor description like "Alexandria (Mediterranean desal) →
-// Cairo → Aswan" into ordered waypoints. This is the same arrow-delimited
-// shorthand already used for corridor descriptions in article prose, so a
-// plain parser is more reliable here than another AI-JSON round trip.
+// Splits a corridor description like "Alexandria, Egypt (Mediterranean
+// desal) → Cairo → Aswan" into ordered waypoints. This is the same
+// arrow-delimited shorthand already used for corridor descriptions in
+// article prose, so a plain parser is more reliable here than another
+// AI-JSON round trip.
+//
+// A place written as "City, Country" keeps the full string as geocodeQuery
+// (Nominatim needs the country — its top hit for a bare city name is often
+// the wrong continent) but trims the country back off for name, which is
+// what ends up baked into the map label. Otherwise every label on the map
+// carries its country, which is redundant on a single-country corridor map
+// and is what pushed "Alexandria, Egypt (Mediterranean desal)" past the
+// edge of a narrower canvas.
 function parseCorridorDescription(text) {
   const segments = String(text || '')
     .split(/→|->/)
@@ -51,10 +60,11 @@ function parseCorridorDescription(text) {
 
   return segments.map(segment => {
     const match = segment.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
-    if (match) {
-      return { name: match[1].trim(), label: match[2].trim(), geocodeQuery: match[1].trim() };
-    }
-    return { name: segment, label: '', geocodeQuery: segment };
+    const core = match ? match[1].trim() : segment;
+    const label = match ? match[2].trim() : '';
+    const commaIdx = core.indexOf(',');
+    const name = commaIdx === -1 ? core : core.slice(0, commaIdx).trim();
+    return { name, label, geocodeQuery: core };
   });
 }
 
