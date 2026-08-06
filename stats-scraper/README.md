@@ -65,6 +65,12 @@ It rejects `--user-data-dir`, `--isolated`, `--config`, and `--storage-state`
 sanity-checks its own hardcoded path against known browser profile locations.
 The file is mode 555; `chmod u+w` first if you need to change it.
 
+The wrapper also passes `--sandbox`, because `playwright-mcp` launches Chrome
+with `--no-sandbox` by default. That default disables the renderer sandbox —
+the thing that contains a malicious page — and this browser reads other
+people's LinkedIn comments, which is the real injection surface. It also
+passes `--block-service-workers`, which nothing here needs.
+
 Backing that up, `~/.claude/settings.json` denies reads of
 `~/.config/google-chrome/**` and edits to the wrapper and `mcp-config.json`.
 
@@ -85,6 +91,10 @@ the prompt uses an absolute path to `config.local.json`. Nothing to fill in.
 
 Run it **weekly, not continuously.** Less exposure to markup drift breaking a
 run midway, and it avoids traffic patterns that look automated to LinkedIn.
+
+**Close the browser when the run finishes.** The login persists in
+`Default/Cookies` on disk, so nothing is lost by closing it — and a window
+left open is a logged-in session sitting there between runs for no reason.
 
 ## Output
 
