@@ -26,7 +26,16 @@ Analytics, Substack Stats) and extract post-level metrics into CSV.
 ## Files
 
 - `mcp-config.json` — MCP server config (isolated profile, own user-data-dir)
+- `config.example.json` — settings template (committed)
+- `config.local.json` — real handle/subdomain/output path (gitignored)
 - `prompt-template.md` — the extraction prompt + setup notes + known risks
+- `README.md` — human-facing overview
+
+Output goes to `outputPath` from `config.local.json`, default
+`~/oat-data/stats/stats-log.csv`. **Not** in this repo — `oat-tools` is a
+public GitHub repo, and the CSV holds Owen's own performance numbers. An
+earlier version was committed and pushed here; removed and scrubbed from
+history 2026-08-06.
 
 ## Next steps
 

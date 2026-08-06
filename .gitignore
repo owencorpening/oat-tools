@@ -7,3 +7,7 @@ worker/.wrangler/
 .vscode/
 *.vsix
 .playwright-mcp/
+
+# stats-scraper: local settings + generated reports
+stats-scraper/config.local.json
+stats-scraper/*.csv
