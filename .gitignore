@@ -6,3 +6,4 @@ worker/.wrangler/
 .wrangler/
 .vscode/
 *.vsix
+.playwright-mcp/

@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "playwright-stats": {
+      "command": "playwright-mcp",
+      "args": [
+        "--user-data-dir=/home/owen/.playwright-stats-profile"
+      ]
+    }
+  }
+}
