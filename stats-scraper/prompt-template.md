@@ -23,7 +23,7 @@ Paste this into **Claude Code** (not claude.ai — the browser session and MCP
 server are local). The `playwright-stats` server is registered at user scope,
 so this works from any directory. Nothing to fill in by hand.
 
-```
+```text
 Read /home/owen/dev/oat-tools/stats-scraper/config.local.json first — it holds
 linkedinHandle, substackSubdomain, outputPath, postsPerPull, and lastRun. Use
 linkedinHandle/substackSubdomain/outputPath/postsPerPull below.
@@ -46,6 +46,11 @@ Using the playwright-stats browser:
    last {postsPerPull} posts. The table paginates at 20 rows — if
    {postsPerPull} > 20, click the pagination "next" icon button (the second
    of the two icon buttons directly below the table) to reach later rows.
+   The stats table only gives day/time ("May 12, 8:03am"), never the year —
+   resolve the year for every post before writing it (mandatory, not just
+   for backfills: with postsPerPull=25 pulled weekly, posts from a prior
+   year enter the window well within a normal year of runs). See "Substack
+   dates omit the year" below for where to find it.
 
 3. Append the results to the CSV at {outputPath}, preserving its existing
    rows and header. Columns: Platform, Title, Date, Audience, Views,
@@ -55,10 +60,16 @@ Using the playwright-stats browser:
    leave Comments blank). Dedup on (URL, Captured At), not URL alone: skip a
    row only if that exact URL already has a row with today's Captured At —
    a post pulled again on a later day gets a new snapshot row instead of
-   being skipped, so numbers over time are visible. For the LinkedIn Date
-   column, decode the absolute date from the activity ID (see "LinkedIn
-   absolute dates" below) rather than using the relative label shown in the
-   feed. Set Captured At to today's date (YYYY-MM-DD) on every new row.
+   being skipped, so numbers over time are visible. Write both platforms'
+   Date column as an absolute ISO date, not whatever the source page shows
+   — this is not a post-processing step, do it before the row is written:
+     - LinkedIn: decode the date from the activity ID (see "LinkedIn
+       absolute dates" below) rather than using the relative label ("2mo")
+       shown in the feed. Date-only: `YYYY-MM-DD`.
+     - Substack: prepend the year resolved in step 2 to the existing
+       day/time, replacing the bare "May 12" with `YYYY-MM-DD`, keeping the
+       time: `2026-05-12, 8:03am`.
+   Set Captured At to today's date (YYYY-MM-DD) on every new row.
 
 4. Do not summarize or analyze — just extract structured data.
 
@@ -176,6 +187,38 @@ a computed guess, and it worked for all 45 posts checked, including one from
 check, don't trust the decode for that post — fall back to the relative label
 and flag it rather than writing a wrong absolute date.
 
+## Substack dates omit the year (found 2026-08-06, still applies to every run)
+
+`/publish/stats/emails` shows "May 12, 8:03am" — no year, ever, even for
+posts over a year old. Never assume the current year: this is not a
+backfill-only problem — at postsPerPull=25 pulled weekly, the window
+crosses into a prior year for part of the year on every steady-state run
+too, not just the one-time backfill that first surfaced this.
+
+**Where the year actually lives, every time**: the `/archive` page lists
+every public post's `<time datetime="...">` (full ISO, with year) alongside
+its permalink in one page load — visit it once per run and match rows to
+the stats table by slug-vs-title (the slug is usually a close match to the
+current title, occasionally a stale draft title). This is the standard
+source, not just a backfill shortcut. A single post's own `/p/<id>`
+permalink also works if you only need one (its "more from this author"
+widget additionally surfaces ~10 *other* posts' dates for free, though it's
+a fixed set, not a chronological neighbor list — don't expect visiting more
+permalinks to reveal new ones). Cross-check by converting the UTC
+`datetime` to `America/Chicago` (Austin) and confirming it reproduces the
+stats table's exact day-of-month and time-of-day before trusting the year.
+
+**Unlisted/deleted posts** (e.g. an internal template post with a handful of
+views) return **404 on both the public permalink and the archive** — they
+never got a real public page. For those, use the dashboard's draft-editor
+route instead: `https://{subdomain}.substack.com/publish/post/<id>` loads
+`GET /api/v1/drafts/<id>` in the network log, whose JSON body has a
+`post_date` field (ISO, UTC) even for a post that was never truly published.
+
+Convert whichever UTC timestamp you found to `America/Chicago` and take the
+date (`YYYY-MM-DD`) — that's what reproduces the stats table's local
+day/time, confirmed across all 25 backfilled posts with zero mismatches.
+
 ## Cadence
 
 Run weekly, not continuously. Reduces both fragility (markup drift breaking
@@ -196,10 +239,14 @@ the OAT stack).
 Columns: Platform, Title, Date, Audience, Views, Comments, Engagement Rate,
 Free Subs, Paid Subs, Estimated Value, Open Rate, URL, Captured At.
 
-- **Date** — the post's own publish date. Absolute (`YYYY-MM-DD`) for both
-  platforms: Substack's stats page already gives one; LinkedIn's is decoded
-  from the activity ID (see "LinkedIn absolute dates" above), not the
-  relative label shown in the feed.
+- **Date** — the post's own publish date, absolute for both platforms, never
+  taken at face value from either stats table. LinkedIn's is decoded from
+  the activity ID (see "LinkedIn absolute dates" above); Substack's stats
+  table gives day/time but omits the year, so the year is resolved
+  per-post from the permalink or archive page (see "Substack dates omit
+  the year" above) and prepended as `YYYY-MM-DD` ahead of the existing
+  `H:MMam/pm` — e.g. `2026-05-12, 8:03am`. LinkedIn rows are date-only
+  (`YYYY-MM-DD`) since LinkedIn never exposes a time-of-day at all.
 - **Captured At** — the date *this row* was scraped (`YYYY-MM-DD`), added
   2026-08-06. Distinct from Date: a post's numbers (views, engagement) can
   be re-pulled later and change, so this says when the snapshot was taken.
