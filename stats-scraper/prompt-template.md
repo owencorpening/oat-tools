@@ -5,12 +5,14 @@ logged into LinkedIn + Substack once, session persists).
 
 ## Prompt
 
-Paste this as-is — it reads your settings from `config.local.json`, so there
-is nothing to fill in by hand.
+Paste this into **Claude Code** (not claude.ai — the browser session and MCP
+server are local). The `playwright-stats` server is registered at user scope,
+so this works from any directory. Nothing to fill in by hand.
 
 ```
-Read stats-scraper/config.local.json first — it holds linkedinHandle,
-substackSubdomain, outputPath, and postsPerPull. Use those values below.
+Read /home/owen/dev/oat-tools/stats-scraper/config.local.json first — it holds
+linkedinHandle, substackSubdomain, outputPath, and postsPerPull. Use those
+values below.
 
 Using the playwright-stats browser:
 
@@ -84,7 +86,7 @@ the OAT stack).
 
 ## Setup notes (one-time)
 
-1. Add `mcp-config.json` to your Claude Code / Claude Desktop MCP settings.
+1. Add `mcp-config.json` to your Claude Code MCP settings (user scope).
 2. Copy `config.example.json` to `config.local.json` and fill in your handle,
    subdomain, and output path.
 3. Launch it once and log into LinkedIn + Substack manually inside that

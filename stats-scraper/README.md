@@ -29,7 +29,8 @@ The tradeoff is fragility — see [Limits](#limits).
 ## Setup (one-time)
 
 1. **Register the MCP server.** Add the contents of `mcp-config.json` to your
-   Claude Code or Claude Desktop MCP settings. It defines one server,
+   Claude Code MCP settings — user scope, so it's available from any
+   directory. (Currently registered in `~/.claude.json`.) It defines one server,
    `playwright-stats`, pointed at a dedicated profile directory
    (`~/.playwright-stats-profile`).
 
@@ -53,9 +54,12 @@ The tradeoff is fragility — see [Limits](#limits).
 
 ## Running a pull
 
-Paste the prompt from `prompt-template.md` to Claude with the
-`playwright-stats` server available. Nothing to fill in — it reads
-`config.local.json` for your handle, subdomain, and output path.
+Paste the prompt from `prompt-template.md` into **Claude Code**. Not claude.ai
+— the MCP server and browser profile are both local, so only a locally-running
+client can reach them.
+
+The server is registered at user scope, so it works from any directory, and
+the prompt uses an absolute path to `config.local.json`. Nothing to fill in.
 
 Run it **weekly, not continuously.** Less exposure to markup drift breaking a
 run midway, and it avoids traffic patterns that look automated to LinkedIn.
