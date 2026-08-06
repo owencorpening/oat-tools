@@ -30,4 +30,14 @@ case "$(readlink -m "$PROFILE")" in
     ;;
 esac
 
-exec playwright-mcp --user-data-dir="$PROFILE" "$@"
+# --sandbox: playwright-mcp launches Chrome with --no-sandbox by default, which
+#   turns off the renderer sandbox — the thing that normally contains a
+#   malicious page. This browser reads other people's LinkedIn comments, so
+#   that containment matters. Verified working on this kernel.
+# --block-service-workers: nothing here needs them, and they run code outside
+#   the page lifecycle and persist across visits.
+exec playwright-mcp \
+  --user-data-dir="$PROFILE" \
+  --sandbox \
+  --block-service-workers \
+  "$@"
