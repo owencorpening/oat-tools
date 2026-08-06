@@ -25,7 +25,9 @@ Analytics, Substack Stats) and extract post-level metrics into CSV.
 
 ## Files
 
-- `mcp-config.json` — MCP server config (isolated profile, own user-data-dir)
+- `bin/stats-mcp` — wrapper that pins the browser profile (mode 555)
+- `mcp-config.json` — MCP server config; invokes the wrapper, not
+  `playwright-mcp` directly
 - `config.example.json` — settings template (committed)
 - `config.local.json` — real handle/subdomain/output path (gitignored)
 - `prompt-template.md` — the extraction prompt + setup notes + known risks
@@ -55,6 +57,9 @@ Setup gotchas found during the first run:
 - `--isolated` and `--user-data-dir` conflict — pass one or the other, not
   both. Use `--user-data-dir` here, since the persisted login session is the
   whole point.
+- Don't add profile flags to `mcp-config.json` — `bin/stats-mcp` rejects
+  `--user-data-dir`, `--isolated`, `--config`, and `--storage-state` and exits
+  64. Change the pinned path in the wrapper itself (`chmod u+w` first).
 
 Deliberately avoids the community LinkedIn scraper MCPs (cookie-based,
 ToS-risk to the account) in favor of browsing your own dashboards through

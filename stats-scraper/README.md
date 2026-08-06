@@ -51,6 +51,28 @@ The tradeoff is fragility — see [Limits](#limits).
 
 4. **Never point this profile at your everyday Chrome profile.** Isolation is
    what keeps a prompt-injection attempt on a page from reaching anything else.
+   This one is enforced, not just advised — see below.
+
+## The profile guard
+
+`bin/stats-mcp` is a wrapper that pins the browser profile and refuses any
+attempt to relocate it. `mcp-config.json` invokes the wrapper rather than
+`playwright-mcp` directly, so the profile path is no longer a string sitting in
+a config file waiting to be edited.
+
+It rejects `--user-data-dir`, `--isolated`, `--config`, and `--storage-state`
+(a config file can set `userDataDir` just as well as the flag can), and
+sanity-checks its own hardcoded path against known browser profile locations.
+The file is mode 555; `chmod u+w` first if you need to change it.
+
+Backing that up, `~/.claude/settings.json` denies reads of
+`~/.config/google-chrome/**` and edits to the wrapper and `mcp-config.json`.
+
+**What this does and doesn't do.** It reliably stops the realistic failure —
+someone or something quietly editing the profile path. It is *not* a sandbox:
+both profiles are owned by the same Unix user, so any process running as you
+can still read either one. Kernel-enforced isolation would mean running the
+browser under `bwrap` with `~/.config` unmounted, which isn't set up here.
 
 ## Running a pull
 

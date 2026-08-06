@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Launches playwright-mcp pinned to the stats-scraper browser profile.
+#
+# The profile path is fixed here on purpose. Pointing this automation at an
+# everyday browser profile would hand it every logged-in session on the
+# machine, so any attempt to redirect it is refused rather than honored.
+#
+# Deliberately mode 555 — `chmod u+w` first if you genuinely need to edit it.
+
+set -euo pipefail
+
+PROFILE="/home/owen/.playwright-stats-profile"
+
+# Reject any flag that could relocate or replace the profile. --config is
+# included because a config file can set userDataDir just as well as the flag.
+for arg in "$@"; do
+  case "$arg" in
+    --user-data-dir|--user-data-dir=*|--isolated|--config|--config=*|--storage-state|--storage-state=*)
+      printf 'stats-mcp: refusing %s — profile is pinned to %s\n' "$arg" "$PROFILE" >&2
+      exit 64
+      ;;
+  esac
+done
+
+# Guard the constant itself, in case a future edit is careless.
+case "$(readlink -m "$PROFILE")" in
+  */.config/google-chrome*|*/.config/chromium*|*/snap/chromium*|*/.mozilla*|*/.config/BraveSoftware*)
+    printf 'stats-mcp: PROFILE points into an everyday browser profile (%s) — refusing\n' "$PROFILE" >&2
+    exit 78
+    ;;
+esac
+
+exec playwright-mcp --user-data-dir="$PROFILE" "$@"
