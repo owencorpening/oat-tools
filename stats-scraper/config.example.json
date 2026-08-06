@@ -2,5 +2,6 @@
   "linkedinHandle": "your-linkedin-handle",
   "substackSubdomain": "your-substack-subdomain",
   "outputPath": "/absolute/path/to/stats-log.csv",
-  "postsPerPull": 10
+  "postsPerPull": 25,
+  "lastRun": null
 }
