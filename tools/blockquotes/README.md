@@ -13,5 +13,5 @@ Both commands render the PNG, commit + push it to the images repo, and replace
 the markdown text with the `<img>` embed automatically — no manual URL
 copy/paste step, which the old CLI required.
 
-See `oat-standards/sops/sop-blockquote-image.md` for the full workflow and
+See `oat-standards/sops/actions/sop-blockquote-image.md` for the full workflow and
 design spec.

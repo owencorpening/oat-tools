@@ -7,7 +7,7 @@ const path = require('path');
 function pullquoteSopPath(vscode) {
   const configured = vscode.workspace.getConfiguration('oatImages').get('pullquoteSopPath', '');
   if (configured) return configured;
-  return path.join(os.homedir(), 'dev', 'oat-standards', 'sops', 'sop-pullquote-selection.md');
+  return path.join(os.homedir(), 'dev', 'oat-standards', 'sops', 'guardrails', 'sop-pullquote-selection.md');
 }
 
 // Returns the SOP path after confirming it exists — the CLI reads the file

@@ -167,7 +167,7 @@
         "oatImages.pullquoteSopPath": {
           "type": "string",
           "default": "",
-          "description": "Absolute path to sop-pullquote-selection.md, used verbatim as the system prompt. Defaults to ~/dev/oat-standards/sops/sop-pullquote-selection.md."
+          "description": "Absolute path to sop-pullquote-selection.md, used verbatim as the system prompt. Defaults to ~/dev/oat-standards/sops/guardrails/sop-pullquote-selection.md."
         },
         "oatImages.pullquoteScanWindowChars": {
           "type": "number",
