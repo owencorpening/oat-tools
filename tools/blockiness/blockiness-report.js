@@ -58,6 +58,13 @@ function classifyBlock(raw, pullquoteMarker = DEFAULT_PULLQUOTE_MARKER) {
   const firstLine = raw.split('\n')[0].trim();
 
   if (/^#{1,6}\s/.test(firstLine)) return 'heading';
+  // HTML figure/img blocks — the actual image/pullquote convention this
+  // repo's SOPs use (<figure><img class="oat-pullquote" ...></figure>),
+  // not markdown ![]() syntax. Check the class on the whole block, not
+  // just firstLine, since it's usually on a nested <img>, not <figure>.
+  if (/^<figure[\s>]/i.test(firstLine) || /^<img[\s>]/i.test(firstLine)) {
+    return /oat-pullquote/i.test(raw) ? 'pullquote' : 'image';
+  }
   if (/^!\[.*?\]\(.*?\)/.test(firstLine)) return 'image';
   if (/^\|.*\|/.test(firstLine) && /^\|[\s:-]+\|/.test(raw.split('\n')[1] || '')) return 'table';
   if (/^>/.test(firstLine) && !firstLine.startsWith(pullquoteMarker)) return 'blockquote';
