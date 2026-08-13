@@ -11,14 +11,25 @@
  *
  * Usage:
  *   node blockiness-report.js <file-or-directory> [--json] [--pullquote-marker=">>"]
+ *     [--classify-lists] [--model=claude-sonnet-5]
  *
  * Exit behavior: prints a human-readable report by default; --json emits
  * machine-readable output suitable for piping into the VS Code extension
  * or a CI step.
+ *
+ * --classify-lists is a separate, opt-in pass: for every bullet list found,
+ * it calls Claude (via `claude -p`, drawing on your Claude Code login rather
+ * than a separate API key — see classifyLists.js) against
+ * oat-standards/sops/guardrails/sop-bullet-list-classification.md to flag
+ * lists that are actually disguised tables/arguments/paragraphs and suggest
+ * a conversion. Unlike the rest of this report, it's not instant or free —
+ * one model call per list — and it never edits the article; it only prints
+ * suggestions for manual review.
  */
 
 const fs = require('fs');
 const path = require('path');
+const { classifyListBlock } = require('./classifyLists');
 
 // ---- Configuration -------------------------------------------------------
 
@@ -71,9 +82,24 @@ function classifyBlock(raw, pullquoteMarker = DEFAULT_PULLQUOTE_MARKER) {
   if (firstLine.startsWith(pullquoteMarker)) return 'pullquote';
   if (/^```/.test(firstLine)) return 'code';
   if (/^(-{3,}|\*{3,}|_{3,})$/.test(firstLine)) return 'hr';
-  if (/^(\*|-|\+|\d+\.)\s/.test(firstLine)) return 'list';
+  if (isListLine(firstLine)) return 'list';
+  // A bold or plain "Label:" line glued directly to its list (no blank
+  // line between them — this repo's articles do this constantly, e.g.
+  // "**Economic Success:**\n✅ item\n✅ item") is still visually a list,
+  // not a wall of prose. Without this, every labeled ✅/❌ list in the
+  // corpus scores as dense unbroken text instead of a break.
+  const secondLine = (raw.split('\n')[1] || '').trim();
+  if (isLabelLine(firstLine) && isListLine(secondLine)) return 'list';
 
   return 'text';
+}
+
+function isListLine(line) {
+  return /^(\*|-|\+|\d+\.|[✅❌])\s/.test(line);
+}
+
+function isLabelLine(line) {
+  return /^(\*\*[^*]+\*\*:?|[A-Za-z][A-Za-z0-9 /'-]*:)\s*$/.test(line);
 }
 
 function countWords(raw) {
@@ -176,6 +202,49 @@ function scoreFile(markdown, filePath, pullquoteMarker) {
   };
 }
 
+// ---- Bullet list classification (opt-in, --classify-lists) ----------------
+
+// Gathers, for every 'list' block: the preceding block's raw text (context
+// for the model) and, if the very next block is also a list, its items too
+// (so PATTERN_C's opposing-list pairing — success/failure, pro/con — has
+// something to actually detect against). Both lists in a pair are still
+// classified independently; nothing here merges them.
+function findListBlocksWithContext(blocks) {
+  const found = [];
+  blocks.forEach((block, i) => {
+    if (block.type !== 'list') return;
+    const preceding = i > 0 ? blocks[i - 1] : null;
+    const next = i < blocks.length - 1 ? blocks[i + 1] : null;
+    found.push({
+      startLine: block.startLine,
+      listItems: block.raw,
+      precedingContext: preceding ? preceding.raw : null,
+      pairedListItems: next && next.type === 'list' ? next.raw : null,
+    });
+  });
+  return found;
+}
+
+async function classifyListsInFile(markdown, filePath, options = {}) {
+  const blocks = parseBlocks(markdown);
+  const candidates = findListBlocksWithContext(blocks);
+  const results = [];
+
+  for (let i = 0; i < candidates.length; i++) {
+    const c = candidates[i];
+    process.stderr.write(
+      `  Classifying list ${i + 1}/${candidates.length} (line ${c.startLine}) in ${filePath}...\n`
+    );
+    try {
+      const classification = await classifyListBlock(c, options);
+      results.push({ startLine: c.startLine, ...classification });
+    } catch (err) {
+      results.push({ startLine: c.startLine, error: err.message });
+    }
+  }
+  return results;
+}
+
 // ---- File discovery ---------------------------------------------------------
 
 function collectMarkdownFiles(target) {
@@ -213,6 +282,24 @@ function renderHumanReport(results) {
     lines.push(`  Headings:                ${r.headingCount} (${r.wordsPerHeading} words/heading)`);
     lines.push(`  Existing pullquotes:     ${r.existingPullquotes}`);
     lines.push(`  Est. read time:          ${r.estimatedReadMinutes} min (${r.totalWords} words)`);
+
+    if (r.listClassifications && r.listClassifications.length > 0) {
+      lines.push('');
+      lines.push('  Bullet list conversion suggestions:');
+      for (const c of r.listClassifications) {
+        if (c.error) {
+          lines.push(`    Line ${c.startLine}: ERROR — ${c.error}`);
+          continue;
+        }
+        lines.push(`    Line ${c.startLine}: PATTERN_${c.pattern} → ${c.verdict} (confidence: ${c.confidence})`);
+        lines.push(`      ${c.reasoning}`);
+        if (c.pairedListId) lines.push(`      Paired with: ${c.pairedListId}`);
+        if (c.convertedOutput) {
+          lines.push('      Suggested conversion:');
+          c.convertedOutput.split('\n').forEach((l) => lines.push(`        ${l}`));
+        }
+      }
+    }
   }
 
   lines.push('');
@@ -226,15 +313,18 @@ function renderHumanReport(results) {
 
 // ---- CLI entry point ---------------------------------------------------------
 
-function main() {
+async function main() {
   const args = process.argv.slice(2);
   const target = args.find((a) => !a.startsWith('--'));
   const jsonOutput = args.includes('--json');
+  const classifyLists = args.includes('--classify-lists');
   const markerArg = args.find((a) => a.startsWith('--pullquote-marker='));
   const pullquoteMarker = markerArg ? markerArg.split('=')[1] : DEFAULT_PULLQUOTE_MARKER;
+  const modelArg = args.find((a) => a.startsWith('--model='));
+  const model = modelArg ? modelArg.split('=')[1] : 'claude-sonnet-5';
 
   if (!target) {
-    console.error('Usage: node blockiness-report.js <file-or-directory> [--json] [--pullquote-marker=">>"]');
+    console.error('Usage: node blockiness-report.js <file-or-directory> [--json] [--pullquote-marker=">>"] [--classify-lists] [--model=claude-sonnet-5]');
     process.exit(1);
   }
 
@@ -246,6 +336,14 @@ function main() {
 
   const results = files.map((f) => scoreFile(fs.readFileSync(f, 'utf8'), f, pullquoteMarker));
 
+  if (classifyLists) {
+    process.stderr.write(`Classifying bullet lists across ${files.length} file(s) — one Claude call per list, this may take a while...\n`);
+    for (const result of results) {
+      const markdown = fs.readFileSync(result.file, 'utf8');
+      result.listClassifications = await classifyListsInFile(markdown, result.file, { model });
+    }
+  }
+
   if (jsonOutput) {
     console.log(JSON.stringify(results, null, 2));
   } else {
@@ -254,7 +352,13 @@ function main() {
 }
 
 if (require.main === module) {
-  main();
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
 }
 
-module.exports = { scoreFile, parseBlocks, classifyBlock, collectMarkdownFiles };
+module.exports = {
+  scoreFile, parseBlocks, classifyBlock, collectMarkdownFiles,
+  findListBlocksWithContext, classifyListsInFile
+};

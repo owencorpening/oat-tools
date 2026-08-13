@@ -28,3 +28,25 @@ npm run report:blockiness -- path/to/article.md --pullquote-marker=">>"
 Accepts a single markdown file or a directory (recursed, skipping
 `node_modules` and dotfolders). Ranks results by blockiness score, highest
 first, and lists the top 5 candidates for `add-pullquotes`.
+
+## Bullet list classification (opt-in)
+
+```bash
+npm run report:blockiness -- path/to/article.md --classify-lists
+```
+
+Separate, opt-in pass: for every bullet list found, calls Claude (via
+`claude -p` — draws on your Claude Code login/subscription, not a separate
+API key) against
+[`oat-standards/sops/guardrails/sop-bullet-list-classification.md`](https://github.com/owencorpening/oat-standards/blob/main/sops/guardrails/sop-bullet-list-classification.md)
+to flag lists that are actually disguised tables, arguments, or paragraphs,
+and suggests a conversion (table, comparison block, or prose). Unlike the
+rest of this report, it's not instant or free — one model call per list —
+and it never edits the article; suggestions are printed for manual review
+only.
+
+Override the model (default `claude-sonnet-5`):
+
+```bash
+npm run report:blockiness -- path/to/article.md --classify-lists --model=claude-opus-5
+```
