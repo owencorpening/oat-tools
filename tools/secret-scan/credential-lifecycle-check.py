@@ -22,10 +22,13 @@ def parse_date(cell):
 
 
 def is_na(cell):
-    # Explicit "n/a" (lowercase, no other content) means tracking doesn't
-    # apply here at all — distinct from "unknown", which means we should
-    # know but don't.
-    return cell.strip().lower() in ("n/a", "none")
+    # "n/a"/"none", or either followed by explanatory text (e.g.
+    # "N/A — retired, project deleted"), means tracking doesn't apply
+    # here at all — distinct from "unknown", which means we should know
+    # but don't. Prefix match, not exact — the inventory's own style is
+    # "N/A — reasoning", never a bare "n/a".
+    normalized = cell.strip().lower()
+    return normalized.startswith("n/a") or normalized.startswith("none")
 
 
 def parse_rows(text):
