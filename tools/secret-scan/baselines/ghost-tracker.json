@@ -1,0 +1,42 @@
+[
+ {
+  "Description": "Found a Stripe Access Token, posing a risk to payment processing services and sensitive financial data.",
+  "StartLine": 14,
+  "EndLine": 14,
+  "StartColumn": 23,
+  "EndColumn": 130,
+  "Match": "REDACTED\"",
+  "Secret": "REDACTED",
+  "File": "src/tracker.gs",
+  "SymlinkFile": "",
+  "Commit": "911eec0a239da46372f051627c8bc8256f9efbbb",
+  "Entropy": 5.521201,
+  "Author": "Owen Corpening",
+  "Email": "Owencorpening@yahoo.com",
+  "Date": "2026-06-18T00:05:44Z",
+  "Message": "feat: add Stripe success/cancel pages and update GAS URLs",
+  "Tags": [],
+  "RuleID": "stripe-access-token",
+  "Fingerprint": "911eec0a239da46372f051627c8bc8256f9efbbb:src/tracker.gs:stripe-access-token:14"
+ },
+ {
+  "Description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+  "StartLine": 20,
+  "EndLine": 20,
+  "StartColumn": 8,
+  "EndColumn": 65,
+  "Match": "E_WEBHOOK_SECRET: \"REDACTED\"",
+  "Secret": "REDACTED",
+  "File": "src/tracker.gs",
+  "SymlinkFile": "",
+  "Commit": "911eec0a239da46372f051627c8bc8256f9efbbb",
+  "Entropy": 4.596483,
+  "Author": "Owen Corpening",
+  "Email": "Owencorpening@yahoo.com",
+  "Date": "2026-06-18T00:05:44Z",
+  "Message": "feat: add Stripe success/cancel pages and update GAS URLs",
+  "Tags": [],
+  "RuleID": "generic-api-key",
+  "Fingerprint": "911eec0a239da46372f051627c8bc8256f9efbbb:src/tracker.gs:generic-api-key:20"
+ }
+]

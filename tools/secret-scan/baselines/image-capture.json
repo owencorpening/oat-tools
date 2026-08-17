@@ -1,0 +1,42 @@
+[
+ {
+  "Description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+  "StartLine": 44,
+  "EndLine": 44,
+  "StartColumn": 8,
+  "EndColumn": 74,
+  "Match": "UNSPLASH_ACCESS_KEY = 'REDACTED'",
+  "Secret": "REDACTED",
+  "File": "READM#E.md",
+  "SymlinkFile": "",
+  "Commit": "73a549e36ea6b2076fdecdbd5b72b70e139590b9",
+  "Entropy": 4.8970814,
+  "Author": "Owen Corpening",
+  "Email": "Owencorpening@yahoo.com",
+  "Date": "2025-11-11T21:54:06Z",
+  "Message": "got it working",
+  "Tags": [],
+  "RuleID": "generic-api-key",
+  "Fingerprint": "73a549e36ea6b2076fdecdbd5b72b70e139590b9:READM#E.md:generic-api-key:44"
+ },
+ {
+  "Description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+  "StartLine": 45,
+  "EndLine": 45,
+  "StartColumn": 8,
+  "EndColumn": 85,
+  "Match": "PEXELS_ACCESS_KEY = 'REDACTED'",
+  "Secret": "REDACTED",
+  "File": "READM#E.md",
+  "SymlinkFile": "",
+  "Commit": "73a549e36ea6b2076fdecdbd5b72b70e139590b9",
+  "Entropy": 4.9389763,
+  "Author": "Owen Corpening",
+  "Email": "Owencorpening@yahoo.com",
+  "Date": "2025-11-11T21:54:06Z",
+  "Message": "got it working",
+  "Tags": [],
+  "RuleID": "generic-api-key",
+  "Fingerprint": "73a549e36ea6b2076fdecdbd5b72b70e139590b9:READM#E.md:generic-api-key:45"
+ }
+]
