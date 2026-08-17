@@ -1,5 +1,6 @@
 credentials/
 node_modules/
+__pycache__/
 worker/.wrangler/
 .dev.vars
 .env
