@@ -62,26 +62,43 @@ def check_row(row, today):
 
     # Missing data — checked independent of whether a rotation policy
     # even applies, per the SOP: an unknown Last-rotated date means the
-    # ledger itself is incomplete for that row.
+    # ledger itself is incomplete for that row. Still flagged even when
+    # a fallback baseline lets the overdue check proceed below — "we're
+    # missing a real record" and "here's our best-effort overdue guess"
+    # are two different facts, not alternatives.
     last_rotated_cell = row["last_rotated"]
-    if "unknown" in last_rotated_cell.lower() or "not rotated" in last_rotated_cell.lower():
+    last_rotated_missing = "unknown" in last_rotated_cell.lower() or "not rotated" in last_rotated_cell.lower()
+    if last_rotated_missing:
         flags.append("Missing data (no Last rotated date)")
-        return flags  # can't compute rotation-overdue without a date
 
     if is_na(row["last_rotated"]):
-        return flags  # explicitly not tracked, nothing to check
+        return flags  # explicitly not tracked, nothing to check further
 
     # Rotation-policy overdue (only when a numeric policy applies)
     if is_na(row["rotation_policy"]):
         return flags
 
     policy_match = DAYS_RE.search(row["rotation_policy"])
+    if not policy_match:
+        return flags
+    policy_days = int(policy_match.group(1))
+
     last_rotated = parse_date(last_rotated_cell)
-    if policy_match and last_rotated:
-        policy_days = int(policy_match.group(1))
-        age_days = (today - last_rotated).days
+    baseline, baseline_label = last_rotated, "last rotated"
+
+    if baseline is None and last_rotated_missing:
+        # Fall back to Issued (verified or assumed) as the rotation
+        # clock's starting point — better than never checking at all,
+        # since a credential that's never been rotated has its issue
+        # date as the true last time it was set.
+        issued_date = parse_date(row["issued"])
+        if issued_date:
+            baseline, baseline_label = issued_date, "issued (no Last rotated on record)"
+
+    if baseline:
+        age_days = (today - baseline).days
         if age_days > policy_days:
-            flags.append(f"rotation overdue ({age_days}d since last rotated, policy {policy_days}d)")
+            flags.append(f"rotation overdue ({age_days}d since {baseline_label}, policy {policy_days}d)")
 
     return flags
 
