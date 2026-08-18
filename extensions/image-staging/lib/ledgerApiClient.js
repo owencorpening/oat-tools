@@ -2,6 +2,23 @@
 
 const http = require('http');
 const https = require('https');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+
+// Fallback for ledgerApiToken so it doesn't have to live in VS Code's
+// settings.json (a file with no access controls of its own, synced to
+// the cloud if Settings Sync is on). Same file-based-secret convention
+// already used elsewhere in this codebase (oat-tools/credentials/).
+function readTokenFallback() {
+  try {
+    return fs.readFileSync(
+      path.join(os.homedir(), '.oat-secrets', 'ledger-api-token'), 'utf8'
+    ).trim();
+  } catch {
+    return '';
+  }
+}
 
 function createLedgerApiClient({ baseUrl, token, request = requestJson } = {}) {
   if (!baseUrl) return null;
@@ -139,7 +156,7 @@ function createLedgerWriterFromSettings(vscode) {
   const config = vscode.workspace.getConfiguration('oatImages');
   return createLedgerApiClient({
     baseUrl: config.get('ledgerApiUrl', ''),
-    token: config.get('ledgerApiToken', '')
+    token: config.get('ledgerApiToken', '') || readTokenFallback()
   });
 }
 

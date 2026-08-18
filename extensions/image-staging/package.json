@@ -152,7 +152,7 @@
         "oatImages.ledgerApiToken": {
           "type": "string",
           "default": "",
-          "description": "Optional bearer token for oatImages.ledgerApiUrl."
+          "description": "Optional bearer token for oatImages.ledgerApiUrl. Leave empty to fall back to ~/.oat-secrets/ledger-api-token (mode 600) instead of storing the live value here in settings.json, which has no access control of its own."
         },
         "oatImages.claudeCliPath": {
           "type": "string",
