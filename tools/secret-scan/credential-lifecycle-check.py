@@ -61,13 +61,21 @@ def check_row(row, today):
                 flags.append(f"expiring in {days_left}d (expiry {exp.isoformat()})")
 
     # Missing data — checked independent of whether a rotation policy
-    # even applies, per the SOP: an unknown Last-rotated date means the
-    # ledger itself is incomplete for that row. Still flagged even when
-    # a fallback baseline lets the overdue check proceed below — "we're
-    # missing a real record" and "here's our best-effort overdue guess"
-    # are two different facts, not alternatives.
+    # even applies, per the SOP: no parseable Last-rotated date means
+    # the ledger itself is incomplete for that row. Based on whether a
+    # real date can actually be extracted, not on substring-matching
+    # "unknown"/"not rotated" — a cell can legitimately contain "not
+    # rotated" as descriptive history (e.g. "2026-08-16 (= issued —
+    # deliberately not rotated)") while still carrying a real date;
+    # matching the phrase regardless of that date was a real bug, not
+    # a hypothetical one — caught it live on pexels-access-key. Still
+    # flagged even when a fallback baseline lets the overdue check
+    # proceed below — "we're missing a real record" and "here's our
+    # best-effort overdue guess" are two different facts, not
+    # alternatives.
     last_rotated_cell = row["last_rotated"]
-    last_rotated_missing = "unknown" in last_rotated_cell.lower() or "not rotated" in last_rotated_cell.lower()
+    last_rotated_parsed = parse_date(last_rotated_cell)
+    last_rotated_missing = last_rotated_parsed is None and not is_na(last_rotated_cell)
     if last_rotated_missing:
         flags.append("Missing data (no Last rotated date)")
 
@@ -83,8 +91,7 @@ def check_row(row, today):
         return flags
     policy_days = int(policy_match.group(1))
 
-    last_rotated = parse_date(last_rotated_cell)
-    baseline, baseline_label = last_rotated, "last rotated"
+    baseline, baseline_label = last_rotated_parsed, "last rotated"
 
     if baseline is None and last_rotated_missing:
         # Fall back to Issued (verified or assumed) as the rotation
