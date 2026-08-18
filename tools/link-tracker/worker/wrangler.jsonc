@@ -1,0 +1,16 @@
+{
+  "$schema": "https://unpkg.com/wrangler/config-schema.json",
+  "name": "oat-link-tracker",
+  "main": "index.js",
+  "compatibility_date": "2026-08-18",
+  "observability": {
+    "enabled": true
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "oat-link-tracker",
+      "database_id": "d14b21e1-0a11-4af6-b75c-c2002c7b1a26"
+    }
+  ]
+}
