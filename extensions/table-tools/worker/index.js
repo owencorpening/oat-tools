@@ -6,7 +6,7 @@ const LIGHT_TEAL       = { red: 0.5804, green: 0.8235, blue: 0.7412 };
 const ROW_TINT         = { red: 0.9412, green: 0.9686, blue: 0.9725 };
 const TOTAL_BG         = { red: 0.9098, green: 0.9569, blue: 0.9608 };
 
-export default {
+const handler = {
   async fetch(request, env) {
     if (request.method !== 'POST') {
       return json({ error: 'POST required' }, 405);
@@ -30,13 +30,41 @@ export default {
         sheetUrl: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`
       });
     } catch (e) {
+      if (e instanceof ReauthRequiredError) {
+        console.error('OAT table promotion: re-auth required', { message: e.message });
+        return json({ error: e.message, reauthRequired: true }, 401);
+      }
       console.error('OAT table promotion failed', { message: e.message });
       return json({ error: e.message }, 500);
     }
   }
 };
 
+export default handler;
+// Named exports for testing (Cloudflare only looks for the default
+// export above; these don't affect the deployed Worker at all).
+export { handler, getAccessToken, ReauthRequiredError };
+
 // ── Auth ─────────────────────────────────────────────────────────────────────
+
+// The OAuth app ("OAT Table Promotion", project oat-tools-owen) is in
+// Google's "Testing" publishing status, which caps refresh token
+// lifetime at 7 days regardless of use — this is expected to happen
+// periodically, not a bug, until/unless the app is published to
+// Production. See ../../../oat-standards/credentials-inventory.md,
+// oat-promote-tables-google-refresh-token row.
+class ReauthRequiredError extends Error {
+  constructor(googleError) {
+    super(
+      'Google authorization has expired or been revoked (refresh token invalid — ' +
+      'expected every ~7 days while this OAuth app is in "Testing" publishing status). ' +
+      'Fix: run `node extensions/table-tools/scripts/get-refresh-token.js` from the ' +
+      'oat-tools repo root, complete the browser consent flow, then retry. ' +
+      `(Google's error: ${googleError})`
+    );
+    this.name = 'ReauthRequiredError';
+  }
+}
 
 async function getAccessToken(env) {
   if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET || !env.GOOGLE_REFRESH_TOKEN) {
@@ -54,7 +82,18 @@ async function getAccessToken(env) {
     })
   });
   const data = await res.json();
-  if (!data.access_token) throw new Error('Token exchange failed: ' + JSON.stringify(data));
+
+  if (!data.access_token) {
+    // invalid_grant is Google's specific, documented error for an
+    // expired or revoked refresh token — distinct from other failure
+    // modes (bad client_id/secret, network issues, etc.) that a re-auth
+    // wouldn't fix.
+    if (data.error === 'invalid_grant') {
+      throw new ReauthRequiredError(data.error_description || data.error);
+    }
+    throw new Error('Token exchange failed: ' + JSON.stringify(data));
+  }
+
   return data.access_token;
 }
 
