@@ -2,9 +2,15 @@
 
 const ledger = require('../../../extensions/image-staging/lib/assetLedgerD1');
 const { PROVIDERS, buildAttributionText } = require('./imageProviders');
+const { syncLedgerToSheet } = require('./sheetSync');
 
 async function fetch(request, env) {
   return handleRequest(request, env);
+}
+
+async function scheduled(controller, env) {
+  const summary = await syncLedgerToSheet(env);
+  console.log(`syncLedgerToSheet: ${summary.updated} updated, ${summary.appended} appended, ${summary.total} ledger assets`);
 }
 
 async function handleRequest(request, env = {}) {
@@ -567,6 +573,7 @@ function emptyToUndefined(value) {
 
 module.exports = {
   fetch,
+  scheduled,
   handleRequest,
   handleListImageProviders,
   handleSearchImageProviders,

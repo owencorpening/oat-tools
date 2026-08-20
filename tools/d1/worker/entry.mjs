@@ -2,5 +2,6 @@
 import worker from './index.js';
 
 export default {
-  fetch: worker.fetch
+  fetch: worker.fetch,
+  scheduled: worker.scheduled
 };

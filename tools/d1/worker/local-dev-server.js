@@ -18,7 +18,10 @@ function main() {
     DB: db,
     LEDGER_API_TOKEN: process.env.LEDGER_API_TOKEN || '',
     UNSPLASH_ACCESS_KEY: process.env.UNSPLASH_ACCESS_KEY || '',
-    PEXELS_ACCESS_KEY: process.env.PEXELS_ACCESS_KEY || ''
+    PEXELS_ACCESS_KEY: process.env.PEXELS_ACCESS_KEY || '',
+    GOOGLE_SERVICE_ACCOUNT_EMAIL: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || '',
+    GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY || '',
+    SHEET_ID: process.env.SHEET_ID || ''
   };
 
   const server = http.createServer((req, res) => {

@@ -5,8 +5,14 @@ Fresh-start D1 schema for the image and table asset pipeline.
 The image pipeline is clean-slate D1: the ledger is the source of truth for
 image capture, staging, placement, and discard state. The legacy "Images"
 Google Sheet still exists as a human-readable mirror — the image-capture
-Apps Script forwards bookmarklet captures to `POST /captures/image` and its
-`syncFromLedger()` (hourly trigger) upserts sheet rows from `GET /assets`.
+Apps Script forwards bookmarklet captures to `POST /captures/image`, and
+this Worker's own hourly Cron Trigger (`scheduled` in `index.js`, backed by
+`sheetSync.js`) mirrors ledger state back into the sheet directly via the
+Google Sheets API. This replaced an Apps Script time-driven trigger
+(`syncFromLedger()`, still present in `image-capture/Code.gs` as an
+undeployed manual fallback) whose OAuth grant could silently expire —
+Cron Triggers authenticate with a self-signed Google service-account JWT
+minted fresh on every run instead.
 
 ## Deployment
 
@@ -14,7 +20,9 @@ Deployed 2026-07-19 at **https://oat-publishing-ledger.owencorpening.workers.dev
 (D1 database `oat-publishing-ledger`, id in `worker/wrangler.jsonc`). Secrets
 set on the Worker: `LEDGER_API_TOKEN` (bearer auth — same value as the
 `oatImages.ledgerApiToken` VS Code setting), `UNSPLASH_ACCESS_KEY`,
-`PEXELS_ACCESS_KEY`. Redeploy after code changes with:
+`PEXELS_ACCESS_KEY`, `GOOGLE_SERVICE_ACCOUNT_EMAIL`,
+`GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`, `SHEET_ID` (see "Scheduled Sync"
+below). Redeploy after code changes with:
 
 ```bash
 cd tools/d1/worker && npx wrangler deploy
@@ -127,3 +135,40 @@ These replace the old Google Apps Script Script Properties used by the
 sheet-backed capture endpoint. In deployed Cloudflare Workers, store them as
 Worker secrets. In `npm run ledger:dev:node`, pass them as environment
 variables before starting the local server.
+
+## Scheduled Sync
+
+An hourly Cron Trigger (`"0 * * * *"` in `wrangler.jsonc`) runs `scheduled()`
+in `index.js`, which calls `sheetSync.js`'s `syncLedgerToSheet()`: reads
+assets straight from D1 (`ledger.listAssets`, no HTTP round-trip), diffs
+them against the current sheet (`sheetSync.js`'s `buildSyncPlan`, a
+byte-for-byte port of the old Apps Script `syncFromLedger()` logic), and
+writes back via the Sheets API — one batched `values:batchUpdate` call for
+existing-row refreshes, one `values:append` call for new rows.
+
+Authentication is a Google service-account JWT, hand-signed with the Web
+Crypto API (`googleServiceAccountAuth.js` — no JWT library dependency, kept
+consistent with this repo's zero-runtime-dependency convention) and
+exchanged for a short-lived access token on every run. This has no
+persistent OAuth grant that can silently expire, unlike Apps Script
+time-driven triggers.
+
+Requires three Worker secrets:
+
+- `GOOGLE_SERVICE_ACCOUNT_EMAIL` / `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` —
+  from a GCP service account's downloaded JSON key. The service account
+  must be shared on the target Google Sheet as **Editor** — Sheets API
+  access is governed by the sheet's share list, not GCP IAM roles.
+- `SHEET_ID` — the same Sheet ID the Apps Script project used (Apps Script
+  editor → gear icon → Script Properties → `SHEET_ID`).
+
+Simulate the cron locally with `npm run ledger:dev` running, then:
+
+```bash
+curl "http://localhost:8787/cdn-cgi/handler/scheduled"
+```
+
+(Not `/__scheduled` — that's the older documented path; current Wrangler
+uses `/cdn-cgi/handler/scheduled`, printed in the `wrangler dev` startup
+warning.) Point local testing at a scratch/duplicate sheet, not the
+production Images sheet.
