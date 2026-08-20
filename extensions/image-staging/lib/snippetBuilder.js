@@ -12,6 +12,12 @@ function buildSnippet({ target, imageUrl, displayName, name, figNum, figureNumbe
       return `![bg left:40%](${imageUrl})`;
     case 'linkedin-post':
       return `Image URL: ${imageUrl}\nPhotographer: ${photographer} | License: ${license}\n(Attach manually in LinkedIn editor.)`;
+    case 'markdown-image':
+      // Draftsman's format — plain markdown image syntax, identical shape
+      // to its own placeholder marker (see draftsmanMarker.js), so a
+      // resolved image and an unresolved placeholder are indistinguishable
+      // to Review's cursor-line detection and the editor decoration regex.
+      return `![${desc}](${imageUrl})`;
     default:
       return imageUrl;
   }
