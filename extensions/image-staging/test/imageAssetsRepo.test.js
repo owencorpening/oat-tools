@@ -9,6 +9,7 @@ const {
   createPlacedAsset,
   writeProviderComplianceFiles,
   removePlacedAssetBySourceUrl,
+  removePlacedAssetByRawAssetUrl,
   buildRawGitHubBase,
   guessExt,
   deleteSource
@@ -110,6 +111,44 @@ function testRemovePlacedAssetBySourceUrl() {
   assert(!fs.existsSync(path.join(repoPath, 'water-series', 'part-09', 'discard-me')));
 }
 
+function testRemovePlacedAssetByRawAssetUrl() {
+  const repoPath = tempRepo();
+  const asset = createPlacedAsset({
+    repoPath,
+    series: 'water-series',
+    partDir: 'part-09',
+    slug: 'discard-me-too',
+    image: {
+      sourceUrl: 'https://example.com/discard-me-too.jpg',
+      photographer: 'A',
+      license: 'CC'
+    }
+  });
+
+  const result = removePlacedAssetByRawAssetUrl({ repoPath, rawAssetUrl: asset.rawAssetUrl });
+
+  assert.strictEqual(result.status, 'removed');
+  assert.strictEqual(result.series, 'water-series');
+  assert.strictEqual(result.partDir, 'part-09');
+  assert.strictEqual(result.slug, 'discard-me-too');
+  assert(!fs.existsSync(path.join(repoPath, 'water-series', 'part-09', 'discard-me-too')));
+}
+
+function testRemovePlacedAssetByRawAssetUrlNoOpsOnMalformedUrl() {
+  const repoPath = tempRepo();
+  const result = removePlacedAssetByRawAssetUrl({ repoPath, rawAssetUrl: 'https://example.com/not-a-raw-github-url.jpg' });
+  assert.strictEqual(result.status, 'unrecognized-url');
+}
+
+function testRemovePlacedAssetByRawAssetUrlReportsMissingDir() {
+  const repoPath = tempRepo();
+  const result = removePlacedAssetByRawAssetUrl({
+    repoPath,
+    rawAssetUrl: 'https://raw.githubusercontent.com/owencorpening/oat-assets/main/water-series/part-09/never-existed/never-existed.jpg'
+  });
+  assert.strictEqual(result.status, 'missing');
+}
+
 function testWriteProviderComplianceFiles() {
   const assetDir = tempRepo();
 
@@ -189,6 +228,9 @@ function tempRepo() {
   testCreateRepoAssetUsesSourcePathExtensionForLocalFiles();
   testCreatePlacedAssetCompatibility();
   testRemovePlacedAssetBySourceUrl();
+  testRemovePlacedAssetByRawAssetUrl();
+  testRemovePlacedAssetByRawAssetUrlNoOpsOnMalformedUrl();
+  testRemovePlacedAssetByRawAssetUrlReportsMissingDir();
   testWriteProviderComplianceFiles();
   testWriteProviderComplianceFilesOmitsPingReceiptWhenNotPinged();
   await testDeleteSourceRemovesFile();

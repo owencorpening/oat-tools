@@ -9,6 +9,7 @@ const { registerPlannedPlacementRunCommand } = require('./lib/plannedPlacementRu
 const { registerPullquoteCommands } = require('./lib/pullquoteCommands');
 const { registerReviewImageNeedCommand } = require('./lib/reviewImageNeedCommand');
 const { registerUrlIntakeCommand } = require('./lib/urlIntakeCommand');
+const { registerDraftsmanCommands } = require('./lib/draftsmanCommands');
 
 function activate(context) {
   const outputChannel = vscode.window.createOutputChannel('OAT Image Staging');
@@ -35,6 +36,7 @@ function activate(context) {
   registerExecutePlannedPlacementCommand(context, vscode, { ledgerWriter });
   registerPlannedPlacementRunCommand(context, vscode, { ledgerWriter });
   registerPullquoteCommands(context, vscode);
+  registerDraftsmanCommands(context, vscode, { ledgerWriter });
 }
 
 function deactivate() {}

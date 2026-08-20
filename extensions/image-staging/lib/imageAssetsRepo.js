@@ -149,6 +149,30 @@ function removePlacedAssetBySourceUrl({ repoPath, series = 'water-series', place
   return { status: 'removed', partDir, slug: matches[0] };
 }
 
+// removePlacedAssetBySourceUrl (above) matches against url.txt — the
+// original provider source URL. Draftsman's Review command only ever has
+// the *rendered* raw.githubusercontent.com URL at the cursor when
+// replacing an already-placed image, a different value never written to
+// url.txt. This is the inverse of createRepoAsset's own rawAssetUrl
+// construction (https://raw.githubusercontent.com/{owner}/{repo}/{branch}/
+// {series}/{partDir}/{slug}/{fileName}) — parses series/partDir/slug
+// straight out of the URL's path segments, no directory scan or file-
+// content comparison needed.
+function removePlacedAssetByRawAssetUrl({ repoPath, rawAssetUrl }) {
+  const match = /raw\.githubusercontent\.com\/[^/]+\/[^/]+\/[^/]+\/(.+)$/.exec(String(rawAssetUrl || ''));
+  if (!match) return { status: 'unrecognized-url' };
+
+  const segments = match[1].split('/').filter(Boolean);
+  if (segments.length < 4) return { status: 'unrecognized-url' };
+
+  const [series, partDir, slug] = segments;
+  const assetDir = path.join(repoPath, series, partDir, slug);
+  if (!fs.existsSync(assetDir)) return { status: 'missing', assetDir };
+
+  fs.rmSync(assetDir, { recursive: true, force: true });
+  return { status: 'removed', assetDir, series, partDir, slug };
+}
+
 function guessExt(url) {
   const m = String(url || '').match(/\.(jpe?g|png|webp|gif)(\?|$)/i);
   return m ? `.${m[1].toLowerCase().replace('jpeg', 'jpg')}` : '.jpg';
@@ -189,5 +213,6 @@ module.exports = {
   deleteSource,
   gitPushAsset,
   removePlacedAssetBySourceUrl,
+  removePlacedAssetByRawAssetUrl,
   guessExt
 };

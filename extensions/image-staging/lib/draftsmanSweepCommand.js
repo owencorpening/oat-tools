@@ -44,7 +44,7 @@ async function sweepArticle({
   place = runPlacement,
   buildPlacement = buildDraftsmanPlacement,
   resolveLine = resolvePlaceholderLine,
-  repoPath = imagesRepoPath(vscode)
+  repoPath
 } = {}) {
   const editor = vscode.window.activeTextEditor;
   if (!editor) {
@@ -62,6 +62,7 @@ async function sweepArticle({
     return { resolved: 0, remaining: 0, promptPresented: false };
   }
 
+  const resolvedRepoPath = repoPath || imagesRepoPath(vscode);
   let resolved = 0;
   let promptPresented = false;
 
@@ -81,7 +82,7 @@ async function sweepArticle({
         });
 
         if (asset) {
-          await placeResolvedAsset({ vscode, editor, asset, placeholder, place, buildPlacement, resolveLine, ledgerWriter, repoPath });
+          await placeResolvedAsset({ vscode, editor, asset, placeholder, place, buildPlacement, resolveLine, ledgerWriter, repoPath: resolvedRepoPath });
           resolved++;
           continue;
         }
