@@ -1298,7 +1298,18 @@ _timeoutId = setTimeout(() => {
   }
 }
 
-module.exports = { ImagePanelProvider, placementTargetFromDraftPath };
+module.exports = {
+  ImagePanelProvider,
+  placementTargetFromDraftPath,
+  extractSeriesAndPartDir,
+  nextFigureNumber,
+  captionSuggestionForImage,
+  placementId,
+  sagaId,
+  writeSnippetToActiveEditor,
+  isMarkdownDraft,
+  hasDirectPlacementLedgerMethods
+};
 
 function isMarkdownDraft(editor) {
   return /\.md$/i.test(editor?.document?.uri?.fsPath || '');

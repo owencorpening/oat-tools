@@ -91,6 +91,18 @@
       {
         "command": "oatImages.insertPullquoteAndContinue",
         "title": "OAT Images: Insert Pullquote & Continue"
+      },
+      {
+        "command": "oatImages.flagImage",
+        "title": "OAT Images: Draftsman — Flag Image"
+      },
+      {
+        "command": "oatImages.sweepArticle",
+        "title": "OAT Images: Draftsman — Sweep Article"
+      },
+      {
+        "command": "oatImages.reviewImage",
+        "title": "OAT Images: Draftsman — Review Image"
       }
     ],
     "menus": {
@@ -128,9 +140,26 @@
           "command": "oatImages.createReviewNeed",
           "when": "resourceLangId == markdown",
           "group": "oat"
+        },
+        {
+          "command": "oatImages.flagImage",
+          "when": "resourceLangId == markdown",
+          "group": "oat"
+        },
+        {
+          "command": "oatImages.reviewImage",
+          "when": "resourceLangId == markdown",
+          "group": "oat"
         }
       ]
     },
+    "keybindings": [
+      {
+        "command": "oatImages.flagImage",
+        "key": "ctrl+alt+i",
+        "when": "editorTextFocus && resourceLangId == markdown"
+      }
+    ],
     "configuration": {
       "title": "OAT Image Staging",
       "properties": {
