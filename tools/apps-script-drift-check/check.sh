@@ -53,8 +53,17 @@ while IFS= read -r -d '' clasp_json; do
   while IFS= read -r -d '' live_file; do
     fname=$(basename "$live_file")
     [ "$fname" = ".clasp.json" ] && continue
-    git_file="$project_dir/$fname"
-    if [ ! -f "$git_file" ]; then
+    # clasp pull always writes script files with a .js extension, even
+    # when the git copy is tracked as .gs (a valid, interchangeable
+    # scriptExtensions entry per .clasp.json — Ghost Tracker uses .js,
+    # image-capture still uses .gs). Match by stem across any extension
+    # actually present in the project dir before concluding "not tracked".
+    stem="${fname%.*}"
+    git_file=""
+    for candidate in "$project_dir/$fname" "$project_dir/$stem".*; do
+      [ -f "$candidate" ] && { git_file="$candidate"; break; }
+    done
+    if [ -z "$git_file" ]; then
       echo "=== $rel/$fname: exists live, not tracked in git ===" >> "$out"
       file_drifted=1
     elif ! diff -u "$git_file" "$live_file" >> "$out" 2>&1; then
