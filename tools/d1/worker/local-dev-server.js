@@ -17,6 +17,8 @@ function main() {
   const env = {
     DB: db,
     LEDGER_API_TOKEN: process.env.LEDGER_API_TOKEN || '',
+    // Loopback-only dev server: allow token-less use unless a token is given.
+    LEDGER_ALLOW_UNAUTHENTICATED: process.env.LEDGER_API_TOKEN ? 'false' : 'true',
     UNSPLASH_ACCESS_KEY: process.env.UNSPLASH_ACCESS_KEY || '',
     PEXELS_ACCESS_KEY: process.env.PEXELS_ACCESS_KEY || '',
     GOOGLE_SERVICE_ACCOUNT_EMAIL: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || '',

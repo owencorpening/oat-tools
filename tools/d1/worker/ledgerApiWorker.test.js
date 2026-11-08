@@ -1,7 +1,12 @@
 'use strict';
 
 const assert = require('assert');
-const { handleRequest } = require('./index');
+const { handleRequest: realHandleRequest } = require('./index');
+
+// Most tests exercise routes, not auth, and pass no token; give them the
+// explicit local opt-out. Auth behaviour is tested against realHandleRequest.
+const handleRequest = (request, env = {}) =>
+  realHandleRequest(request, { LEDGER_ALLOW_UNAUTHENTICATED: 'true', ...env });
 const loc = require('./imageProviders/loc');
 const { FakeD1 } = require('./testFakeD1');
 
@@ -859,6 +864,27 @@ async function testAuthAndErrors() {
   assert.strictEqual(response.status, 404);
 }
 
+// #12: no token configured must not mean "open".
+async function testAuthFailsClosedWithoutToken() {
+  const asset = { asset: { id: 'asset-closed' } };
+  let response = await realHandleRequest(jsonRequest('/assets', asset), { DB: new FakeD1() });
+  assert.strictEqual(response.status, 401, 'unset token, no opt-out: rejected');
+
+  response = await realHandleRequest(new Request('https://ledger.test/assets'), { DB: new FakeD1(), LEDGER_API_TOKEN: '' });
+  assert.strictEqual(response.status, 401, 'empty token: rejected (GET too)');
+
+  response = await realHandleRequest(jsonRequest('/assets', asset), { DB: new FakeD1(), LEDGER_ALLOW_UNAUTHENTICATED: 'yes' });
+  assert.strictEqual(response.status, 401, 'opt-out must be exactly "true"');
+
+  response = await realHandleRequest(jsonRequest('/assets', asset, 'secret'), { DB: new FakeD1(), LEDGER_API_TOKEN: 'secret' });
+  assert.notStrictEqual(response.status, 401, 'correct token still accepted');
+
+  response = await realHandleRequest(jsonRequest('/assets', asset, 'wrong'), {
+    DB: new FakeD1(), LEDGER_API_TOKEN: 'secret', LEDGER_ALLOW_UNAUTHENTICATED: 'true'
+  });
+  assert.strictEqual(response.status, 401, 'opt-out never overrides a configured token');
+}
+
 function unsplashPhoto(id) {
   return {
     id,
@@ -1046,6 +1072,7 @@ function pexelsPhoto(id) {
   await testListRoutes();
   await testPlacementLifecycleRoutes();
   await testAuthAndErrors();
+  await testAuthFailsClosedWithoutToken();
   console.log('ledgerApiWorker tests passed');
 })().catch(error => {
   console.error(error);

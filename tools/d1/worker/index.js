@@ -482,8 +482,15 @@ function requireDb(env) {
   if (!env.DB) throw httpError(500, 'Missing D1 DB binding');
 }
 
+// Fails closed (#12): with no LEDGER_API_TOKEN configured, every request is
+// rejected. The only way to run without a token is the explicit
+// LEDGER_ALLOW_UNAUTHENTICATED=true opt-out, set by the loopback-only
+// local-dev-server and the unit tests, never by the deployed Worker.
 function authorize(request, env) {
-  if (!env.LEDGER_API_TOKEN) return;
+  if (!env.LEDGER_API_TOKEN) {
+    if (env.LEDGER_ALLOW_UNAUTHENTICATED === 'true') return;
+    throw httpError(401, 'Unauthorized');
+  }
   const expected = `Bearer ${env.LEDGER_API_TOKEN}`;
   if (request.headers.get('authorization') !== expected) {
     throw httpError(401, 'Unauthorized');
