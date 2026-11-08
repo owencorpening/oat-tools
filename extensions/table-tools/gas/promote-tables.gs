@@ -1,5 +1,8 @@
 // OAT: Promote Tables — Google Apps Script web app
-// Deploy as: Execute as Me, Anyone can access
+//
+// RETIRED 2026-11-08 (#10): replaced by the Cloudflare Worker in ../worker/.
+// All web-app deployments were archived because they ran with "Anyone"
+// access and no auth. Kept for reference only. Do not redeploy as written.
 // Returns: { spreadsheetId, sheetUrl } on success, { error } on failure
 
 var DEEP_WATER_BLUE = '#005f73';
