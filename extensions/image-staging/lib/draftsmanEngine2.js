@@ -2,7 +2,11 @@
 
 const downloadsProvider = require('./downloadsProvider');
 
-// No dedicated image-generation style guide exists in oat-standards —
+// Canonical source for BRAND_STYLE_GUIDE and the prompt template below:
+// oat-standards/sops/actions/sop-draftsman.md ("Engine 2 — generation
+// prompt"). Change the wording there first, then sync it here.
+//
+// Original note: no dedicated image-generation style guide exists in oat-standards —
 // checked: visual-identity.md only covers logo/badge usage (Granite Gray +
 // Brass Gold #B8860B), "cyanotype" appears nowhere in oat-standards except
 // the Draftsman SOP itself. Hardcoded here from the SOP's own wording,
