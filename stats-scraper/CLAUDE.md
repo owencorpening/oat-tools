@@ -6,9 +6,17 @@ credential scraping, no third-party data broker).
 
 ## Status
 
-- **State:** Operational — first successful run 2026-08-06, both platforms
-- **Last updated:** 2026-08-06
+- **State:** Operational — first successful run 2026-08-06, both platforms.
+  Runs so far: 2026-08-06 (backfill), 2026-09-15, 2026-11-07.
+- **Last updated:** 2026-11-07
 - **Owner:** Owen Corpening
+
+> **LinkedIn re-platformed the activity feed before the 2026-11-07 run** (new
+> "SDUI" stack, obfuscated class names). The scrape was repaired in place and
+> `prompt-template.md`'s gotchas section was rewritten to match — read it
+> before touching selectors. Substack is unchanged apart from the archive
+> page's pagination; see the same file. Expect further drift: nothing here
+> selects on a documented API.
 
 ## What it does
 

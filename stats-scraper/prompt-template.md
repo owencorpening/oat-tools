@@ -10,6 +10,15 @@ pages). `stats-log.csv` now has complete history back to the start of both
 accounts. Steady-state weekly runs only need recent posts — see `postsPerPull`
 below, now 25 (was 10). No need to re-run the backfill.
 
+**⚠️ LinkedIn re-platformed the activity feed between 2026-09-15 and
+2026-11-07.** `[data-urn*="urn:li:activity"]` is gone, `window` doesn't
+scroll, and feed cards no longer show impression counts. Read "LinkedIn
+scrape gotchas" below **before** writing any selector — the three naive
+approaches it rules out now all fail silently, returning a plausible-looking
+partial result (20 of 48 cards) rather than an error. Expected shape of a
+healthy LinkedIn pass as of 2026-11-07: **48 cards, 1 repost excluded, 9
+without analytics widgets, 47 posts.**
+
 **Columns added 2026-08-06**: `Captured At` (ISO date the row was scraped —
 distinct from the post's own publish date, lets you tell how stale a row's
 numbers are) and the LinkedIn `Date` column now holds an absolute ISO date
@@ -37,8 +46,12 @@ Using the playwright-stats browser:
 1. Navigate to
    https://www.linkedin.com/in/{linkedinHandle}/recent-activity/all/
    Extract: post text preview, impressions, comment count for the last
-   {postsPerPull} posts. See "LinkedIn scrape gotchas" below — do not trust a
-   single accessibility snapshot or a naive querySelectorAll, both undercount.
+   {postsPerPull} posts. Read "LinkedIn scrape gotchas" below BEFORE writing
+   a selector — a single accessibility snapshot, a naive querySelectorAll,
+   `[data-urn]` (removed 2026-11-07) and `window.scrollBy` (no-op on this
+   page) all undercount without erroring. Impressions and comment counts are
+   no longer in the feed cards at all: enumerate posts from the feed, then
+   read each post's numbers from its /analytics/post-summary/ page.
 
 2. Navigate to
    https://{substackSubdomain}.substack.com/publish/stats/emails
@@ -46,11 +59,15 @@ Using the playwright-stats browser:
    last {postsPerPull} posts. The table paginates at 20 rows — if
    {postsPerPull} > 20, click the pagination "next" icon button (the second
    of the two icon buttons directly below the table) to reach later rows.
-   The stats table only gives day/time ("May 12, 8:03am"), never the year —
-   resolve the year for every post before writing it (mandatory, not just
-   for backfills: with postsPerPull=25 pulled weekly, posts from a prior
-   year enter the window well within a normal year of runs). See "Substack
-   dates omit the year" below for where to find it.
+   The stats table gives day/time with no year for recent posts ("May 12,
+   8:03am"), and adds a year only past ~12 months ("Nov 04 2025, 3:24pm") —
+   resolve the year from a dated source for every post before writing it
+   (mandatory, not just for backfills: with postsPerPull=25 pulled weekly,
+   posts from a prior year enter the window well within a normal year of
+   runs). Where the table does show a year, require it to agree rather than
+   skipping the lookup. Also grab each row's own /p/<id> link for the URL
+   column. See "Substack dates omit the year" below for where the year
+   lives and how to join it to these rows.
 
 3. Append the results to the CSV at {outputPath}, preserving its existing
    rows and header. Columns: Platform, Title, Date, Audience, Views,
@@ -84,59 +101,122 @@ Using the playwright-stats browser:
 the output path points at your own performance data. `config.example.json` is
 the committed template.
 
-## LinkedIn scrape gotchas (found 2026-08-06, updated during full backfill)
+## LinkedIn scrape gotchas (found 2026-08-06, **rewritten 2026-11-07** after a markup migration)
 
-The recent-activity feed is harder to scrape reliably than it looks:
+The recent-activity feed is harder to scrape reliably than it looks, and
+LinkedIn re-platformed the page between the 2026-09-15 and 2026-11-07 runs.
 
-- **Selector: use `[data-urn*="urn:li:activity"]`, not `[role="article"]` +
-  the analytics link.** The first backfill pass harvested by finding the
-  "View analytics" link inside each `[role="article"]` card and pulling the
-  activity URN out of its href. That silently drops every post whose
-  impressions widget hasn't rendered — which turned out to be **7 of 46**
-  posts, all older ones LinkedIn no longer shows rolling impression data
-  for (analytics past ~360 days still exist at the direct URL, just not as
-  an inline widget on the feed card). `[data-urn*="urn:li:activity"]` is
-  present on every post's own wrapper element regardless of whether the
-  analytics widget rendered — harvest by that, then check separately
-  whether `a[href*="/analytics/post-summary/"]` exists inside each one.
-- **Impressions widget missing ≠ skip it.** For any post where the
-  analytics link isn't in the card, navigate directly to
-  `https://www.linkedin.com/analytics/post-summary/urn:li:activity:<id>/`
-  and read the numbers from there — same data, just not inlined in the
-  feed. Confirmed working back to an 11-year-old post.
+> **2026-11-07 — the page moved to a new "SDUI" rendering stack.** Three of
+> the things this section used to tell you to do now silently fail:
+> `[data-urn*="urn:li:activity"]` no longer exists anywhere in the DOM,
+> `window` no longer scrolls, and feed cards no longer contain an
+> impressions number at all. Class names are obfuscated, per-build hashes
+> (`gvymfy gvymfx gvyk8o …`) — never select on them. The bullets below are
+> updated; the pre-migration behavior is noted where it's still useful
+> history.
+
+- **Selector: use `[role="listitem"][componentkey^="update-card"]`.** Each
+  post card is a `div` with that pair, inside the container
+  `[data-testid="ProfileRecentActivityAll-{linkedinHandle}"]`
+  (`role="list"`, `data-component-type="LazyColumn"`). This is the current
+  stand-in for the old `data-urn` wrapper: present on every card whether or
+  not the analytics widget rendered.
+  - *History:* the original backfill harvested by finding the "View
+    analytics" link inside each `[role="article"]` card and pulling the URN
+    out of its href. That silently drops every post whose impressions
+    widget hasn't rendered — **7 of 46** posts then, **9 of 48** on
+    2026-11-07. Then `[data-urn*="urn:li:activity"]` fixed it; now that
+    attribute is gone and `componentkey` is the replacement.
+- **The activity ID is now *only* in the analytics href.** Post-migration,
+  the sole place the URN appears in the DOM is
+  `a[href*="/analytics/post-summary/"]` inside the card — i.e. the exact
+  fragile source the bullet above warns about, now unavoidable. So the
+  card-level selector gets you a complete *count* of posts, but the ~9
+  oldest cards have **no ID available from the feed at all**. The
+  `componentkey` is an opaque token, not an encoded ID. Harvest those cards
+  by `componentkey` so you still know they exist, then resolve their IDs
+  out of band (matching title against prior `stats-log.csv` rows works, and
+  for a steady-state `postsPerPull=25` run they're well outside the window
+  anyway). Don't let a missing ID silently shrink the pull.
+- **Impressions are no longer in the feed card — every post needs its
+  analytics page.** This used to be true only for posts older than ~360
+  days; as of 2026-11-07 the card shows a bare "View analytics" link and no
+  number for *any* post. Read each one from
+  `https://www.linkedin.com/analytics/post-summary/urn:li:activity:<id>/`.
+  That page is **server-rendered**, so don't navigate 25 times — `fetch()`
+  it from the page with `credentials: 'include'`, parse with `DOMParser`,
+  and read `body.innerText`. 25 posts at a ~700ms gap is one tool call.
+  Confirmed working back to an 11-year-old post.
+- **The scroll container is `<main>`, not `window`.** `document.body` is
+  `overflow: hidden` and `document.documentElement.scrollHeight` sits at
+  roughly viewport height (1355px) no matter how much feed there is, so
+  `window.scrollBy`/`scrollTo` are silent no-ops — a full scroll pass will
+  run to completion with `scrollY: 0` and harvest only the ~20 cards that
+  happened to be in the initial DOM. Find it generically rather than by
+  class: the element with `scrollHeight > clientHeight`, `clientHeight >
+  200`, and computed `overflow-y` of `auto|scroll` (currently exactly one
+  match, `main`, e.g. 11212 vs 1303). Drive `sc.scrollBy(0, 500)` and read
+  `sc.scrollTop` / `sc.scrollHeight`.
+- **Virtualization**: the feed unmounts off-screen post cards as you scroll,
+  and a persistent `window`-scoped accumulator only helps if you actually
+  scroll past every section — jumping straight to the bottom skips whatever
+  hasn't rendered yet along the way and there's no way to recover it after
+  the fact except reloading and re-scrolling from the top. Scroll in small
+  increments (~400-600px) with a several-hundred-ms wait between each,
+  harvesting after every step, for the *entire* height from top to bottom in
+  one pass. Pagination fires on the container's scroll and grows
+  `scrollHeight` in jumps — observed at ~9500px (+10 cards), ~14000px (+10),
+  ~17500px (+6), then two more at the end. Stop once several consecutive
+  steps add nothing *and* `scrollTop` has stopped advancing; a known total
+  (48 cards / 47 posts as of 2026-11-07) is the best confirmation the feed
+  is exhausted.
+  - *Note:* `browser_network_requests` filtered on
+    `voyagerFeedDashProfileUpdates` no longer confirms exhaustion — the
+    initial page is server-rendered and the new stack's pagination fetches
+    didn't appear under that name in the 2026-11-07 run.
 - **Reposts show up in your own activity feed too.** A card whose actor
   line reads "`<You> reposted this`" followed by someone else's name is a
   repost of someone else's content, not your own post — exclude it from the
-  stats log rather than logging their content under your byline. It still
-  carries `data-urn`, so the selector above will surface it; check the
-  actor text before treating it as a real post.
-- **Shadow DOM**: `document.querySelectorAll('article')` returns nothing —
-  LinkedIn's post cards are `<div role="article">` inside shadow roots.
-  If you do need to walk `[role="article"]` for anything, recurse through
-  `el.shadowRoot` on every element, don't rely on plain `querySelectorAll`.
-- **Virtualization**: the feed unmounts off-screen post cards as you scroll,
-  and a persistent `window`-scoped accumulator only helps if you actually
-  scroll past every section — jumping straight to the bottom (even via
-  `scrollTo(0, scrollHeight)`) skips whatever hasn't rendered yet along the
-  way and there's no way to recover it after the fact except reloading and
-  re-scrolling from the top. Scroll in small increments (~400-600px) with
-  a several-hundred-ms wait between each, harvesting after every step, for
-  the *entire* height from top to bottom in one pass. Stop once several
-  consecutive steps produce no new posts and `scrollY` stops advancing —
-  confirm via `browser_network_requests` (filter `voyagerFeedDashProfileUpdates`)
-  that no further paginated fetch (`start=N`) has fired after multiple
-  more scroll attempts, which means the feed has no more pages to give you.
+  stats log rather than logging their content under your byline. It is a
+  normal `update-card` listitem, so the selector above will surface it;
+  check the actor text before treating it as a real post. (1 of 48 on
+  2026-11-07, same single repost as the backfill.) These cards also carry no
+  analytics link, so they land in the "no ID" bucket — don't confuse them
+  with old posts.
+- **Shadow DOM / `<article>`**: `document.querySelectorAll('article')`
+  returns nothing, and post-migration `[role="article"]` is gone as well
+  (cards are `role="listitem"`). The 2026-11-07 cards were reachable by
+  plain `querySelectorAll` with no shadow roots in the path — but if you
+  write a generic element walk for this page, still recurse `el.shadowRoot`
+  rather than assuming plain `querySelectorAll` sees everything.
 - **Ordering**: don't trust DOM order across a scroll session (accumulation
   order isn't guaranteed once virtualization has swapped nodes in and out).
-  Instead sort the accumulated results by the numeric activity ID parsed
-  out of the URN — these IDs are Snowflake-style and directly decode to a
+  Instead sort the accumulated results by the numeric activity ID from the
+  analytics href — these IDs are Snowflake-style and directly decode to a
   timestamp (see "LinkedIn absolute dates" below), so sorting descending
   gives newest-first reliably. Take the top `postsPerPull` after sorting
-  for a steady-state run.
+  for a steady-state run. Cards with no ID can't be sorted this way; they
+  were all the oldest posts on 2026-11-07, but verify that rather than
+  assuming it.
+- **Title extraction from the new card layout**: split the card's
+  `innerText` into non-empty lines and find the relative-time line
+  (`/^\d+\s*(mo|yr|w|d|h)\b/`, which may read "5mo • Edited"); the post's
+  own text starts on the **next** line. Lines before it are chrome: "Feed
+  post", your name, "• You", your headline. Don't index from the top of the
+  card.
+- **Some titles come back CSS-truncated** with a trailing "…" (e.g. "The
+  Aquifer Restoration Manife…") — these are link-preview/article cards
+  where the visible text is clipped, not the real title. Prior
+  `stats-log.csv` rows already hold the resolved full title for anything
+  from the backfill; reuse that by activity ID rather than writing the
+  truncated string. Note the CSV's titles also have leading emoji stripped
+  (card "🌊 Part IV: …" vs CSV "Part IV: …") — keep reusing the CSV form so
+  a post's title stays stable across snapshot rows.
 - **Document/carousel posts**: some posts have no caption text, only a PDF
   carousel that's still rendering when you read it ("Your document is
   loading" placeholder). Don't fabricate a title — label it explicitly
   (e.g. `[Document/carousel post — no caption text]`) rather than guessing.
+  Two such posts are already logged under that exact label.
 - **Analytics page label/value order isn't consistent.** On
   `/analytics/post-summary/`, the headline stats (Impressions, Social
   engagements) show as *value then label* ("28 / Impressions"), but the
@@ -146,6 +226,13 @@ The recent-activity feed is harder to scrape reliably than it looks:
   breakdown wrong — it'll silently attribute the Reactions count to
   Comments. Read the full text block and pair each label with the number
   that *follows* it for the breakdown section.
+  **Still true on 2026-11-07** (this page survived the migration). The
+  collapsed `innerText` reads
+  `…Discovery122ImpressionsProfile activity0…Engagement1Social
+  engagementsReactions0Comments1Reposts0Saves0Sends on LinkedIn0…`, so
+  `/([\d,]+)\s*Impressions/` and `/Comments\s*([\d,]+)/` are the correct
+  pair of directions. Pull `Reactions` too as a sanity check — it's the
+  number a "before the label" regex would wrongly hand you for Comments.
 
 ## LinkedIn absolute dates (found 2026-08-06, during the backfill)
 
@@ -187,26 +274,63 @@ a computed guess, and it worked for all 45 posts checked, including one from
 check, don't trust the decode for that post — fall back to the relative label
 and flag it rather than writing a wrong absolute date.
 
-## Substack dates omit the year (found 2026-08-06, still applies to every run)
+**Re-validated 2026-11-07**, and this is now the load-bearing check on the
+whole LinkedIn pull: all 25 IDs in the window decoded monotonically in ID
+order and reproduced the dates recorded on 2026-08-06 and 2026-09-15
+exactly. Since the migration removed every other date signal from the page,
+a decode that disagrees with a prior `stats-log.csv` row for the same
+activity ID is the clearest early warning that something upstream changed —
+compare against the CSV on every run, not just on backfills.
 
-`/publish/stats/emails` shows "May 12, 8:03am" — no year, ever, even for
-posts over a year old. Never assume the current year: this is not a
-backfill-only problem — at postsPerPull=25 pulled weekly, the window
-crosses into a prior year for part of the year on every steady-state run
-too, not just the one-time backfill that first surfaced this.
+## Substack dates omit the year (found 2026-08-06, updated 2026-11-07)
+
+`/publish/stats/emails` shows "May 12, 8:03am" — no year for recent posts.
+Never assume the current year: this is not a backfill-only problem — at
+postsPerPull=25 pulled weekly, the window crosses into a prior year for
+part of the year on every steady-state run too, not just the one-time
+backfill that first surfaced this.
+
+**2026-11-07 correction**: the table *does* print a year once a post is
+past roughly 12 months ("Nov 04 2025, 3:24pm"), so "no year, ever" was too
+strong. That doesn't change the procedure — the rows that matter are the
+recent ones, which are still bare, and the 12-month boundary is exactly
+where a wrong guess is most likely. Resolve the year from a dated source
+for every row regardless; where the table does show one, treat it as a
+check that must agree, not as a reason to skip the lookup.
 
 **Where the year actually lives, every time**: the `/archive` page lists
 every public post's `<time datetime="...">` (full ISO, with year) alongside
-its permalink in one page load — visit it once per run and match rows to
-the stats table by slug-vs-title (the slug is usually a close match to the
-current title, occasionally a stale draft title). This is the standard
-source, not just a backfill shortcut. A single post's own `/p/<id>`
-permalink also works if you only need one (its "more from this author"
-widget additionally surfaces ~10 *other* posts' dates for free, though it's
-a fixed set, not a chronological neighbor list — don't expect visiting more
-permalinks to reveal new ones). Cross-check by converting the UTC
-`datetime` to `America/Chicago` (Austin) and confirming it reproduces the
-stats table's exact day-of-month and time-of-day before trusting the year.
+its permalink — visit it once per run and match rows to the stats table by
+slug-vs-title (the slug is usually a close match to the current title,
+occasionally a stale draft title). This is the standard source, not just a
+backfill shortcut. A single post's own `/p/<id>` permalink also works if
+you only need one (its "more from this author" widget additionally surfaces
+~10 *other* posts' dates for free, though it's a fixed set, not a
+chronological neighbor list — don't expect visiting more permalinks to
+reveal new ones). Cross-check by converting the UTC `datetime` to
+`America/Chicago` (Austin) and confirming it reproduces the stats table's
+exact day-of-month and time-of-day before trusting the year.
+
+**The archive is not one page load, and its pagination is not a URL
+param** (found 2026-11-07): `/archive?sort=new` renders only the newest
+**12** posts and lazy-loads the rest on scroll. `?offset=12` / `?offset=24`
+are **ignored** — they return the same first 12 every time, which looks
+like success if you only count rows (24 links found, 12 unique). And
+`/api/v1/archive?limit=&offset=` returns **400**, so there's no clean JSON
+shortcut. Navigate to `/archive` for real and scroll (`window` does scroll
+here, unlike LinkedIn), harvesting `<time datetime>` per `/p/<slug>` link
+until the count stops growing — 24 of 25 posts in the 2026-11-07 run, the
+25th being the unlisted one below.
+
+**Matching archive dates to stats-table rows**: don't rely on title string
+equality — the archive and the stats table disagree on curly quotes,
+en/em dashes and truncation. Match on the rendered date instead: convert
+each archive `datetime` to `America/Chicago`, format it the way the table
+does (`%b %d, h:MMam/pm`), and require **exactly one** candidate per row.
+That makes the prescribed cross-check *be* the join, so a row that would
+have been ambiguous fails loudly instead of silently taking a wrong year.
+The numeric post ID for the `URL` column comes from the stats table row's
+own link (`a[href]` → `/p/<id>`), not from the archive's slug.
 
 **Unlisted/deleted posts** (e.g. an internal template post with a handful of
 views) return **404 on both the public permalink and the archive** — they
@@ -214,10 +338,25 @@ never got a real public page. For those, use the dashboard's draft-editor
 route instead: `https://{subdomain}.substack.com/publish/post/<id>` loads
 `GET /api/v1/drafts/<id>` in the network log, whose JSON body has a
 `post_date` field (ISO, UTC) even for a post that was never truly published.
+You can skip the page load and `fetch('/api/v1/drafts/<id>')` directly —
+confirmed 2026-11-07 for id `183861863` ("Post template", `is_published:
+false`), which returned `post_date: 2026-01-08T01:53:19.548Z` → Chicago
+`2026-01-07 7:53pm`, reproducing the stats table's "Jan 07, 7:53pm". Note
+its `draft_title` ("Master Post template") differs from the title the stats
+table shows ("Post template") — another reason not to join on title.
 
 Convert whichever UTC timestamp you found to `America/Chicago` and take the
 date (`YYYY-MM-DD`) — that's what reproduces the stats table's local
-day/time, confirmed across all 25 backfilled posts with zero mismatches.
+day/time, confirmed across all 25 posts on both the 2026-08-06 backfill and
+the 2026-11-07 run with zero mismatches (including both DST boundaries).
+
+**Stats-table pagination still works as described** (confirmed 2026-11-07):
+20 rows per page, and the two icon buttons just below the table are
+prev/next — the first is `disabled` on page 1, so click the second. A
+reliable way to find them without touching class names: buttons not
+contained by the `<table>`, whose bounding box sits within ~160px below the
+table's bottom edge, that contain an `<svg>`. Page 2 held the remaining 5
+of 25.
 
 ## Cadence
 
