@@ -73,6 +73,11 @@
           "default": "",
           "description": "Cloudflare Worker URL for OAT table promotion."
         },
+        "oatTables.workerToken": {
+          "type": "string",
+          "default": "",
+          "description": "Shared secret for the table-promotion Worker. Leave empty to read ~/.oat-secrets/promote-tables-token (preferred: keeps it out of settings.json)."
+        },
         "oatTables.imagesRepoPath": {
           "type": "string",
           "default": "",

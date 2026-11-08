@@ -47,6 +47,13 @@ async function promoteAllTables() {
     );
     return;
   }
+  const workerToken = getWorkerToken();
+  if (!workerToken) {
+    vscode.window.showErrorMessage(
+      'OAT Tables: Worker token not set. Put it in ~/.oat-secrets/promote-tables-token (or oatTables.workerToken).'
+    );
+    return;
+  }
 
   const partNum = await vscode.window.showInputBox({
     prompt: 'Part number (e.g. 09)',
@@ -97,7 +104,7 @@ async function promoteAllTables() {
         const title = `part${partNum.trim()}-table-${descriptor}`;
 
         try {
-          const { spreadsheetId, sheetUrl } = await callWorker(workerUrl, {
+          const { spreadsheetId, sheetUrl } = await callWorker(workerUrl, workerToken, {
             title,
             headers: table.headers,
             rows: table.rows
@@ -224,7 +231,19 @@ async function applyFigureRepairs(editor) {
 
 // ── Cloudflare Worker call ────────────────────────────────────────────────────
 
-function callWorker(url, payload) {
+// Shared secret for the promote-tables Worker (#11). The file fallback keeps
+// it out of settings.json, the same convention as the ledger API token.
+function getWorkerToken() {
+  const configured = getSetting('workerToken', '');
+  if (configured) return configured;
+  try {
+    return fs.readFileSync(path.join(os.homedir(), '.oat-secrets', 'promote-tables-token'), 'utf8').trim();
+  } catch {
+    return '';
+  }
+}
+
+function callWorker(url, token, payload) {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify(payload);
     const urlObj = new URL(url);
@@ -234,7 +253,8 @@ function callWorker(url, payload) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(body)
+        'Content-Length': Buffer.byteLength(body),
+        'Authorization': `Bearer ${token}`
       },
       timeout: 30000
     }, res => {

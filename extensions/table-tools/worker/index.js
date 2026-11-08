@@ -12,6 +12,12 @@ const handler = {
       return json({ error: 'POST required' }, 405);
     }
 
+    // Every request must carry the shared secret. Fails closed: if the
+    // PROMOTE_TABLES_TOKEN secret is unset, nothing gets through (#11).
+    if (!isAuthorized(request, env)) {
+      return json({ error: 'Unauthorized' }, 401);
+    }
+
     let title, headers, rows;
     try {
       ({ title, headers, rows } = await request.json());
@@ -246,6 +252,20 @@ async function driveRequest(token, method, path, body) {
   const data = await res.json();
   if (!res.ok) throw new Error(`Drive API ${path}: ${JSON.stringify(data.error ?? data)}`);
   return data;
+}
+
+function isAuthorized(request, env) {
+  const expected = env && env.PROMOTE_TABLES_TOKEN;
+  if (!expected) return false;
+  const given = request.headers.get('Authorization') || '';
+  return timingSafeEqual(given, `Bearer ${expected}`);
+}
+
+function timingSafeEqual(a, b) {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
 }
 
 function json(data, status = 200) {
