@@ -75,10 +75,11 @@ async function testSweepEngine1ThenEngine2FallbackOrdering() {
     query === 'context for stock match' ? { provider: 'pexels', title: 'Stock Match' } : null;
   const stageEngine1Result = async ({ result }) => ({ asset: { id: 'asset-stock', ...result } });
 
-  // Engine 2 / Downloads check: only the second placeholder's query has
-  // something already sitting in Downloads; the third and fourth have nothing.
-  const awaitGeneratedIntake = async ({ query }) =>
-    query === 'context already in downloads' ? { id: 'asset-downloads', title: 'Downloads Match' } : null;
+  // Engine 2 / Downloads check: for the second placeholder the author picks
+  // an image already sitting in Downloads; for the third they pick nothing.
+  // (Sweep passes the placeholder context for display; the fake keys on it.)
+  const awaitGeneratedIntake = async ({ context }) =>
+    context === 'context already in downloads' ? { id: 'asset-downloads', title: 'Downloads Match' } : null;
 
   let promptBuilt = null;
   const buildGeneratePrompt = ({ context }) => { promptBuilt = context; return `PROMPT for ${context}`; };

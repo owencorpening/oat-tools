@@ -110,7 +110,7 @@ async function resolveOnePlaceholder(placeholder, { vscode, ledgerWriter, attemp
     return staged && staged.asset;
   }
 
-  const generatedAsset = await awaitGeneratedIntake({ vscode, query: placeholder.context });
+  const generatedAsset = await awaitGeneratedIntake({ vscode, context: placeholder.context });
   if (!generatedAsset) return null;
 
   if (ledgerWriter && ledgerWriter.saveAsset) {

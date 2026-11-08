@@ -43,23 +43,64 @@ async function presentPromptForRefinement({ vscode, prompt } = {}) {
 // tab. No new staging directory: confirmed ~/Downloads is already the
 // real, working local holding pen for generated candidates, cleaned up
 // automatically by imagePipeline.js after a successful placement.
-async function awaitGeneratedIntake({ vscode, downloadsProviderModule = downloadsProvider, query = '' } = {}) {
-  const { results } = await downloadsProviderModule.searchDownloads({ query });
-  const generated = results.filter(result => result.sourceKind === 'ai-generated');
-  const candidates = generated.length > 0 ? generated : results;
+//
+// Candidates come from listRecentDownloads (images saved in the last 24h,
+// newest first), NOT from a keyword search on the placeholder context: the
+// context is a whole paragraph and generator exports are named by
+// timestamp, so keyword matching never found them. The author picks; no
+// file is ever auto-selected.
+// `context` is display-only (shown in the picker so the author knows which
+// placeholder it's for) — it is never used to filter files.
+async function awaitGeneratedIntake({
+  vscode,
+  downloadsProviderModule = downloadsProvider,
+  downloadsDir,
+  context = '',
+  now = Date.now()
+} = {}) {
+  const { results: candidates } = await downloadsProviderModule.listRecentDownloads({
+    ...(downloadsDir ? { downloadsDir } : {}),
+    now
+  });
 
   if (candidates.length === 0) {
-    await vscode.window.showInformationMessage('Draftsman: no images found in Downloads yet — generate one, save it, then try again.');
+    await vscode.window.showInformationMessage(
+      'Draftsman: no images saved to Downloads in the last 24 hours — generate one, save it, then try again.'
+    );
     return null;
   }
 
   const picked = await vscode.window.showQuickPick(
-    candidates.map(result => ({ label: result.title, description: result.sourceName, result })),
-    { placeHolder: 'Select the generated image to intake' }
+    candidates.map(result => ({
+      label: result.title,
+      description: [result.sourceKind === 'ai-generated' ? 'AI-generated' : null, formatAge(result.modifiedAt, now)]
+        .filter(Boolean)
+        .join(' · '),
+      detail: result.sourceName,
+      result
+    })),
+    { placeHolder: pickerPrompt(context) }
   );
   if (!picked) return null;
 
   return downloadsProviderModule.stageDownloadsResult(picked.result);
 }
 
-module.exports = { BRAND_STYLE_GUIDE, buildGeneratePrompt, presentPromptForRefinement, awaitGeneratedIntake };
+function pickerPrompt(context) {
+  const clean = String(context || '').trim();
+  const shown = clean.length > 80 ? `${clean.slice(0, 79).trim()}…` : clean;
+  return shown
+    ? `Select the generated image for "${shown}" (most recent first)`
+    : 'Select the generated image to intake (most recent first)';
+}
+
+function formatAge(modifiedAt, now) {
+  const ms = now - new Date(modifiedAt).getTime();
+  if (!Number.isFinite(ms)) return null;
+  const minutes = Math.max(0, Math.round(ms / 60000));
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes} min ago`;
+  return `${Math.round(minutes / 60)} h ago`;
+}
+
+module.exports = { BRAND_STYLE_GUIDE, formatAge, buildGeneratePrompt, presentPromptForRefinement, awaitGeneratedIntake };

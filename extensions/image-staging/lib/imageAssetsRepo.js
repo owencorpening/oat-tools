@@ -158,7 +158,12 @@ function removePlacedAssetBySourceUrl({ repoPath, series = 'water-series', place
 // {series}/{partDir}/{slug}/{fileName}) — parses series/partDir/slug
 // straight out of the URL's path segments, no directory scan or file-
 // content comparison needed.
-function removePlacedAssetByRawAssetUrl({ repoPath, rawAssetUrl }) {
+// Pure path resolution — maps a raw GitHub asset URL to its local asset
+// folder in the images repo without touching the filesystem. Draftsman's
+// Review uses this to REPORT a replaced image's folder; it never deletes
+// (an asset can be shared by other articles, so cleanup is a deliberate,
+// manual decision).
+function resolvePlacedAssetDirFromRawAssetUrl({ repoPath, rawAssetUrl }) {
   const match = /raw\.githubusercontent\.com\/[^/]+\/[^/]+\/[^/]+\/(.+)$/.exec(String(rawAssetUrl || ''));
   if (!match) return { status: 'unrecognized-url' };
 
@@ -166,7 +171,16 @@ function removePlacedAssetByRawAssetUrl({ repoPath, rawAssetUrl }) {
   if (segments.length < 4) return { status: 'unrecognized-url' };
 
   const [series, partDir, slug] = segments;
-  const assetDir = path.join(repoPath, series, partDir, slug);
+  return { status: 'resolved', assetDir: path.join(repoPath, series, partDir, slug), series, partDir, slug };
+}
+
+// Destructive. Not called by Draftsman any more (see
+// resolvePlacedAssetDirFromRawAssetUrl) — kept only for deliberate cleanup.
+function removePlacedAssetByRawAssetUrl({ repoPath, rawAssetUrl }) {
+  const resolved = resolvePlacedAssetDirFromRawAssetUrl({ repoPath, rawAssetUrl });
+  if (resolved.status !== 'resolved') return resolved;
+
+  const { assetDir, series, partDir, slug } = resolved;
   if (!fs.existsSync(assetDir)) return { status: 'missing', assetDir };
 
   fs.rmSync(assetDir, { recursive: true, force: true });
@@ -214,5 +228,6 @@ module.exports = {
   gitPushAsset,
   removePlacedAssetBySourceUrl,
   removePlacedAssetByRawAssetUrl,
+  resolvePlacedAssetDirFromRawAssetUrl,
   guessExt
 };

@@ -1,6 +1,9 @@
 'use strict';
 
 const assert = require('assert');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const Module = require('module');
 
 const originalLoad = Module._load;
@@ -32,12 +35,12 @@ function fakeEditor(lineText) {
   };
 }
 
-function fakeVscode(editor, { engineChoiceValue = 'stock' } = {}) {
+function fakeVscode(editor, { engineChoiceValue = 'stock', messages = [] } = {}) {
   return {
     window: {
       activeTextEditor: editor,
       showErrorMessage: () => {},
-      showInformationMessage: () => {},
+      showInformationMessage: message => { messages.push(message); },
       showQuickPick: async items => items.find(item => item.value === engineChoiceValue) || null
     }
   };
@@ -64,8 +67,8 @@ function testFindImageLineAtCursorReturnsNullForNonImageLine() {
 
 async function testReviewImageOnPlaceholderViaStockDoesNotRemoveAnything() {
   const editor = fakeEditor(PLACEHOLDER_LINE);
-  const vscode = fakeVscode(editor, { engineChoiceValue: 'stock' });
-  let removeCalled = false;
+  const messages = [];
+  const vscode = fakeVscode(editor, { engineChoiceValue: 'stock', messages });
 
   const result = await reviewImage({
     vscode,
@@ -75,59 +78,100 @@ async function testReviewImageOnPlaceholderViaStockDoesNotRemoveAnything() {
     place: async options => ({ placed: options }),
     buildPlacement: ({ asset }) => ({ placement: { id: 'p', assetId: asset.id }, saga: { id: 's' } }),
     resolveLine: () => async () => {},
-    repoPath: '/repo/oat-assets',
-    removeOldAsset: () => { removeCalled = true; }
+    repoPath: '/repo/oat-assets'
   });
 
-  assert.strictEqual(removeCalled, false, 'a placeholder has no old asset to remove');
   assert.strictEqual(result.placed.asset.id, 'asset-1');
+  assert.strictEqual(result.previousAsset, null, 'a placeholder has no old asset to report');
+  assert(messages.includes('OAT: Draftsman placed the image.'));
 }
 
-async function testReviewImageOnStockResolvedViaGenerateRemovesOldAsset() {
-  const editor = fakeEditor(STOCK_RESOLVED_LINE);
-  const vscode = fakeVscode(editor, { engineChoiceValue: 'generate' });
-  let removedWith = null;
+// Bug #2: Review must never delete the replaced image's asset folder. Runs
+// against a REAL temp images repo with the real (default) old-asset
+// locator, and asserts the folder and file survive and the path is reported.
+async function testReviewImageOnStockResolvedViaGenerateLeavesOldAssetInPlace() {
+  const { repoPath, assetDir, imagePath } = makeTempImagesRepo('water-series/part-09/wetland', 'wetland.jpg');
+  try {
+    const editor = fakeEditor(STOCK_RESOLVED_LINE);
+    const messages = [];
+    const vscode = fakeVscode(editor, { engineChoiceValue: 'generate', messages });
 
-  await reviewImage({
-    vscode,
-    ledgerWriter: { saveAsset: async ({ asset }) => ({ asset: { ...asset, id: 'asset-2' } }) },
-    buildGeneratePrompt: () => 'a prompt',
-    presentPromptForRefinement: async () => {},
-    awaitGeneratedIntake: async () => ({ id: 'pre-save-id', title: 'Generated' }),
-    place: async options => ({ placed: options }),
-    buildPlacement: ({ asset }) => ({ placement: { id: 'p', assetId: asset.id }, saga: { id: 's' } }),
-    resolveLine: () => async () => {},
-    repoPath: '/repo/oat-assets',
-    removeOldAsset: options => { removedWith = options; }
-  });
+    const result = await reviewImage({
+      vscode,
+      ledgerWriter: { saveAsset: async ({ asset }) => ({ asset: { ...asset, id: 'asset-2' } }) },
+      buildGeneratePrompt: () => 'a prompt',
+      presentPromptForRefinement: async () => {},
+      awaitGeneratedIntake: async () => ({ id: 'pre-save-id', title: 'Generated' }),
+      place: async options => ({ placed: options }),
+      buildPlacement: ({ asset }) => ({ placement: { id: 'p', assetId: asset.id }, saga: { id: 's' } }),
+      resolveLine: () => async () => {},
+      repoPath
+    });
 
-  assert.deepStrictEqual(removedWith, {
-    repoPath: '/repo/oat-assets',
-    rawAssetUrl: 'https://raw.githubusercontent.com/owencorpening/oat-assets/main/water-series/part-09/wetland/wetland.jpg'
-  });
+    assert(fs.existsSync(assetDir), 'old asset folder must not be deleted');
+    assert(fs.existsSync(imagePath), 'old image file must not be deleted');
+    assert.deepStrictEqual(result.previousAsset, {
+      src: 'https://raw.githubusercontent.com/owencorpening/oat-assets/main/water-series/part-09/wetland/wetland.jpg',
+      assetDir
+    });
+    assert(messages.some(message => message.includes(assetDir)), 'notification should report the old asset path');
+  } finally {
+    fs.rmSync(repoPath, { recursive: true, force: true });
+  }
 }
 
-async function testReviewImageOnGeneratedResolvedViaStockRemovesOldAsset() {
-  const editor = fakeEditor(GENERATED_RESOLVED_LINE);
-  const vscode = fakeVscode(editor, { engineChoiceValue: 'stock' });
-  let removedWith = null;
+async function testReviewImageOnGeneratedResolvedViaStockLeavesOldAssetInPlace() {
+  const { repoPath, assetDir, imagePath } = makeTempImagesRepo('water-series/part-09/illustration', 'illustration.png');
+  try {
+    const editor = fakeEditor(GENERATED_RESOLVED_LINE);
+    const vscode = fakeVscode(editor, { engineChoiceValue: 'stock' });
 
-  await reviewImage({
+    const result = await reviewImage({
+      vscode,
+      ledgerWriter: {},
+      stageEngine1Result: async () => ({ asset: { id: 'asset-3' } }),
+      runManualSearch: async () => ({ provider: 'pexels', sourceUrl: 'https://pexels.com/y' }),
+      place: async options => ({ placed: options }),
+      buildPlacement: ({ asset }) => ({ placement: { id: 'p', assetId: asset.id }, saga: { id: 's' } }),
+      resolveLine: () => async () => {},
+      repoPath
+    });
+
+    assert(fs.existsSync(imagePath), 'old generated image must not be deleted');
+    assert.strictEqual(result.previousAsset.assetDir, assetDir);
+  } finally {
+    fs.rmSync(repoPath, { recursive: true, force: true });
+  }
+}
+
+// A non-Draftsman image (not a raw GitHub URL) is reported by its src.
+async function testReviewImageOnForeignImageReportsSrcWithoutDeleting() {
+  const editor = fakeEditor('![Chart](images/local-chart.png)');
+  const messages = [];
+  const vscode = fakeVscode(editor, { engineChoiceValue: 'stock', messages });
+
+  const result = await reviewImage({
     vscode,
     ledgerWriter: {},
-    stageEngine1Result: async () => ({ asset: { id: 'asset-3' } }),
-    runManualSearch: async () => ({ provider: 'pexels', sourceUrl: 'https://pexels.com/y' }),
+    stageEngine1Result: async () => ({ asset: { id: 'asset-4' } }),
+    runManualSearch: async () => ({ provider: 'pexels', sourceUrl: 'https://pexels.com/z' }),
     place: async options => ({ placed: options }),
     buildPlacement: ({ asset }) => ({ placement: { id: 'p', assetId: asset.id }, saga: { id: 's' } }),
     resolveLine: () => async () => {},
-    repoPath: '/repo/oat-assets',
-    removeOldAsset: options => { removedWith = options; }
+    repoPath: '/repo/oat-assets'
   });
 
-  assert.strictEqual(
-    removedWith.rawAssetUrl,
-    'https://raw.githubusercontent.com/owencorpening/oat-assets/main/water-series/part-09/illustration/illustration.png'
-  );
+  assert.deepStrictEqual(result.previousAsset, { src: 'images/local-chart.png', assetDir: null });
+  assert(messages.some(message => message.includes('images/local-chart.png') && message.includes('not removed')));
+}
+
+function makeTempImagesRepo(relAssetDir, fileName) {
+  const repoPath = fs.mkdtempSync(path.join(os.tmpdir(), 'oat-assets-'));
+  const assetDir = path.join(repoPath, relAssetDir);
+  fs.mkdirSync(assetDir, { recursive: true });
+  const imagePath = path.join(assetDir, fileName);
+  fs.writeFileSync(imagePath, 'fake image bytes');
+  return { repoPath, assetDir, imagePath };
 }
 
 async function testReviewImageErrorsWhenCursorNotOnImageLine() {
@@ -172,8 +216,9 @@ async function testReviewImageGenerateReturnsNullWhenNothingIntakeYet() {
   testFindImageLineAtCursorDetectsResolvedImage();
   testFindImageLineAtCursorReturnsNullForNonImageLine();
   await testReviewImageOnPlaceholderViaStockDoesNotRemoveAnything();
-  await testReviewImageOnStockResolvedViaGenerateRemovesOldAsset();
-  await testReviewImageOnGeneratedResolvedViaStockRemovesOldAsset();
+  await testReviewImageOnStockResolvedViaGenerateLeavesOldAssetInPlace();
+  await testReviewImageOnGeneratedResolvedViaStockLeavesOldAssetInPlace();
+  await testReviewImageOnForeignImageReportsSrcWithoutDeleting();
   await testReviewImageErrorsWhenCursorNotOnImageLine();
   await testReviewImageReturnsNullWhenEngineChoiceCancelled();
   await testReviewImageGenerateReturnsNullWhenNothingIntakeYet();

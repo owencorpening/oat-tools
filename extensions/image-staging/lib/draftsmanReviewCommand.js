@@ -4,7 +4,7 @@ const { parseImageLine } = require('./draftsmanMarker');
 const engine1 = require('./draftsmanEngine1');
 const engine2 = require('./draftsmanEngine2');
 const { buildDraftsmanPlacement, resolvePlaceholderLine, runPlacement } = require('./draftsmanPlacement');
-const { removePlacedAssetByRawAssetUrl } = require('./imageAssetsRepo');
+const { resolvePlacedAssetDirFromRawAssetUrl } = require('./imageAssetsRepo');
 const { imagesRepoPath } = require('./plannedPlacementRunCommand');
 
 function registerDraftsmanReviewCommand(context, vscode, options = {}) {
@@ -71,7 +71,7 @@ async function reviewImage({
   resolveLine = resolvePlaceholderLine,
   runManualSearch = runManualStockSearch,
   pickEngine = pickEngineChoice,
-  removeOldAsset = removePlacedAssetByRawAssetUrl,
+  locateOldAsset = resolvePlacedAssetDirFromRawAssetUrl,
   repoPath
 } = {}) {
   const editor = vscode.window.activeTextEditor;
@@ -103,7 +103,7 @@ async function reviewImage({
   } else {
     const prompt = buildGeneratePrompt({ context: imageLine.alt });
     await presentPromptForRefinement({ vscode, prompt });
-    const generatedAsset = await awaitGeneratedIntake({ vscode, query: imageLine.alt });
+    const generatedAsset = await awaitGeneratedIntake({ vscode, context: imageLine.alt });
     if (!generatedAsset) return null; // nothing to place yet — author re-runs Review once generated
     if (ledgerWriter && ledgerWriter.saveAsset) {
       const saved = await ledgerWriter.saveAsset({ asset: generatedAsset });
@@ -127,14 +127,28 @@ async function reviewImage({
     writeSnippet: resolveLine({ vscode, editor, lineNumber: imageLine.line })
   });
 
-  // Delete-after-success: if a failed new placement never got this far,
-  // the old image stays live rather than leaving zero images placed.
+  // Never delete the replaced image's asset automatically: Review accepts
+  // any markdown image line, and the same asset can be used by other
+  // articles. Report where the old asset lives so cleanup is deliberate.
+  let previousAsset = null;
   if (!imageLine.isPlaceholder && imageLine.currentSrc) {
-    removeOldAsset({ repoPath: resolvedRepoPath, rawAssetUrl: imageLine.currentSrc });
+    const located = locateOldAsset({ repoPath: resolvedRepoPath, rawAssetUrl: imageLine.currentSrc });
+    previousAsset = {
+      src: imageLine.currentSrc,
+      assetDir: located && located.status === 'resolved' ? located.assetDir : null
+    };
   }
 
-  vscode.window.showInformationMessage('OAT: Draftsman replaced the image.');
-  return placed;
+  vscode.window.showInformationMessage(replacementMessage(previousAsset));
+  return { ...placed, previousAsset };
+}
+
+function replacementMessage(previousAsset) {
+  if (!previousAsset) return 'OAT: Draftsman placed the image.';
+  if (previousAsset.assetDir) {
+    return `OAT: Draftsman replaced the image. The old asset was left in place: ${previousAsset.assetDir}`;
+  }
+  return `OAT: Draftsman replaced the image. The old image (${previousAsset.src}) was not removed.`;
 }
 
 module.exports = {

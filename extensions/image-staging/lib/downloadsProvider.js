@@ -34,6 +34,46 @@ async function searchDownloads({ query = '', downloadsDir = defaultDownloadsDir(
   return { provider: 'downloads', results };
 }
 
+const RECENT_DOWNLOADS_WINDOW_MS = 24 * 60 * 60 * 1000;
+const RECENT_DOWNLOADS_LIMIT = 12;
+
+// Recency-based listing for Draftsman's generated-image pickup. Keyword
+// matching (searchDownloads) can't work there: the query is a whole
+// placeholder paragraph, and generator exports are named by timestamp
+// ("ChatGPT Image Nov 7, 2026, 08_12_33 PM.png"), not by subject. "The
+// image I just saved" is identified by mtime instead: image files modified
+// within the window, newest first, capped AFTER sorting (searchDownloads
+// caps in readdir order, which could drop the newest file).
+async function listRecentDownloads({
+  downloadsDir = defaultDownloadsDir(),
+  withinMs = RECENT_DOWNLOADS_WINDOW_MS,
+  limit = RECENT_DOWNLOADS_LIMIT,
+  now = Date.now()
+} = {}) {
+  const entries = await safeReadDir(downloadsDir);
+  const candidates = [];
+
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    if (!IMAGE_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) continue;
+
+    const filePath = path.join(downloadsDir, entry.name);
+    const stat = await safeStat(filePath);
+    if (!stat) continue;
+    if (now - stat.mtimeMs > withinMs) continue;
+
+    candidates.push({ filePath, fileName: entry.name, stat });
+  }
+
+  candidates.sort((a, b) => b.stat.mtimeMs - a.stat.mtimeMs);
+
+  const results = [];
+  for (const candidate of candidates.slice(0, limit)) {
+    results.push(await normalizeDownloadsFile(candidate));
+  }
+  return { provider: 'downloads', results };
+}
+
 async function stageDownloadsResult(result, {
   imageIntakeModule = imageIntake,
   idFactory = defaultIds
@@ -199,6 +239,8 @@ function shortHash(value) {
 
 module.exports = {
   searchDownloads,
+  listRecentDownloads,
+  RECENT_DOWNLOADS_WINDOW_MS,
   stageDownloadsResult,
   inferFilenameHints,
   displayNameFromFileName,

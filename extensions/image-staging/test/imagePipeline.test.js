@@ -1,7 +1,11 @@
 'use strict';
 
 const assert = require('assert');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const { placeAsset, snippetFormatForTarget } = require('../lib/imagePipeline');
+const realRepo = require('../lib/imageAssetsRepo');
 
 async function testPlaceAssetSuccess() {
   const calls = [];
@@ -324,6 +328,121 @@ async function testLocalSourceKeepsUserProvidedOriginal() {
   assert(!calls.some(call => call[0] === 'deleteSource'), 'user-provided originals may live anywhere on disk and must not be deleted');
 }
 
+// Bug #5: the Downloads original must be deleted only after EVERY step has
+// succeeded — after the markdown edit and the final 'succeeded' saga mark,
+// not right after the copy.
+async function testDownloadsOriginalDeletedOnlyAfterEveryStep() {
+  const calls = [];
+  const ledger = fakeLedger(calls);
+  const repo = fakeRepo(calls);
+
+  const result = await placeAsset({
+    db: {},
+    sagaId: 'saga-9',
+    repoPath: '/tmp/oat-assets',
+    asset: localAiAsset('/home/owen/Downloads/ChatGPT Image.png'),
+    placement: { id: 'placement-9', target: 'substack', contentDraftId: 'draft-1' },
+    ledger,
+    repo,
+    writeSnippet: async () => calls.push(['writeSnippet'])
+  });
+
+  const index = predicate => calls.findIndex(predicate);
+  const deleteAt = index(call => call[0] === 'deleteSource');
+  assert(deleteAt !== -1, 'should still clean up the Downloads original after a full success');
+  assert(deleteAt > index(call => call[0] === 'copy'), 'delete must come after the copy');
+  assert(deleteAt > index(call => call[0] === 'writeSnippet'), 'delete must come after the markdown edit');
+  assert(deleteAt > index(call => call[0] === 'placed'), 'delete must come after the D1 markPlaced write');
+  assert(deleteAt > index(call => call[0] === 'sagaStep' && call[2] === 'succeeded'), 'delete must come after the saga is marked succeeded');
+  assert.strictEqual(result.stagingSourceDeleted, true);
+}
+
+// Simulates a failure AFTER the copy (the markdown edit is rejected) against
+// a real temp file and the real deleteSource, and asserts the file survives.
+async function testDownloadsOriginalSurvivesFailureAfterCopy() {
+  const { dir, filePath } = makeTempSource();
+  try {
+    const calls = [];
+    const ledger = fakeLedger(calls);
+    const repo = { ...fakeRepo(calls), deleteSource: realRepo.deleteSource };
+
+    await assert.rejects(
+      placeAsset({
+        db: {},
+        sagaId: 'saga-10',
+        repoPath: '/tmp/oat-assets',
+        asset: localAiAsset(filePath),
+        placement: { id: 'placement-10', target: 'substack', contentDraftId: 'draft-1' },
+        ledger,
+        repo,
+        writeSnippet: async () => {
+          throw new Error('Draftsman: VS Code rejected the placement edit.');
+        }
+      }),
+      /rejected the placement edit/
+    );
+
+    assert(calls.some(call => call[0] === 'copy'), 'precondition: the copy step ran before the failure');
+    assert(fs.existsSync(filePath), 'Downloads original must still exist when a step after the copy fails');
+    assert(calls.some(call => call[0] === 'failed'), 'saga should be marked failed');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+// Same guarantee when the failure is a D1 write rather than the editor.
+async function testDownloadsOriginalSurvivesLedgerFailureAfterCopy() {
+  const { dir, filePath } = makeTempSource();
+  try {
+    const calls = [];
+    const ledger = {
+      ...fakeLedger(calls),
+      updatePlacementSnippet: async () => {
+        throw new Error('D1 write failed');
+      }
+    };
+    const repo = { ...fakeRepo(calls), deleteSource: realRepo.deleteSource };
+
+    await assert.rejects(
+      placeAsset({
+        db: {},
+        sagaId: 'saga-11',
+        repoPath: '/tmp/oat-assets',
+        asset: localAiAsset(filePath),
+        placement: { id: 'placement-11', target: 'substack', contentDraftId: 'draft-1' },
+        ledger,
+        repo,
+        writeSnippet: async () => {}
+      }),
+      /D1 write failed/
+    );
+
+    assert(fs.existsSync(filePath), 'Downloads original must still exist when a D1 write after the copy fails');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+function localAiAsset(sourcePath) {
+  return {
+    id: 'asset-local',
+    slug: 'chat-gpt-image',
+    displayName: 'ChatGPT Image',
+    sourcePath,
+    sourceKind: 'ai-generated',
+    photographer: 'Owen',
+    license: 'OAT',
+    intakeSection: 'water-series/part-09'
+  };
+}
+
+function makeTempSource() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'oat-pipeline-'));
+  const filePath = path.join(dir, 'ChatGPT Image Nov 7, 2026, 08_12_33 PM.png');
+  fs.writeFileSync(filePath, 'fake png bytes');
+  return { dir, filePath };
+}
+
 function testSnippetFormatForTarget() {
   assert.strictEqual(snippetFormatForTarget('substack'), 'html-figure');
   assert.strictEqual(snippetFormatForTarget('carousel'), 'marp-image');
@@ -385,6 +504,9 @@ function fakeRepo(calls, options = {}) {
   await testRecordAssetUseFailureAbortsPlacement();
   await testLocalSourceCopiesAndDeletesDownloadsOriginal();
   await testLocalSourceKeepsUserProvidedOriginal();
+  await testDownloadsOriginalDeletedOnlyAfterEveryStep();
+  await testDownloadsOriginalSurvivesFailureAfterCopy();
+  await testDownloadsOriginalSurvivesLedgerFailureAfterCopy();
   testSnippetFormatForTarget();
   console.log('imagePipeline tests passed');
 })().catch(error => {

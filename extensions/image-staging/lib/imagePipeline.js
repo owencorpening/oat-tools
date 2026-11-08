@@ -26,6 +26,12 @@ async function placeAsset(options = {}) {
   requireValue(placement.id, 'placement.id');
   requireValue(placement.target, 'placement.target');
 
+  // Downloads/ai-generated originals are cleaned up only after EVERY step
+  // below has succeeded (copy, provenance/attribution files, D1 writes,
+  // push, markdown edit, final saga mark). Deleting right after the copy
+  // meant a later failure left the image existing only in the images repo.
+  let stagingSourceToDelete = null;
+
   try {
     await setSagaStep(ledger, db, sagaId, 1, 'Mark asset and placement publishing');
     await ledger.markAssetPublishing(db, asset.id);
@@ -50,8 +56,10 @@ async function placeAsset(options = {}) {
         // staging artifacts, not originals worth keeping — leaving them
         // behind after a successful placement just clutters ~/Downloads.
         // user-provided files may live anywhere on disk and are left alone.
+        // Deletion itself is deferred to the end of the pipeline (see
+        // stagingSourceToDelete above).
         if (isStagingSourceKind(asset.sourceKind) && repo.deleteSource) {
-          await repo.deleteSource({ path: asset.sourcePath });
+          stagingSourceToDelete = asset.sourcePath;
         }
       } else {
         await repo.downloadAsset({ url: placedAsset.downloadSrc, dest: placedAsset.imagePath });
@@ -136,12 +144,26 @@ async function placeAsset(options = {}) {
       nextRetryAt: null
     });
 
+    // Placement is complete. Cleanup is best-effort and outside the saga:
+    // a leftover file in ~/Downloads is clutter, not a failed placement,
+    // so a delete error must not mark an already-succeeded saga failed.
+    let stagingSourceDeleted = false;
+    if (stagingSourceToDelete) {
+      try {
+        await repo.deleteSource({ path: stagingSourceToDelete });
+        stagingSourceDeleted = true;
+      } catch {
+        stagingSourceDeleted = false;
+      }
+    }
+
     return {
       asset,
       placement,
       placedAsset,
       snippet,
-      snippetFormat
+      snippetFormat,
+      stagingSourceDeleted
     };
   } catch (error) {
     await markFailedBestEffort(ledger, db, sagaId, error);
