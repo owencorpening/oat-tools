@@ -1,14 +1,43 @@
 'use strict';
 
 // Writes the site from the articles the gate returned, and nothing else.
-//
-// PLACEHOLDER PAGES: this first version writes deliberately bare HTML so the
-// publish gate can be tested end to end. The real Home / Series / Article /
-// Not found page types (design step 3) replace these in the next change.
-// What must not change: this module only ever sees gate output.
+// Page types (design step 3): Home, Series, Article, Not found.
+// Every page is complete HTML with no JavaScript and no outside requests.
 
 const fs = require('fs');
 const path = require('path');
+const { renderBody, firstParagraph } = require('./render');
+const { copyImages, pointAtCopies } = require('./images');
+const { GateError } = require('./gate');
+
+const SITE_NAME = "Owen's Applied Thinking";
+const TAGLINE = "It's not activism. It's not theory. It's engineering.";
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
+  'August', 'September', 'October', 'November', 'December'];
+
+const CSS = `:root{--ink:#1f2328;--quiet:#5c636a;--line:#d8dadc;--bg:#ffffff;--granite:#4a4f54;--brass:#b8860b}
+@media (prefers-color-scheme:dark){:root{--ink:#e6e7e8;--quiet:#a3a8ad;--line:#3a3f44;--bg:#16181a;--granite:#c9ccd0;--brass:#d4a017}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:18px/1.6 Georgia,"Times New Roman",serif}
+header,main,footer{max-width:42rem;margin:0 auto;padding:0 1rem}
+header{border-bottom:3px solid var(--brass);padding-top:1rem;padding-bottom:.75rem}
+header a{color:var(--granite);font:600 1.1rem/1.2 system-ui,sans-serif;text-decoration:none}
+footer{border-top:1px solid var(--line);margin-top:3rem;padding-top:1rem;padding-bottom:2rem;color:var(--quiet);font:.9rem/1.5 system-ui,sans-serif}
+h1,h2,h3{font-family:system-ui,sans-serif;color:var(--granite);line-height:1.25}
+h1{font-size:2rem;margin:1.5rem 0 .5rem}
+a{color:var(--brass)}
+img{max-width:100%;height:auto}
+table{border-collapse:collapse;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:.3rem .5rem}
+blockquote{border-left:3px solid var(--brass);margin-left:0;padding-left:1rem;color:var(--quiet)}
+.meta{color:var(--quiet);font:.95rem/1.4 system-ui,sans-serif}
+.list{list-style:none;padding:0}
+.list li{border-bottom:1px solid var(--line);padding:.9rem 0}
+.list a{font:600 1.1rem/1.3 system-ui,sans-serif}
+.list p{margin:.3rem 0 0;color:var(--quiet);font-size:.95rem}
+.pager{display:flex;justify-content:space-between;gap:1rem;border-top:1px solid var(--line);margin-top:2rem;padding-top:1rem;font:.95rem/1.4 system-ui,sans-serif}
+.also{font:.95rem/1.4 system-ui,sans-serif}
+`;
 
 function escapeHtml(text) {
   return String(text)
@@ -18,8 +47,45 @@ function escapeHtml(text) {
     .replace(/"/g, '&quot;');
 }
 
-function page(title, bodyHtml) {
-  return `<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<title>${escapeHtml(title)}</title>\n</head>\n<body>\n${bodyHtml}\n</body>\n</html>\n`;
+function formatDate(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return `${MONTHS[m - 1]} ${d}, ${y}`;
+}
+
+function partLabel(part) {
+  if (!part) return null;
+  if (/^\d+$/.test(part)) return `Part ${Number(part)}`;
+  return part.charAt(0).toUpperCase() + part.slice(1);
+}
+
+// Numbered parts first in order, then the rest newest first.
+function seriesOrder(a, b) {
+  const na = /^\d+$/.test(a.part || '') ? Number(a.part) : null;
+  const nb = /^\d+$/.test(b.part || '') ? Number(b.part) : null;
+  if (na !== null && nb !== null) return na - nb;
+  if (na !== null) return -1;
+  if (nb !== null) return 1;
+  return b.published.localeCompare(a.published);
+}
+
+function page({ title, description, canonical, rootPrefix, body }) {
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(title)}</title>
+${description ? `<meta name="description" content="${escapeHtml(description)}">\n` : ''}${canonical ? `<link rel="canonical" href="${escapeHtml(canonical)}">\n` : ''}<link rel="stylesheet" href="${rootPrefix}style.css">
+</head>
+<body>
+<header><a href="${rootPrefix || './'}">${escapeHtml(SITE_NAME)}</a></header>
+<main>
+${body}
+</main>
+<footer>${escapeHtml(TAGLINE)}</footer>
+</body>
+</html>
+`;
 }
 
 function writeFile(outDir, relPath, content) {
@@ -28,24 +94,120 @@ function writeFile(outDir, relPath, content) {
   fs.writeFileSync(full, content);
 }
 
-// Refuses to write into a directory that already has files, so stale pages
-// from an earlier build can never survive an unpublish.
-function writeSite(articles, outDir) {
+// options: { series: Map from readSeries, baseUrl: 'https://…/oat-web/', fetchImpl }
+// Refuses a non-empty output directory, so stale pages from an earlier
+// build can never survive an unpublish.
+async function writeSite(articles, outDir, options = {}) {
   if (fs.existsSync(outDir) && fs.readdirSync(outDir).length > 0) {
     throw new Error(`output directory ${outDir} is not empty`);
   }
-  fs.mkdirSync(outDir, { recursive: true });
+  const series = options.series || new Map([['standalone', { id: 'standalone', name: 'Standalone', description: '', order: 1000 }]]);
+  const baseUrl = options.baseUrl ? options.baseUrl.replace(/\/?$/, '/') : null;
+  const basePath = baseUrl ? new URL(baseUrl).pathname : '/';
+  const canonical = (rel) => (baseUrl ? baseUrl + rel : null);
 
-  const list = articles
-    .map((a) => `<li><a href="${a.series}/${a.slug}/">${escapeHtml(a.title)}</a></li>`)
-    .join('\n');
-  writeFile(outDir, 'index.html', page("Owen's Applied Thinking", `<ul>\n${list}\n</ul>`));
-
+  const problems = [];
   for (const a of articles) {
-    const body = `<h1>${escapeHtml(a.title)}</h1>\n<pre>${escapeHtml(a.body)}</pre>`;
-    writeFile(outDir, `${a.series}/${a.slug}/index.html`, page(a.title, body));
+    if (!series.has(a.series)) problems.push(`${a.tag}: series "${a.series}" is not in site/series.json`);
   }
-  writeFile(outDir, '404.html', page('Not found', '<p>Page not found. <a href="/">Home</a></p>'));
+  if (problems.length) throw new GateError(problems);
+
+  // Group and order.
+  const bySeries = new Map();
+  for (const a of articles) {
+    if (!bySeries.has(a.series)) bySeries.set(a.series, []);
+    bySeries.get(a.series).push(a);
+  }
+  for (const list of bySeries.values()) list.sort(seriesOrder);
+  const shownSeries = [...bySeries.keys()]
+    .map((id) => series.get(id))
+    .sort((x, y) => x.order - y.order || x.name.localeCompare(y.name));
+
+  // Render article bodies; links between published articles become site links.
+  const bySubstackSlug = new Map();
+  for (const a of articles) {
+    const m = a.substackUrl && /\/p\/([A-Za-z0-9-]+)/.exec(a.substackUrl);
+    if (m) bySubstackSlug.set(m[1].toLowerCase(), a);
+  }
+  const rendered = new Map();
+  for (const a of articles) {
+    const { html, problems: p } = renderBody(a, {
+      bySubstackSlug,
+      linkTo: (t) => `../../${t.series}/${t.slug}/`
+    });
+    problems.push(...p);
+    rendered.set(a, html);
+  }
+  if (problems.length) throw new GateError(problems);
+
+  fs.mkdirSync(outDir, { recursive: true });
+  const imageMap = await copyImages([...rendered.values()].map((html) => ({ html })), outDir, options.fetchImpl);
+
+  writeFile(outDir, 'style.css', CSS);
+
+  // Home.
+  const homeList = shownSeries.map((s) => {
+    const n = bySeries.get(s.id).length;
+    return `<li><a href="${s.id}/">${escapeHtml(s.name)}</a><p>${escapeHtml(s.description)} · ${n} article${n === 1 ? '' : 's'}</p></li>`;
+  }).join('\n');
+  writeFile(outDir, 'index.html', page({
+    title: SITE_NAME,
+    description: TAGLINE,
+    canonical: canonical(''),
+    rootPrefix: '',
+    body: `<h1>${escapeHtml(SITE_NAME)}</h1>\n<p class="meta">${escapeHtml(TAGLINE)}</p>\n<ul class="list">\n${homeList}\n</ul>`
+  }));
+
+  // Series pages.
+  for (const s of shownSeries) {
+    const items = bySeries.get(s.id).map((a) => {
+      const label = partLabel(a.part);
+      const desc = a.description || firstParagraph(a.body);
+      return `<li><a href="${a.slug}/">${escapeHtml(a.title)}</a><p>${label ? `${escapeHtml(label)} · ` : ''}${formatDate(a.published)}${desc ? ` · ${escapeHtml(desc)}` : ''}</p></li>`;
+    }).join('\n');
+    writeFile(outDir, `${s.id}/index.html`, page({
+      title: `${s.name} · ${SITE_NAME}`,
+      description: s.description,
+      canonical: canonical(`${s.id}/`),
+      rootPrefix: '../',
+      body: `<h1>${escapeHtml(s.name)}</h1>\n<p class="meta">${escapeHtml(s.description)}</p>\n<ul class="list">\n${items}\n</ul>`
+    }));
+  }
+
+  // Article pages.
+  for (const s of shownSeries) {
+    const list = bySeries.get(s.id);
+    list.forEach((a, i) => {
+      const prev = list[i - 1];
+      const next = list[i + 1];
+      const label = partLabel(a.part);
+      const meta = [formatDate(a.published), `<a href="../">${escapeHtml(s.name)}</a>`, label ? escapeHtml(label) : null]
+        .filter(Boolean).join(' · ');
+      const also = [
+        a.substackUrl ? `<a href="${escapeHtml(a.substackUrl)}">Substack</a>` : null,
+        a.linkedinUrl ? `<a href="${escapeHtml(a.linkedinUrl)}">LinkedIn</a>` : null
+      ].filter(Boolean);
+      const pager = (prev || next)
+        ? `<nav class="pager"><span>${prev ? `← <a href="../${prev.slug}/">${escapeHtml(prev.title)}</a>` : ''}</span><span>${next ? `<a href="../${next.slug}/">${escapeHtml(next.title)}</a> →` : ''}</span></nav>`
+        : '';
+      const html = pointAtCopies(rendered.get(a), imageMap, '../../');
+      writeFile(outDir, `${s.id}/${a.slug}/index.html`, page({
+        title: `${a.title} · ${SITE_NAME}`,
+        description: a.description || firstParagraph(a.body),
+        canonical: canonical(`${s.id}/${a.slug}/`),
+        rootPrefix: '../../',
+        body: `<article>\n<h1>${escapeHtml(a.title)}</h1>\n<p class="meta">${meta}</p>\n${html}\n</article>\n${also.length ? `<p class="also">Also on ${also.join(' and ')}.</p>\n` : ''}${pager}`
+      }));
+    });
+  }
+
+  // Not found: served at any depth, so it uses absolute paths and lists nothing.
+  writeFile(outDir, '404.html', page({
+    title: `Not found · ${SITE_NAME}`,
+    canonical: null,
+    rootPrefix: basePath,
+    body: `<h1>Page not found</h1>\n<p><a href="${escapeHtml(basePath)}">Go to the home page</a></p>`
+  }));
 }
 
 module.exports = { writeSite, escapeHtml };
