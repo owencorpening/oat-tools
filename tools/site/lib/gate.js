@@ -67,7 +67,7 @@ function listPublishTags(repoDir, problems) {
     }
     const [, series, slug, date, seq] = m;
     const key = `${series}/${slug}`;
-    const rank = `${date}.${String(Number(seq || 1)).padStart(6, '0')}`;
+    const rank = `${date}.${String(Number(seq || 0)).padStart(6, '0')}`;
     const prev = newest.get(key);
     if (!prev || rank > prev.rank) {
       newest.set(key, { name, series, slug, date, rank });
