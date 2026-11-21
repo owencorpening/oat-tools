@@ -17,6 +17,7 @@
 
 const { execFileSync } = require('child_process');
 const { parseFrontMatter } = require('./frontMatter');
+const { extractLinks, placeholderProblems } = require('./sopChecks');
 
 const TAG_PATTERN = /^pub\/([a-z0-9][a-z0-9-]*)\/([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2})(?:\.(\d+))?$/;
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
@@ -177,18 +178,17 @@ function selectPublished(repoDir, options = {}) {
   return articles.sort((a, b) => (a.series + a.slug).localeCompare(b.series + b.slug));
 }
 
-// A published article must not link to an OAT article that isn't published:
-// the link alone would reveal that the draft exists.
+// A published article must not link to an OAT article that isn't published
+// (the link alone would reveal that the draft exists), and must not carry
+// placeholder links (pre-publish SOP).
 function checkLinksToUnpublished(articles) {
   const problems = [];
   const publishedSubstack = new Set(
     articles.map((a) => normalizeSubstack(a.substackUrl)).filter(Boolean)
   );
   for (const a of articles) {
-    const linkRe = /\]\(([^)\s]+)[^)]*\)|href=["']([^"']+)["']/g;
-    let m;
-    while ((m = linkRe.exec(a.body)) !== null) {
-      const url = m[1] || m[2];
+    problems.push(...placeholderProblems(a));
+    for (const { url } of extractLinks(a.body)) {
       const substack = normalizeSubstack(url);
       if (substack && !publishedSubstack.has(substack)) {
         problems.push(`${a.tag}: links to ${url}, which is not a published article on the site`);

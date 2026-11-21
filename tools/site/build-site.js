@@ -15,6 +15,7 @@ const path = require('path');
 const { selectPublished, GateError } = require('./lib/gate');
 const { readSeries } = require('./lib/series');
 const { writeSite } = require('./lib/writeSite');
+const { sourcesProblem } = require('./lib/sopChecks');
 
 const DEFAULT_BASE_URL = 'https://owencorpening.github.io/oat-web/';
 
@@ -46,6 +47,9 @@ async function main() {
     await writeSite(articles, out, { series, baseUrl: args['base-url'] || DEFAULT_BASE_URL });
     console.log(`Built ${articles.length} published article(s) into ${args.out}`);
     for (const a of articles) console.log(`  ${a.series}/${a.slug}  (${a.tag})`);
+    // Warning only for now; whether it should fail the build is Owen's call.
+    const warnings = articles.map(sourcesProblem).filter(Boolean);
+    for (const w of warnings) console.log(`Warning: ${w}`);
   } catch (err) {
     if (!existedBefore) fs.rmSync(out, { recursive: true, force: true });
     console.error(err instanceof GateError ? err.message : `Build failed: ${err.message}`);

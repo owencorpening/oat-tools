@@ -208,6 +208,22 @@ test('fails when a published article links to an unpublished one', () => {
   assertGateFails(repo, /secret-draft/);
 });
 
+test('fails on a reference-style link to an unpublished article', () => {
+  const repo = makeRepo();
+  repo.write('a.md', article(good('a'), 'See the next part.[1]\n\n[1]: https://owencorpening.substack.com/p/ref-draft "Next"'));
+  repo.commit('a');
+  repo.tag('pub/standalone/a/2025-01-01');
+  assertGateFails(repo, /ref-draft/);
+});
+
+test('fails on a placeholder link', () => {
+  const repo = makeRepo();
+  repo.write('a.md', article(good('a'), 'See [the report](link).'));
+  repo.commit('a');
+  repo.tag('pub/standalone/a/2025-01-01');
+  assertGateFails(repo, /placeholder link/);
+});
+
 test('allows links between published articles', () => {
   const repo = makeRepo();
   repo.write('a.md', article(good('a', { substack_url: 'https://owencorpening.substack.com/p/a-live' }),
