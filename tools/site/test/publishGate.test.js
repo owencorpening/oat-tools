@@ -287,6 +287,17 @@ test('the build refuses a non-empty output directory', async () => {
   fs.writeFileSync(path.join(out, 'stale.html'), 'CANARY_STALE_PAGE');
   await assert.rejects(() => writeSite([], out), /not empty/);
 });
+test('a same-day .1 re-tag beats the plain date tag', () => {
+  const repo = makeRepo();
+  repo.write('substack-published/water/a.md', article(good('a', { series: 'water' }), 'Old text.'));
+  repo.commit('a v0');
+  repo.tag('pub/water/a/2025-01-01');
+  repo.write('substack-published/water/a.md', article(good('a', { series: 'water' }), 'New text.'));
+  repo.commit('a v1');
+  repo.tag('pub/water/a/2025-01-01.1');
+  const [a] = selectPublished(repo.dir);
+  assert.strictEqual(a.tag, 'pub/water/a/2025-01-01.1');
+});
 
 // ---------------------------------------------------------------------------
 
