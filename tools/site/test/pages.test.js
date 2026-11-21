@@ -24,8 +24,14 @@ function tmpDir(prefix) {
 
 function startImageServer() {
   const hits = [];
+  let busy = 0;
   const server = http.createServer((req, res) => {
     hits.push(req.url);
+    if (req.url.startsWith('/down') || (req.url.startsWith('/busy') && busy++ < 2)) {
+      res.writeHead(503);
+      res.end('Service Unavailable');
+      return;
+    }
     if (req.url.startsWith('/missing')) {
       res.writeHead(404);
       res.end();
@@ -171,6 +177,23 @@ test('fails when an image cannot be downloaded', async () => {
     await assert.rejects(
       () => writeSite([art('standalone', 'a', { body: `![x](${img.base}/missing.png)` })], out, { series: SERIES }),
       /HTTP 404/
+    );
+    assert.strictEqual(img.hits.length, 1, 'a 404 is not retried');
+  } finally {
+    img.close();
+  }
+});
+
+test('retries a busy image host, then gives up with the reason', async () => {
+  const img = await startImageServer();
+  try {
+    const out = path.join(tmpDir('oat-pages-'), 'site');
+    await writeSite([art('standalone', 'a', { body: `![x](${img.base}/busy.png)` })], out, { series: SERIES, retryDelaysMs: [0, 0] });
+    assert.strictEqual(img.hits.length, 3, 'two 503s, then success');
+    const out2 = path.join(tmpDir('oat-pages-'), 'site');
+    await assert.rejects(
+      () => writeSite([art('standalone', 'b', { body: `![x](${img.base}/down.png)` })], out2, { series: SERIES, retryDelaysMs: [0] }),
+      /HTTP 503 \(Service Unavailable\) after 2 tries/
     );
   } finally {
     img.close();
