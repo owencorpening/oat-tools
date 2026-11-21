@@ -22,7 +22,7 @@ test('finds inline, image, href and reference-style links', () => {
 });
 
 test('flags placeholder link targets', () => {
-  for (const target of ['link', '', '#', 'TODO', 'https://example.test/TBD']) {
+  for (const target of ['link', '', '#', 'TODO', 'https://example.test/TBD', 'PENDING_URL', 'URL_HERE', 'part-six']) {
     const p = placeholderProblems(art(`See [the report](${target}).`));
     assert.strictEqual(p.length, 1, `target "${target}" is flagged`);
     assert.ok(/placeholder link/.test(p[0]));
@@ -39,7 +39,7 @@ test('flags a homepage link standing in for an article, allows the CTA block', (
 });
 
 test('real links and section anchors are fine', () => {
-  assert.deepStrictEqual(placeholderProblems(art('[WHO](https://www.who.int/r) [jump](#costs) [p](https://owencorpening.substack.com/p/part-one)')), []);
+  assert.deepStrictEqual(placeholderProblems(art('[WHO](https://www.who.int/r) [jump](#costs) [p](https://owencorpening.substack.com/p/part-one) [pdf](report.pdf) [up](../index.html) [mail](mailto:a@example.invalid)')), []);
 });
 
 test('Sources section: heading, bold line or details block', () => {

@@ -11,7 +11,10 @@
 //     or <details><summary> block. LinkedIn posts are exempt.
 
 const PLACEHOLDER_TARGETS = new Set(['', '#', 'link', 'url', 'todo', 'tbd', 'tk', 'xxx', 'placeholder', 'insert-link', 'link-here']);
-const PLACEHOLDER_WORD = /\b(todo|tbd|placeholder|insert[ _-]?link)\b/i;
+const PLACEHOLDER_WORD = /(^|[^a-z])(todo|tbd|pending|placeholder|insert[ _-]?link)([^a-z]|$)/i;
+// A bare word such as PENDING_URL or LINK can't be a real link target: real
+// targets have a scheme, a path, a dot or an #anchor.
+const BARE_WORD = /^[A-Za-z0-9_-]+$/;
 const SUBSTACK_HOME = /^https?:\/\/owencorpening\.substack\.com\/?(?:[?#].*)?$/i;
 const CTA_TEXT = /owen.s applied thinking|owencorpening\.substack\.com|subscribe/i;
 const SOURCES = /^\s{0,3}(?:#{1,6}\s*|\*\*\s*|__\s*)?(?:sources|references)\b|<summary>[^<]*\b(?:sources|references)\b/im;
@@ -57,7 +60,7 @@ function placeholderProblems(article) {
   for (const link of extractLinks(article.body)) {
     const url = link.url.trim();
     const label = link.text ? `[${link.text}](${url})` : url || '(empty link)';
-    if (PLACEHOLDER_TARGETS.has(url.toLowerCase()) || PLACEHOLDER_WORD.test(url)) {
+    if (PLACEHOLDER_TARGETS.has(url.toLowerCase()) || PLACEHOLDER_WORD.test(url) || BARE_WORD.test(url)) {
       problems.push(`${article.tag}: placeholder link ${label}`);
     } else if (!link.image && SUBSTACK_HOME.test(url) && !CTA_TEXT.test(link.text)) {
       problems.push(`${article.tag}: link ${label} goes to the Substack homepage; it should point at a specific article`);
