@@ -120,6 +120,25 @@ blank (`-`):
 From there it either stays as a CSV or feeds the Ghost Tracker Google Sheet
 ingestion path (GAS, zero-infra, consistent with the rest of the OAT stack).
 
+## GitHub traffic
+
+`github_traffic.py` records views, clones, referrers and popular paths for
+every non-fork repo I own, using `gh` (no browser, no scraping). **GitHub only
+keeps 14 days of traffic data**, so a systemd user timer
+(`~/.config/systemd/user/github-traffic.timer`, `Persistent=true`) runs it
+daily to build up the history.
+
+It writes to `~/oat-data/stats/` (`--out` to change), outside this repo:
+
+| File | Contents |
+|------|----------|
+| `github-traffic-daily.csv` | `date, repo, views, unique_visitors, clones, unique_cloners`. One row per repo per day. A rerun replaces matching rows, because today's numbers are partial. Older rows are never deleted. |
+| `github-traffic-referrers.csv` | `captured_on, repo, referrer, count, uniques`. A **snapshot** of the 14-day totals on `captured_on`, not a daily count. |
+| `github-traffic-paths.csv` | `captured_on, repo, path, title, count, uniques`. The same kind of snapshot, for the most-viewed pages. |
+
+Repos with no traffic in the window are skipped, except `riffkit`, which
+always gets daily rows.
+
 ## Limits
 
 **LinkedIn's feed actively resists straightforward scraping.** Post cards live
@@ -150,5 +169,6 @@ after 0.0.40. Since this runs a globally installed binary rather than
 | `config.local.json` | Your handle, subdomain, output path (gitignored) |
 | `prompt-template.md` | The extraction prompt, setup notes, and scrape gotchas |
 | `CLAUDE.md` | Working notes and project status for Claude Code |
+| `github_traffic.py` | Daily GitHub traffic capture (see [GitHub traffic](#github-traffic)) |
 
 Results live outside the repo at the configured `outputPath`.
