@@ -219,6 +219,14 @@ test('allows links between published articles', () => {
   assert.strictEqual(selectPublished(repo.dir).length, 2);
 });
 
+test('accepts a published date with a time, as LinkedIn headers have', () => {
+  const repo = makeRepo();
+  repo.write('a.md', article(good('a', { published: '2026-04-07 14:15', type: 'linkedin-article' }), 'text'));
+  repo.commit('a');
+  repo.tag('pub/standalone/a/2026-04-07');
+  assert.strictEqual(selectPublished(repo.dir)[0].published, '2026-04-07');
+});
+
 test('fails on a malformed pub/ tag', () => {
   const repo = makeRepo();
   repo.write('a.md', article(good('a'), 'text'));

@@ -20,7 +20,7 @@ const { parseFrontMatter } = require('./frontMatter');
 
 const TAG_PATTERN = /^pub\/([a-z0-9][a-z0-9-]*)\/([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2})(?:\.(\d+))?$/;
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
-const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?$/; // a time after the date is allowed and ignored
 const TYPES = new Set(['substack-article', 'linkedin-article', 'linkedin-post']);
 const STANDALONE = 'standalone';
 
@@ -105,7 +105,7 @@ function checkFields(where, data) {
   }
   if (!data.title) problems.push(`${where}: missing title`);
   if (!data.published || !DATE_PATTERN.test(data.published)) {
-    problems.push(`${where}: published must be a YYYY-MM-DD date`);
+    problems.push(`${where}: published must be a YYYY-MM-DD date (a time after it is fine)`);
   }
   if (!data.slug || !SLUG_PATTERN.test(data.slug)) {
     problems.push(`${where}: slug must be lowercase letters, digits and hyphens`);
@@ -158,7 +158,7 @@ function selectPublished(repoDir, options = {}) {
       series: tag.series,
       slug: tag.slug,
       title: article.data.title,
-      published: article.data.published,
+      published: article.data.published.slice(0, 10),
       type: article.data.type,
       part: article.data.part || null,
       description: article.data.description || null,
