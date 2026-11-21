@@ -9,6 +9,10 @@ const { marked } = require('marked');
 const ACTIVE_CONTENT = /<\s*(script|iframe|object|embed)\b|\son[a-z]+\s*=/i;
 const SUBSTACK_POST = /^https?:\/\/owencorpening\.substack\.com\/p\/([A-Za-z0-9-]+)/;
 
+// Old Substack series-guide posts. The site's generated series pages replace
+// them, so a link to one from a series article goes to that series' page.
+const SERIES_GUIDE_SLUGS = new Set(['series-guide']);
+
 function substackSlug(url) {
   const m = url ? SUBSTACK_POST.exec(url) : null;
   return m ? m[1].toLowerCase() : null;
@@ -48,7 +52,9 @@ function renderBody(article, { bySubstackSlug, linkTo }) {
   }
   let html = marked.parse(dropLeadingTitle(article.body, article.title), { async: false });
   html = html.replace(/href="([^"]*)"/g, (all, url) => {
-    const target = bySubstackSlug.get(substackSlug(url));
+    const slug = substackSlug(url);
+    if (SERIES_GUIDE_SLUGS.has(slug) && article.series !== 'standalone') return 'href="../"';
+    const target = bySubstackSlug.get(slug);
     if (target) return `href="${linkTo(target)}"`;
     return `href="${stripReferral(url)}"`;
   });
@@ -73,4 +79,4 @@ function firstParagraph(body, max = 220) {
   return '';
 }
 
-module.exports = { renderBody, firstParagraph, substackSlug, stripReferral };
+module.exports = { renderBody, firstParagraph, substackSlug, stripReferral, SERIES_GUIDE_SLUGS };

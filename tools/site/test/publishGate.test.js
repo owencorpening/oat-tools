@@ -224,6 +224,17 @@ test('fails on a placeholder link', () => {
   assertGateFails(repo, /placeholder link/);
 });
 
+test('allows a series-guide link from a series article, not from a standalone one', () => {
+  const repo = makeRepo();
+  repo.write('a.md', article(good('a', { series: 'water' }), 'See the [series guide](https://owencorpening.substack.com/p/series-guide?r=1gha0n).'));
+  repo.write('b.md', article(good('b'), 'See the [series guide](https://owencorpening.substack.com/p/series-guide).'));
+  repo.commit('a and b');
+  repo.tag('pub/water/a/2025-01-01');
+  assert.strictEqual(selectPublished(repo.dir).length, 1);
+  repo.tag('pub/standalone/b/2025-01-01');
+  assertGateFails(repo, /pub\/standalone\/b\/2025-01-01: links to https:\/\/owencorpening\.substack\.com\/p\/series-guide/);
+});
+
 test('allows links between published articles', () => {
   const repo = makeRepo();
   repo.write('a.md', article(good('a', { substack_url: 'https://owencorpening.substack.com/p/a-live' }),
