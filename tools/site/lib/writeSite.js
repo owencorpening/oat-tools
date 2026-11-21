@@ -141,7 +141,7 @@ async function writeSite(articles, outDir, options = {}) {
   if (problems.length) throw new GateError(problems);
 
   fs.mkdirSync(outDir, { recursive: true });
-  const imageMap = await copyImages([...rendered.values()].map((html) => ({ html })), outDir, options.fetchImpl);
+  const imageMap = await copyImages([...rendered.values()].map((html) => ({ html })), outDir, options.fetchImpl, options.retryDelaysMs);
 
   writeFile(outDir, 'style.css', CSS);
 
