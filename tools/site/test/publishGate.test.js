@@ -100,12 +100,14 @@ function assertGateFails(repo, expected) {
   );
 }
 
+const noFetch = () => { throw new Error('no network in this test'); };
+
 const tests = [];
 function test(name, fn) { tests.push({ name, fn }); }
 
 // ---------------------------------------------------------------------------
 
-test('only tagged, published articles reach the output; drafts never do', () => {
+test('only tagged, published articles reach the output; drafts never do', async () => {
   const repo = makeRepo();
 
   // A: published twice. The older version and later main edits must not leak.
@@ -153,9 +155,9 @@ test('only tagged, published articles reach the output; drafts never do', () => 
   assert.deepStrictEqual(articles.map((a) => `${a.series}/${a.slug}`), ['standalone/b-essay', 'water/part-01']);
 
   const out = path.join(tmpDir('oat-gate-out-'), 'site');
-  writeSite(articles, out);
+  await writeSite(articles, out, { series: new Map([['standalone', { id: 'standalone', name: 'Standalone', description: 'd', order: 2 }], ['water', { id: 'water', name: 'Water', description: 'd', order: 1 }]]), fetchImpl: noFetch });
   const files = allFiles(out).map((f) => path.relative(out, f)).sort();
-  assert.deepStrictEqual(files, ['404.html', 'index.html', 'standalone/b-essay/index.html', 'water/part-01/index.html']);
+  assert.deepStrictEqual(files, ['404.html', 'index.html', 'standalone/b-essay/index.html', 'standalone/index.html', 'style.css', 'water/index.html', 'water/part-01/index.html']);
   assertNoCanary(out);
   const page = fs.readFileSync(path.join(out, 'water/part-01/index.html'), 'utf8');
   assert.ok(page.includes('Published text of part one.'), 'article text is in the page HTML');
@@ -217,6 +219,14 @@ test('allows links between published articles', () => {
   assert.strictEqual(selectPublished(repo.dir).length, 2);
 });
 
+test('accepts a published date with a time, as LinkedIn headers have', () => {
+  const repo = makeRepo();
+  repo.write('a.md', article(good('a', { published: '2026-04-07 14:15', type: 'linkedin-article' }), 'text'));
+  repo.commit('a');
+  repo.tag('pub/standalone/a/2026-04-07');
+  assert.strictEqual(selectPublished(repo.dir)[0].published, '2026-04-07');
+});
+
 test('fails on a malformed pub/ tag', () => {
   const repo = makeRepo();
   repo.write('a.md', article(good('a'), 'text'));
@@ -245,18 +255,19 @@ test('the build command writes nothing when the gate fails', () => {
   assert.ok(!/CANARY_/.test(run.stdout), 'build log does not print draft text');
 });
 
-test('the build refuses a non-empty output directory', () => {
+test('the build refuses a non-empty output directory', async () => {
   const out = tmpDir('oat-gate-out-');
   fs.writeFileSync(path.join(out, 'stale.html'), 'CANARY_STALE_PAGE');
-  assert.throws(() => writeSite([], out), /not empty/);
+  await assert.rejects(() => writeSite([], out), /not empty/);
 });
 
 // ---------------------------------------------------------------------------
 
+(async () => {
 let failed = 0;
 for (const t of tests) {
   try {
-    t.fn();
+    await t.fn();
     console.log(`  ok  ${t.name}`);
   } catch (err) {
     failed += 1;
@@ -269,3 +280,4 @@ if (failed) {
   process.exit(1);
 }
 console.log(`publishGate tests passed (${tests.length})`);
+})();

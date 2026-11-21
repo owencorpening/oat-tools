@@ -38,9 +38,23 @@ unpublished articles, then checks that none of it appears in any output file.
 It also checks each failure rule. This repo is public, so fixtures must never
 contain real drafts.
 
+## Pages (`lib/writeSite.js`)
+
+Home (`/`), one page per series with a published article (`/<series>/`,
+plus `/standalone/`), one page per article (`/<series>/<slug>/`) and
+`404.html`. Plain HTML and one stylesheet: no JavaScript, no outside
+requests. Every image a published article uses is downloaded into
+`assets/` and the page points at the copy. Links between published
+articles become site links; Substack `?r=` referral codes are removed.
+
+Series names, descriptions and order come from `site/series.json` in
+oat-content (read from `main`):
+
+```json
+[{ "id": "water", "name": "Water Resilience", "description": "…", "order": 1 }]
+```
+
 ## Status
 
-The pages written by `lib/writeSite.js` are placeholders. The real Home,
-Series, Article and Not found pages, image copying, the remaining
-pre-publish checks (placeholder links, sources section) and the CI workflow
-come next.
+Still to come: the remaining pre-publish checks (placeholder links, sources
+section) and the oat-content workflow that builds and pushes to oat-web.
