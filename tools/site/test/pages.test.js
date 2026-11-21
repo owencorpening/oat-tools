@@ -82,7 +82,7 @@ test('builds home, series, article and not-found pages with no JavaScript', asyn
       art('water', 'part-01', {
         part: '01',
         substackUrl: 'https://owencorpening.substack.com/p/part-one',
-        body: `# Part one\n\nOpening paragraph of part one, which is long enough to describe it.\n\n![chart](${img.base}/chart.png)\n\n<img src="${img.base}/chart.png" width="400" alt="same chart again">\n\nNext: [part two](https://owencorpening.substack.com/p/part-two?r=1gha0n). Source: [WHO](https://www.who.int/report?r=keep).`
+        body: `# Part one\n\nOpening paragraph of part one, which is long enough to describe it.\n\n![chart](${img.base}/chart.png)\n\n<img src="${img.base}/chart.png" width="400" alt="same chart again">\n\nNext: [part two](https://owencorpening.substack.com/p/part-two?r=1gha0n). See the [guide](https://owencorpening.substack.com/p/series-guide?r=1gha0n). Source: [WHO](https://www.who.int/report?r=keep).`
       }),
       art('water', 'manifesto', { part: 'manifesto', published: '2026-05-14' }),
       art('standalone', 'essay', { linkedinUrl: 'https://www.linkedin.com/posts/x', body: '<img src="' + img.base + '/chart.png">\n\n# Title essay\n\nEssay opening paragraph that is long enough to stand as a description.' })
@@ -130,6 +130,7 @@ test('builds home, series, article and not-found pages with no JavaScript', asyn
     assert.ok(p1.includes('href="https://www.who.int/report?r=keep"'), 'non-Substack links untouched');
     assert.ok(p1.includes('<a href="../">Water Resilience</a>') && p1.includes('Part 1'));
     assert.ok(p1.includes('href="../part-02/"'), 'next link');
+    assert.ok(p1.includes('<a href="../">guide</a>') && !p1.includes('series-guide'), 'series-guide link goes to the series page');
     assert.ok(p1.includes('Also on <a href="https://owencorpening.substack.com/p/part-one">Substack</a>'));
     assert.ok(p1.includes('<link rel="canonical" href="https://owencorpening.github.io/oat-web/water/part-01/">'));
     assert.ok(p1.includes('<link rel="stylesheet" href="../../style.css">'));

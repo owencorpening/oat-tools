@@ -18,6 +18,7 @@
 const { execFileSync } = require('child_process');
 const { parseFrontMatter } = require('./frontMatter');
 const { extractLinks, placeholderProblems } = require('./sopChecks');
+const { SERIES_GUIDE_SLUGS } = require('./render');
 
 const TAG_PATTERN = /^pub\/([a-z0-9][a-z0-9-]*)\/([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2})(?:\.(\d+))?$/;
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
@@ -190,6 +191,9 @@ function checkLinksToUnpublished(articles) {
     problems.push(...placeholderProblems(a));
     for (const { url } of extractLinks(a.body)) {
       const substack = normalizeSubstack(url);
+      if (SERIES_GUIDE_SLUGS.has(substack) && a.series !== STANDALONE) {
+        continue; // becomes a link to the article's series page
+      }
       if (substack && !publishedSubstack.has(substack)) {
         problems.push(`${a.tag}: links to ${url}, which is not a published article on the site`);
       } else if (!/^[a-z][a-z0-9+.-]*:/i.test(url) && /\.md(#.*)?$/i.test(url)) {
