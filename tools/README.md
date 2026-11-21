@@ -12,6 +12,7 @@ scripts.
 | `assets/validate-provenance.js` | Checks final asset folders for required provenance files. |
 | `carousels/export-carousel.js` | Exports Marp carousel markdown to PDF with the OAT content standards theme. |
 | `blockiness/blockiness-report.js` | Scores articles for text-blockiness to triage pullquote candidates; optional `--classify-lists` pass flags bullet lists that are actually disguised tables/arguments/paragraphs. |
+| `site/build-site.js` | Builds the public OAT site from published, tagged articles in oat-content, behind the publish gate. See `site/README.md`. |
 
 Blockquote/pullquote rendering moved to the `table-tools` VS Code extension
 (`OAT Tables: Promote Selection as Pullquote` / `Promote All Pullquotes in
