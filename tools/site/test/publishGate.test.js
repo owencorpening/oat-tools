@@ -158,7 +158,7 @@ test('only tagged, published articles reach the output; drafts never do', async 
   const out = path.join(tmpDir('oat-gate-out-'), 'site');
   await writeSite(articles, out, { series: new Map([['vectors', { id: 'vectors', name: 'Vectors', description: 'd', order: 2 }], ['water', { id: 'water', name: 'Water', description: 'd', order: 1 }]]), fetchImpl: noFetch });
   const files = allFiles(out).map((f) => path.relative(out, f)).sort();
-  assert.deepStrictEqual(files, ['404.html', 'index.html', 'standalone/b-essay/index.html', 'standalone/index.html', 'style.css', 'vectors/b-essay/index.html', 'vectors/index.html', 'water/index.html', 'water/part-01/index.html']);
+  assert.deepStrictEqual(files, ['404.html', 'brand/apple-touch-icon.png', 'brand/cornerstone.jpg', 'brand/favicon-32.png', 'brand/oat-mark.png', 'index.html', 'standalone/b-essay/index.html', 'standalone/index.html', 'style.css', 'vectors/b-essay/index.html', 'vectors/index.html', 'water/index.html', 'water/part-01/index.html']);
   assertNoCanary(out);
   const page = fs.readFileSync(path.join(out, 'water/part-01/index.html'), 'utf8');
   assert.ok(page.includes('Published text of part one.'), 'article text is in the page HTML');
