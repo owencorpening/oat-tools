@@ -19,8 +19,8 @@ const { writeSite } = require('./lib/writeSite');
 const { sourcesProblem } = require('./lib/sopChecks');
 
 const DEFAULT_BASE_URL = 'https://owensappliedthinking.com/';
-// GoatCounter site code (CODE.goatcounter.com). null = no visitor counter.
-const GOATCOUNTER_CODE = null;
+// GoatCounter site code (CODE.goatcounter.com), Owen's account. null = no visitor counter.
+const GOATCOUNTER_CODE = 'owensappliedthinking';
 
 function parseArgs(argv) {
   const args = {};
