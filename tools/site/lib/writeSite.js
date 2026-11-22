@@ -19,6 +19,9 @@ const SIGN_OFF = 'Owen Corpening · Austin, Texas';
 // resized and committed here so the build makes no outside request for them.
 const BRAND_SRC = path.join(__dirname, '..', 'brand');
 const BRAND_FILES = ['oat-mark.png', 'favicon-32.png', 'apple-touch-icon.png', 'cornerstone.jpg'];
+// Articles at least this long (words of rendered text) also get a compact
+// Previous/Next pair under the date line (Owen, 2026-11-22).
+const TOP_PAGER_MIN_WORDS = 1000;
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
   'August', 'September', 'October', 'November', 'December'];
 
@@ -54,15 +57,26 @@ blockquote{border-left:3px solid var(--brass);margin-left:0;padding-left:1rem;co
 .pager a:hover{border-color:var(--brass)}
 .pager a:active{transform:translateY(3px);box-shadow:0 0 0 var(--edge);background:var(--press)}
 .pager .next{margin-left:auto;text-align:right}
+.pager-top{display:flex;justify-content:space-between;gap:.75rem;margin:.25rem 0 1.25rem;font:600 .85rem/1 system-ui,sans-serif}
+.pager-top a{padding:.45rem .75rem;border:1px solid var(--line);border-radius:6px;background:var(--band);color:var(--granite);text-decoration:none;box-shadow:0 3px 0 var(--edge);transition:transform .06s,box-shadow .06s}
+.pager-top a:hover{border-color:var(--brass)}
+.pager-top a:active{transform:translateY(3px);box-shadow:0 0 0 var(--edge);background:var(--press)}
+.pager-top .next{margin-left:auto}
+.pager-top a:focus-visible{outline:3px solid var(--brass);outline-offset:3px}
 .pager small{display:block;margin-bottom:.2rem;color:var(--quiet);font-weight:400;font-size:.8rem;letter-spacing:.04em;text-transform:uppercase}
 .list a:focus-visible,.pager a:focus-visible{outline:3px solid var(--brass);outline-offset:3px}
-@media (prefers-reduced-motion:reduce){.list li,.pager a{transition:none}}
+@media (prefers-reduced-motion:reduce){.list li,.pager a,.pager-top a{transition:none}}
 .also{font:.95rem/1.4 system-ui,sans-serif}
 .hero{margin:1.25rem 0 0;border-radius:4px;overflow:hidden}
 .hero img{display:block;width:100%;aspect-ratio:2.15/1;object-fit:cover;object-position:center 45%}
 .sig{display:block;color:var(--ink);font-style:italic;font-family:Georgia,"Times New Roman",serif}
 .visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 `;
+
+function wordCount(html) {
+  const text = html.replace(/<[^>]+>/g, ' ').replace(/&[a-z#0-9]+;/gi, ' ').trim();
+  return text ? text.split(/\s+/).length : 0;
+}
 
 function escapeHtml(text) {
   return String(text)
@@ -239,12 +253,15 @@ async function writeSite(articles, outDir, options = {}) {
         ? `<nav class="pager">${prev ? `<a class="prev" href="../${prev.slug}/"><small>← Previous</small>${escapeHtml(prev.title)}</a>` : ''}${next ? `<a class="next" href="../${next.slug}/"><small>Next →</small>${escapeHtml(next.title)}</a>` : ''}</nav>`
         : '';
       const html = pointAtCopies(rendered.get(a), imageMap, '../../');
+      const topPager = (prev || next) && wordCount(html) >= TOP_PAGER_MIN_WORDS
+        ? `<nav class="pager-top" aria-label="Previous and next">${prev ? `<a class="prev" href="../${prev.slug}/" title="${escapeHtml(prev.title)}">← Previous</a>` : ''}${next ? `<a class="next" href="../${next.slug}/" title="${escapeHtml(next.title)}">Next →</a>` : ''}</nav>\n`
+        : '';
       writeFile(outDir, `${s.id}/${a.slug}/index.html`, page({
         title: `${a.title} · ${SITE_NAME}`,
         description: a.description || firstParagraph(a.body),
         canonical: canonical(`${s.id}/${a.slug}/`),
         rootPrefix: '../../',
-        body: `<article>\n<h1>${escapeHtml(a.title)}</h1>\n<p class="meta">${meta}</p>\n${html}\n</article>\n${also.length ? `<p class="also">Also on ${also.join(' and ')}.</p>\n` : ''}${pager}`
+        body: `<article>\n<h1>${escapeHtml(a.title)}</h1>\n<p class="meta">${meta}</p>\n${topPager}${html}\n</article>\n${also.length ? `<p class="also">Also on ${also.join(' and ')}.</p>\n` : ''}${pager}`
       }));
     });
   }
