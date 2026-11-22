@@ -249,6 +249,24 @@ async function writeSite(articles, outDir, options = {}) {
     }
   }
 
+  // Redirects for articles moved to another series (e.g. /family/x/ ->
+  // /science/x/), including the old id of a renamed series. A former series
+  // left with no articles redirects its index to the home page.
+  const shown = new Set(shownSeries.map((s) => s.id));
+  for (const a of articles) {
+    const from = new Set(a.formerSeries || []);
+    for (const [oldId, newId] of LEGACY_SERIES) if (from.has(newId)) from.add(oldId);
+    for (const oldId of from) {
+      if (shown.has(oldId)) {
+        if (bySeries.get(oldId).some((b) => b.slug === a.slug)) continue;
+      } else if (!fs.existsSync(path.join(outDir, oldId, 'index.html'))) {
+        writeFile(outDir, `${oldId}/index.html`, redirectPage('../', canonical('')));
+      }
+      writeFile(outDir, `${oldId}/${a.slug}/index.html`,
+        redirectPage(`../../${a.series}/${a.slug}/`, canonical(`${a.series}/${a.slug}/`)));
+    }
+  }
+
   // Not found: served at any depth, so it uses absolute paths and lists nothing.
   writeFile(outDir, '404.html', page({
     title: `Not found · ${SITE_NAME}`,

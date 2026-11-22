@@ -12,6 +12,12 @@
 //   5. On main today, that article still says `text_status: published`
 //      (otherwise it has been unpublished and is dropped).
 //
+// Moving an article to another series: change `series` on main and tag it
+// under the new series. Its tags under the old series are then ignored, and
+// the article carries `formerSeries` so the site can redirect the old URLs.
+// If main names a series the article has no tag for yet, that is an error,
+// so the build stops instead of quietly dropping the article.
+//
 // The article text comes from the tagged commit only. Nothing is ever read
 // by walking folders, so drafts, notes and corrections can't be picked up.
 // Any problem with a tagged article is an error and stops the build.
@@ -99,6 +105,56 @@ function findArticleFiles(repoDir, ref, series, slug) {
   return matches;
 }
 
+// Files on main with this slug that say text_status: published, any series.
+function findPublishedOnMain(repoDir, mainRef, slug) {
+  const pattern = `^slug:[[:space:]]*["']?${slug}["']?[[:space:]]*$`;
+  let out = '';
+  try {
+    out = git(repoDir, ['grep', '-l', '-E', pattern, mainRef, '--', '*.md']);
+  } catch (err) {
+    if (err.status === 1) return [];
+    throw err;
+  }
+  const found = [];
+  for (const line of out.trim().split('\n').filter(Boolean)) {
+    const filePath = line.slice(mainRef.length + 1);
+    const { data } = parseFrontMatter(git(repoDir, ['show', `${mainRef}:${filePath}`]));
+    if (data && data.slug === slug && data.text_status === 'published') found.push(data);
+  }
+  return found;
+}
+
+// Picks which tags to build when a slug has been tagged under more than one
+// series, or when main has moved it to a series it isn't tagged under yet.
+function resolveMoves(repoDir, mainRef, tags, problems) {
+  const bySlug = new Map();
+  for (const tag of tags) {
+    if (!bySlug.has(tag.slug)) bySlug.set(tag.slug, []);
+    bySlug.get(tag.slug).push(tag);
+  }
+  const kept = [];
+  for (const [slug, group] of bySlug) {
+    const onMain = new Set(findPublishedOnMain(repoDir, mainRef, slug).map(seriesOf));
+    const stay = group.filter((t) => onMain.has(t.series));
+    const gone = group.filter((t) => !onMain.has(t.series));
+    if (onMain.size === 0) {
+      kept.push(...group); // unpublished on main; dropped later as before
+      continue;
+    }
+    const untagged = [...onMain].filter((s) => !group.some((t) => t.series === s));
+    if (stay.length === 0 && untagged.length) {
+      problems.push(`${slug}: main puts it in series "${untagged.join('", "')}" but it has no pub/${untagged[0]}/${slug}/<date> tag yet`);
+      kept.push(...group); // still checked, so any other problem shows too
+      continue;
+    }
+    if (stay.length === 1 && gone.length) {
+      stay[0].formerSeries = [...new Set(gone.map((t) => t.series))];
+    }
+    kept.push(...stay);
+  }
+  return kept;
+}
+
 function checkFields(where, data) {
   const problems = [];
   if (data.text_status !== 'published') {
@@ -130,7 +186,8 @@ function selectPublished(repoDir, options = {}) {
     throw new GateError([`main branch "${mainRef}" not found`]);
   }
 
-  for (const tag of listPublishTags(repoDir, problems).values()) {
+  const tags = resolveMoves(repoDir, mainRef, [...listPublishTags(repoDir, problems).values()], problems);
+  for (const tag of tags) {
     const commit = git(repoDir, ['rev-list', '-n', '1', tag.name]).trim();
     const where = `tag ${tag.name}`;
 
@@ -170,6 +227,7 @@ function selectPublished(repoDir, options = {}) {
       linkedinUrl: article.data.linkedin_url || null,
       body: article.body,
       tag: tag.name,
+      formerSeries: tag.formerSeries || [],
       commit,
       sourcePath: article.path
     });
