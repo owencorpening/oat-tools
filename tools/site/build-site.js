@@ -5,6 +5,7 @@
 //
 //   node tools/site/build-site.js --content <path to oat-content> --out <empty dir>
 //       [--base-url https://owensappliedthinking.com/] [--main main]
+//       [--goatcounter <code>]
 //
 // Runs inside the private oat-content repo's CI. Only the --out directory is
 // ever pushed to the public site repo. On any failure the output directory
@@ -18,6 +19,8 @@ const { writeSite } = require('./lib/writeSite');
 const { sourcesProblem } = require('./lib/sopChecks');
 
 const DEFAULT_BASE_URL = 'https://owensappliedthinking.com/';
+// GoatCounter site code (CODE.goatcounter.com). null = no visitor counter.
+const GOATCOUNTER_CODE = null;
 
 function parseArgs(argv) {
   const args = {};
@@ -30,7 +33,7 @@ function parseArgs(argv) {
     args[key.slice(2)] = value;
   }
   if (!args.content || !args.out) {
-    throw new Error('usage: build-site.js --content <oat-content> --out <dir> [--base-url <url>] [--main main]');
+    throw new Error('usage: build-site.js --content <oat-content> --out <dir> [--base-url <url>] [--main main] [--goatcounter <code>]');
   }
   return args;
 }
@@ -44,7 +47,7 @@ async function main() {
   try {
     const articles = selectPublished(content, { mainRef });
     const series = readSeries(content, mainRef);
-    await writeSite(articles, out, { series, baseUrl: args['base-url'] || DEFAULT_BASE_URL });
+    await writeSite(articles, out, { series, baseUrl: args['base-url'] || DEFAULT_BASE_URL, goatcounter: args.goatcounter || GOATCOUNTER_CODE });
     console.log(`Built ${articles.length} published article(s) into ${args.out}`);
     for (const a of articles) console.log(`  ${a.series}/${a.slug}  (${a.tag})`);
     // Warning only for now; whether it should fail the build is Owen's call.
