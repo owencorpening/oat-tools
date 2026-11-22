@@ -20,6 +20,36 @@ const SIGN_OFF = 'Owen Corpening · Austin, Texas';
 // resized and committed here so the build makes no outside request for them.
 const BRAND_SRC = path.join(__dirname, '..', 'brand');
 const BRAND_FILES = ['oat-mark.png', 'favicon-32.png', 'apple-touch-icon.png', 'cornerstone.jpg'];
+// About page wording: oat-standards templates/brand_block.md (intro, mission,
+// disclaimer) and sops/actions/sop-pre-publish-review.md (bio footer).
+// "35+ years" replaces brand_block's "five decades" (Owen, 2026-11-22).
+// "Things I've built" lines are the GitHub repo descriptions.
+// Never add new wording here; change oat-standards first.
+const SUBSTACK_URL = 'https://owencorpening.substack.com/';
+const LINKEDIN_URL = 'https://www.linkedin.com/in/owencorpening/';
+const ABOUT_BODY = `<div class="about">
+<h1>About</h1>
+<p class="meta">It's not activism. It's not theory. It's engineering.</p>
+<p class="lede">Exploring the hidden logic and overlooked systems of everyday life — from the perspective of a civil engineer (former Texas PE) with 35+ years of field experience across civil infrastructure and software.</p>
+<p class="creed">No charity. No mandates. No green ideology.</p>
+<h2>Mission</h2>
+<p>Most policy discussions about water, energy, and infrastructure begin with the assumption that scarcity is a natural condition to be managed. This publication starts somewhere else: with the premise that most large-scale resource problems are system design failures, and that system design failures can be solved.</p>
+<p>The analyses here are preliminary and intended to invite scrutiny. The calculations are stated. The assumptions are open. Engineers, hydrologists, and infrastructure planners are encouraged to challenge the estimates and improve them.</p>
+<p><strong>Engineering, not evangelism.</strong></p>
+<h2>The author</h2>
+<p>Owen Corpening is a 5th-generation Texan and a civil engineer (BSCE, UT Austin; former Texas PE). Political and cultural opinions are mine alone.</p>
+<h2>Disclaimer</h2>
+<p>I held a Texas PE license and chose not to renew it after I left engineering practice, so this isn't professional engineering services. These are conceptual analyses and preliminary estimates intended for discussion — not stamped drawings you can build from.</p>
+<p>If you are actually building something, hire a licensed engineer in your jurisdiction.</p>
+<h2>Things I've built</h2>
+<ul class="list">
+<li><a href="https://github.com/owencorpening/riffkit">riffkit</a><p>Free, install from GitHub · Turn any song into a practice project: stems you can mute, lyrics on your TV, your phone as the remote. Also splits live concerts into songs.</p></li>
+<li><a href="https://github.com/owencorpening/image-capture">Image Attribution Logger</a><p>Free, install from GitHub · The Image Attribution Logger is a seamless, zero-friction tool that automates image compliance for content creation.</p></li>
+<li><a href="https://github.com/owencorpening/yt-grid-extension">YouTube Search Grid + Recency Filter</a><p>Free, install from GitHub.</p></li>
+</ul>
+<h2>Elsewhere</h2>
+<ul class="elsewhere"><li><a href="${SUBSTACK_URL}">Substack</a></li><li><a href="${LINKEDIN_URL}">LinkedIn</a></li></ul>
+</div>`;
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
   'August', 'September', 'October', 'November', 'December'];
 
@@ -30,11 +60,15 @@ body{margin:0;background:var(--bg);color:var(--ink);font:18px/1.6 Georgia,"Times
 header,main,footer{max-width:42rem;margin:0 auto;padding:0 1rem}
 header{border-bottom:3px solid var(--brass);padding-top:1rem;padding-bottom:.75rem}
 header{padding-top:1.1rem;padding-bottom:.9rem;background:linear-gradient(180deg,var(--stone),var(--bg) 85%);border-image:linear-gradient(90deg,var(--brass),var(--brass-hi) 45%,var(--brass) 70%,var(--brass)) 1}
-header a{display:flex;align-items:center;gap:.75rem;color:var(--granite);text-decoration:none}
+header{display:flex;align-items:center;justify-content:space-between;gap:.75rem}
+header a.home{display:flex;align-items:center;gap:.75rem;min-width:0;color:var(--granite);text-decoration:none}
+header nav a{display:inline-flex;align-items:center;min-height:44px;color:var(--granite);text-decoration:none;font:600 .8rem/1 system-ui,sans-serif;letter-spacing:.12em;text-transform:uppercase;border-bottom:2px solid transparent}
+header nav a:hover,header nav a[aria-current]{color:var(--brass);border-bottom-color:var(--brass)}
+header nav a:focus-visible,footer a:focus-visible{outline:3px solid var(--brass);outline-offset:3px}
 header img{display:block;height:40px;width:auto}
 .mark{position:relative;display:block;border-radius:3px;overflow:hidden;line-height:0}
 .mark::after{content:"";position:absolute;inset:0;background:linear-gradient(105deg,transparent 30%,rgba(255,255,255,.55) 48%,transparent 66%);transform:translateX(-120%);pointer-events:none;animation:sheen 1.4s .35s ease-out both}
-header a:hover .mark::after{animation:sheen2 1s ease-out}
+header a.home:hover .mark::after{animation:sheen2 1s ease-out}
 @keyframes sheen{to{transform:translateX(120%)}}
 @keyframes sheen2{from{transform:translateX(-120%)}to{transform:translateX(120%)}}
 header span.name{font:400 .95rem/1.2 Georgia,"Times New Roman",serif;letter-spacing:.18em;text-transform:uppercase}
@@ -92,6 +126,16 @@ main>*:nth-child(3){animation-delay:.16s}
 .hero{margin:1.25rem 0 0;border-radius:4px;overflow:hidden}
 .hero img{display:block;width:100%;aspect-ratio:2.15/1;object-fit:cover;object-position:center 45%}
 .sig{display:block;color:var(--ink);font-style:italic;font-family:Georgia,"Times New Roman",serif}
+.about h2{font-size:1.15rem;margin:2rem 0 .5rem;padding-top:1rem;border-top:1px solid var(--line)}
+.about .list li p{display:block;overflow:visible}
+.about .lede{font-size:1.1rem}
+.about .creed{font-style:italic;color:var(--granite)}
+.about .elsewhere{list-style:none;padding:0;display:flex;flex-wrap:wrap;gap:.75rem;font:600 .95rem/1 system-ui,sans-serif}
+.about .elsewhere a{display:inline-flex;align-items:center;min-height:44px;padding:0 1rem;border:1px solid var(--line);border-radius:6px;background:var(--band);color:var(--granite);text-decoration:none;box-shadow:0 3px 0 var(--edge)}
+.about .elsewhere a:hover{border-color:var(--brass);box-shadow:0 3px 0 var(--edge),0 6px 16px var(--glow)}
+.about .elsewhere a:active{transform:translateY(3px);box-shadow:0 0 0 var(--edge);background:var(--press)}
+footer .links{display:block;margin-top:.5rem}
+footer .links a{color:var(--quiet)}
 .visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 `;
 // Changes whenever the stylesheet does, so browsers and the Pages cache
@@ -128,7 +172,7 @@ function seriesOrder(a, b) {
 }
 
 // footerTagline: false on the home page, which shows the tagline under the hero.
-function page({ title, description, canonical, rootPrefix, body, footerTagline = true, image = null }) {
+function page({ title, description, canonical, rootPrefix, body, footerTagline = true, image = null, current = null }) {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -140,11 +184,11 @@ ${description ? `<meta name="description" content="${escapeHtml(description)}">\
 <link rel="apple-touch-icon" href="${rootPrefix}brand/apple-touch-icon.png">
 </head>
 <body>
-<header><a href="${rootPrefix || './'}"><span class="mark"><img src="${rootPrefix}brand/oat-mark.png" alt="OAT" width="100" height="40"></span><span class="name">${escapeHtml(SITE_NAME)}</span></a></header>
+<header><a class="home" href="${rootPrefix || './'}"><span class="mark"><img src="${rootPrefix}brand/oat-mark.png" alt="OAT" width="100" height="40"></span><span class="name">${escapeHtml(SITE_NAME)}</span></a><nav aria-label="Site"><a href="${rootPrefix}about/"${current === 'about' ? ' aria-current="page"' : ''}>About</a></nav></header>
 <main>
 ${body}
 </main>
-<footer>${footerTagline ? escapeHtml(TAGLINE) : ''}<span class="sig">${escapeHtml(SIGN_OFF)}</span></footer>
+<footer>${footerTagline ? escapeHtml(TAGLINE) : ''}<span class="sig">${escapeHtml(SIGN_OFF)}</span><span class="links"><a href="${rootPrefix}about/">About</a> · <a href="${SUBSTACK_URL}">Substack</a> · <a href="${LINKEDIN_URL}">LinkedIn</a></span></footer>
 </body>
 </html>
 `;
@@ -329,6 +373,16 @@ async function writeSite(articles, outDir, options = {}) {
         redirectPage(`../../${a.series}/${a.slug}/`, canonical(`${a.series}/${a.slug}/`)));
     }
   }
+
+  // About: fixed wording from oat-standards, no article content.
+  writeFile(outDir, 'about/index.html', page({
+    title: `About · ${SITE_NAME}`,
+    description: TAGLINE,
+    canonical: canonical('about/'),
+    rootPrefix: '../',
+    current: 'about',
+    body: ABOUT_BODY
+  }));
 
   // Not found: served at any depth, so it uses absolute paths and lists nothing.
   writeFile(outDir, '404.html', page({
