@@ -110,6 +110,9 @@ test('builds home, series, article and not-found pages with no JavaScript', asyn
     ]);
     assert.strictEqual(files.filter((f) => f.startsWith('assets/')).length, 1, 'one image, copied once');
     assert.strictEqual(img.hits.length, 1, 'image downloaded once');
+    assert.deepStrictEqual(files.filter((f) => f.startsWith('brand/')).sort(),
+      ['brand/apple-touch-icon.png', 'brand/cornerstone.jpg', 'brand/favicon-32.png', 'brand/oat-mark.png'],
+      'brand files copied from the repo, not downloaded');
 
     for (const f of files.filter((x) => x.endsWith('.html'))) {
       const html = read(out, f);
@@ -123,6 +126,8 @@ test('builds home, series, article and not-found pages with no JavaScript', asyn
     assert.ok(home.includes('href="water/"') && home.includes('href="standalone/"'));
     assert.ok(!home.includes('CNG'), 'a series with no published article is hidden');
     assert.ok(home.includes('<link rel="canonical" href="https://owencorpening.github.io/oat-web/">'));
+    assert.ok(home.includes('<img src="brand/cornerstone.jpg"'), 'cornerstone hero on the home page');
+    assert.ok(home.includes('<h1 class="visually-hidden">'), 'home keeps its h1 for screen readers');
 
     const series = read(out, 'water/index.html');
     const order = ['part-01/', 'part-02/', 'manifesto/'].map((s) => series.indexOf(`href="${s}"`));
@@ -140,6 +145,10 @@ test('builds home, series, article and not-found pages with no JavaScript', asyn
     assert.ok(p1.includes('Also on <a href="https://owencorpening.substack.com/p/part-one">Substack</a>'));
     assert.ok(p1.includes('<link rel="canonical" href="https://owencorpening.github.io/oat-web/water/part-01/">'));
     assert.ok(p1.includes('<link rel="stylesheet" href="../../style.css">'));
+    assert.ok(p1.includes('<img src="../../brand/oat-mark.png" alt="OAT"'), 'header logo on article pages');
+    assert.ok(p1.includes('<link rel="icon" type="image/png" sizes="32x32" href="../../brand/favicon-32.png">'));
+    assert.ok(p1.includes('Owen Corpening, PE'), 'sign-off in footer');
+    assert.ok(!p1.includes('cornerstone.jpg'), 'hero only on the home page');
 
     const essay = read(out, 'standalone/essay/index.html');
     assert.ok(essay.includes('<a href="../">Standalone</a>') && essay.includes('LinkedIn'));
@@ -147,6 +156,7 @@ test('builds home, series, article and not-found pages with no JavaScript', asyn
 
     const nf = read(out, '404.html');
     assert.ok(nf.includes('href="/oat-web/style.css"') && nf.includes('href="/oat-web/"'));
+    assert.ok(nf.includes('src="/oat-web/brand/oat-mark.png"'), '404 logo uses an absolute path');
     assert.ok(!nf.includes('part-01') && !nf.includes('rel="canonical"'), '404 lists nothing');
   } finally {
     img.close();

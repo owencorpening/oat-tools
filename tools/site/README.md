@@ -47,6 +47,13 @@ requests. Every image a published article uses is downloaded into
 `assets/` and the page points at the copy. Links between published
 articles become site links; Substack `?r=` referral codes are removed.
 
+Branding (oat-standards `visual-identity.md`, `sop-branding.md`): every page
+has the OAT plaque logo and site name in the header, an OAT favicon, and the
+tagline plus sign-off in the footer; the home page opens with the cornerstone
+photo. The files are resized copies from `owencorpening/images` `brand/`,
+committed in `brand/` and copied to the output's `brand/` folder, so the build
+downloads nothing for them.
+
 Series names, descriptions and order come from `site/series.json` in
 oat-content (read from `main`):
 

@@ -12,6 +12,12 @@ const { GateError } = require('./gate');
 
 const SITE_NAME = "Owen's Applied Thinking";
 const TAGLINE = "It's not activism. It's not theory. It's engineering.";
+// Sign-off from oat-standards templates/brand_block.md.
+const SIGN_OFF = 'Owen Corpening, PE · Austin, Texas';
+// Brand files (oat-standards sop-branding.md, owencorpening/images brand/),
+// resized and committed here so the build makes no outside request for them.
+const BRAND_SRC = path.join(__dirname, '..', 'brand');
+const BRAND_FILES = ['oat-mark.png', 'favicon-32.png', 'apple-touch-icon.png', 'cornerstone.jpg'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
   'August', 'September', 'October', 'November', 'December'];
 
@@ -21,7 +27,10 @@ const CSS = `:root{--ink:#1f2328;--quiet:#5c636a;--line:#d8dadc;--bg:#ffffff;--g
 body{margin:0;background:var(--bg);color:var(--ink);font:18px/1.6 Georgia,"Times New Roman",serif}
 header,main,footer{max-width:42rem;margin:0 auto;padding:0 1rem}
 header{border-bottom:3px solid var(--brass);padding-top:1rem;padding-bottom:.75rem}
-header a{color:var(--granite);font:600 1.1rem/1.2 system-ui,sans-serif;text-decoration:none}
+header{padding-top:1.1rem;padding-bottom:.9rem}
+header a{display:flex;align-items:center;gap:.75rem;color:var(--granite);text-decoration:none}
+header img{display:block;height:40px;width:auto;border-radius:3px}
+header span{font:400 .95rem/1.2 Georgia,"Times New Roman",serif;letter-spacing:.18em;text-transform:uppercase}
 footer{border-top:1px solid var(--line);margin-top:3rem;padding-top:1rem;padding-bottom:2rem;color:var(--quiet);font:.9rem/1.5 system-ui,sans-serif}
 h1,h2,h3{font-family:system-ui,sans-serif;color:var(--granite);line-height:1.25}
 h1{font-size:2rem;margin:1.5rem 0 .5rem}
@@ -37,6 +46,10 @@ blockquote{border-left:3px solid var(--brass);margin-left:0;padding-left:1rem;co
 .list p{margin:.3rem 0 0;color:var(--quiet);font-size:.95rem}
 .pager{display:flex;justify-content:space-between;gap:1rem;border-top:1px solid var(--line);margin-top:2rem;padding-top:1rem;font:.95rem/1.4 system-ui,sans-serif}
 .also{font:.95rem/1.4 system-ui,sans-serif}
+.hero{margin:1.25rem 0 0;border-radius:4px;overflow:hidden}
+.hero img{display:block;width:100%;aspect-ratio:2.15/1;object-fit:cover;object-position:center 45%}
+.sig{display:block;color:var(--ink);font-style:italic;font-family:Georgia,"Times New Roman",serif}
+.visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 `;
 
 function escapeHtml(text) {
@@ -76,13 +89,15 @@ function page({ title, description, canonical, rootPrefix, body }) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(title)}</title>
 ${description ? `<meta name="description" content="${escapeHtml(description)}">\n` : ''}${canonical ? `<link rel="canonical" href="${escapeHtml(canonical)}">\n` : ''}<link rel="stylesheet" href="${rootPrefix}style.css">
+<link rel="icon" type="image/png" sizes="32x32" href="${rootPrefix}brand/favicon-32.png">
+<link rel="apple-touch-icon" href="${rootPrefix}brand/apple-touch-icon.png">
 </head>
 <body>
-<header><a href="${rootPrefix || './'}">${escapeHtml(SITE_NAME)}</a></header>
+<header><a href="${rootPrefix || './'}"><img src="${rootPrefix}brand/oat-mark.png" alt="OAT" width="100" height="40"><span>${escapeHtml(SITE_NAME)}</span></a></header>
 <main>
 ${body}
 </main>
-<footer>${escapeHtml(TAGLINE)}</footer>
+<footer>${escapeHtml(TAGLINE)}<span class="sig">${escapeHtml(SIGN_OFF)}</span></footer>
 </body>
 </html>
 `;
@@ -144,6 +159,8 @@ async function writeSite(articles, outDir, options = {}) {
   const imageMap = await copyImages([...rendered.values()].map((html) => ({ html })), outDir, options.fetchImpl, options.retryDelaysMs);
 
   writeFile(outDir, 'style.css', CSS);
+  fs.mkdirSync(path.join(outDir, 'brand'), { recursive: true });
+  for (const f of BRAND_FILES) fs.copyFileSync(path.join(BRAND_SRC, f), path.join(outDir, 'brand', f));
 
   // Home.
   const homeList = shownSeries.map((s) => {
@@ -155,7 +172,7 @@ async function writeSite(articles, outDir, options = {}) {
     description: TAGLINE,
     canonical: canonical(''),
     rootPrefix: '',
-    body: `<h1>${escapeHtml(SITE_NAME)}</h1>\n<p class="meta">${escapeHtml(TAGLINE)}</p>\n<ul class="list">\n${homeList}\n</ul>`
+    body: `<h1 class="visually-hidden">${escapeHtml(SITE_NAME)}</h1>\n<figure class="hero"><img src="brand/cornerstone.jpg" alt="OAT carved in a granite cornerstone" width="1200" height="800"></figure>\n<p class="meta">${escapeHtml(TAGLINE)}</p>\n<ul class="list">\n${homeList}\n</ul>`
   }));
 
   // Series pages.
