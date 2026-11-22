@@ -173,6 +173,9 @@ function checkFields(where, data) {
   if (!TYPES.has(data.type)) {
     problems.push(`${where}: type must be one of ${[...TYPES].join(', ')}`);
   }
+  if (data.cover && !/^https?:\/\/[^\s"<>]+$/i.test(data.cover)) {
+    problems.push(`${where}: cover must be a full http(s) image URL`);
+  }
   return problems;
 }
 
@@ -225,6 +228,7 @@ function selectPublished(repoDir, options = {}) {
       description: article.data.description || null,
       substackUrl: article.data.substack_url || null,
       linkedinUrl: article.data.linkedin_url || null,
+      cover: article.data.cover || null,
       body: article.body,
       tag: tag.name,
       formerSeries: tag.formerSeries || [],

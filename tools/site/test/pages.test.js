@@ -285,6 +285,41 @@ test('captions skip the brand block and keep hyphens', () => {
     'a list item that is long enough to be used as a caption here');
 });
 
+test('covers show on cards and above the article title; no cover gets the OAT tile', async () => {
+  const img = await startImageServer();
+  try {
+    const articles = [
+      art('water', 'part-01', { part: '01', cover: `${img.base}/cover-one.png` }),
+      art('water', 'part-02', { part: '02' }),
+      art('water', 'part-03', { part: '03', cover: `${img.base}/cover-one.png`, body: `# Three\n\nOpening paragraph of part three, long enough to describe it.\n\n![map](${img.base}/cover-one.png)` }),
+      art('vectors', 'essay')
+    ];
+    const out = path.join(tmpDir('oat-cover-'), 'site');
+    await writeSite(articles, out, { series: SERIES, baseUrl: 'https://owencorpening.github.io/oat-web' });
+    const assets = fs.readdirSync(path.join(out, 'assets'));
+    assert.strictEqual(assets.length, 1, 'cover copied into the site');
+    const local = `assets/${assets[0]}`;
+
+    const one = read(out, 'water/part-01/index.html');
+    assert.ok(one.includes(`<figure class="cover"><img src="../../${local}" alt=""></figure>\n<h1>`), 'cover above the title');
+    assert.ok(one.includes(`<meta property="og:image" content="https://owencorpening.github.io/oat-web/${local}">`), 'social preview image');
+    assert.ok(!one.includes('127.0.0.1'), 'cover served from the site, not the original host');
+    const two = read(out, 'water/part-02/index.html');
+    assert.ok(!two.includes('class="cover"') && !two.includes('og:image'), 'no cover, no figure');
+
+    const series = read(out, 'water/index.html');
+    assert.ok(series.includes(`<img class="thumb" src="../${local}"`), 'thumbnail on the card');
+    const three = read(out, 'water/part-03/index.html');
+    assert.ok(three.includes(`src="../../${local}"`) && !three.includes('class="cover"'), 'a cover already in the article is not repeated above the title');
+    assert.strictEqual(series.split('<span class="thumb none"').length - 1, 1, 'OAT tile for the piece without a cover');
+    const home = read(out, 'index.html');
+    assert.ok(home.includes(`<img class="thumb" src="${local}"`), 'section card uses its first cover');
+    assert.ok(home.includes('<span class="thumb none"'), 'section with no cover gets the tile');
+  } finally {
+    img.close();
+  }
+});
+
 (async () => {
   let failed = 0;
   for (const t of tests) {
