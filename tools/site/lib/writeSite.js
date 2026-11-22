@@ -6,6 +6,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { renderBody, firstParagraph } = require('./render');
 const { copyImages, pointAtCopies } = require('./images');
 const { GateError } = require('./gate');
@@ -72,6 +73,9 @@ blockquote{border-left:3px solid var(--brass);margin-left:0;padding-left:1rem;co
 .sig{display:block;color:var(--ink);font-style:italic;font-family:Georgia,"Times New Roman",serif}
 .visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 `;
+// Changes whenever the stylesheet does, so browsers and the Pages cache
+// fetch the new one instead of reusing a stale copy.
+const CSS_VERSION = crypto.createHash('sha256').update(CSS).digest('hex').slice(0, 10);
 
 function wordCount(html) {
   const text = html.replace(/<[^>]+>/g, ' ').replace(/&[a-z#0-9]+;/gi, ' ').trim();
@@ -115,7 +119,7 @@ function page({ title, description, canonical, rootPrefix, body, footerTagline =
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(title)}</title>
-${description ? `<meta name="description" content="${escapeHtml(description)}">\n` : ''}${canonical ? `<link rel="canonical" href="${escapeHtml(canonical)}">\n` : ''}<link rel="stylesheet" href="${rootPrefix}style.css">
+${description ? `<meta name="description" content="${escapeHtml(description)}">\n` : ''}${canonical ? `<link rel="canonical" href="${escapeHtml(canonical)}">\n` : ''}<link rel="stylesheet" href="${rootPrefix}style.css?v=${CSS_VERSION}">
 <link rel="icon" type="image/png" sizes="32x32" href="${rootPrefix}brand/favicon-32.png">
 <link rel="apple-touch-icon" href="${rootPrefix}brand/apple-touch-icon.png">
 </head>

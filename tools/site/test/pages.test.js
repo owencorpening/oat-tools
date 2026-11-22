@@ -157,7 +157,7 @@ test('builds home, series, article and not-found pages with no JavaScript', asyn
     assert.ok(p1.includes('<a href="../">guide</a>') && !p1.includes('series-guide'), 'series-guide link goes to the series page');
     assert.ok(p1.includes('Also on <a href="https://owencorpening.substack.com/p/part-one">Substack</a>'));
     assert.ok(p1.includes('<link rel="canonical" href="https://owencorpening.github.io/oat-web/water/part-01/">'));
-    assert.ok(p1.includes('<link rel="stylesheet" href="../../style.css">'));
+    assert.ok(/<link rel="stylesheet" href="\.\.\/\.\.\/style\.css\?v=[0-9a-f]{10}">/.test(p1), 'stylesheet link carries a version');
     assert.ok(p1.includes('<img src="../../brand/oat-mark.png" alt="OAT"'), 'header logo on article pages');
     assert.ok(p1.includes('<link rel="icon" type="image/png" sizes="32x32" href="../../brand/favicon-32.png">'));
     assert.ok(p1.includes('Owen Corpening · Austin, Texas') && !p1.includes('Corpening, PE'), 'sign-off in footer');
@@ -169,7 +169,7 @@ test('builds home, series, article and not-found pages with no JavaScript', asyn
     assert.strictEqual(essay.split('<h1>Title essay</h1>').length - 1, 1, 'title heading after a hero image is not repeated');
 
     const nf = read(out, '404.html');
-    assert.ok(nf.includes('href="/oat-web/style.css"') && nf.includes('href="/oat-web/"'));
+    assert.ok(/href="\/oat-web\/style\.css\?v=[0-9a-f]{10}"/.test(nf) && nf.includes('href="/oat-web/"'));
     assert.ok(nf.includes('src="/oat-web/brand/oat-mark.png"'), '404 logo uses an absolute path');
     assert.ok(!nf.includes('part-01') && !nf.includes('rel="canonical"'), '404 lists nothing');
   } finally {
