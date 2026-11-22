@@ -84,6 +84,10 @@ main>*:nth-child(3){animation-delay:.16s}
 .thumb.none{display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--stone),var(--bg));color:var(--brass);font:600 .8rem/1 Georgia,"Times New Roman",serif;letter-spacing:.12em}
 .cover{margin:1.25rem 0 0}
 .cover img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:6px;box-shadow:0 2px 0 var(--edge),0 8px 20px var(--glow)}
+.pager-top a{min-height:44px;display:inline-flex;align-items:center}
+@media (max-width:40rem){.list li p{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}}
+@media (max-width:24rem){.thumb{width:56px;height:56px}.list li.has-thumb{gap:.7rem}}
+@media (orientation:landscape) and (max-height:500px){.cover img,.hero img{max-height:55vh}}
 .also{font:.95rem/1.4 system-ui,sans-serif}
 .hero{margin:1.25rem 0 0;border-radius:4px;overflow:hidden}
 .hero img{display:block;width:100%;aspect-ratio:2.15/1;object-fit:cover;object-position:center 45%}
