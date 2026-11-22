@@ -63,14 +63,29 @@ function renderBody(article, { bySubstackSlug, linkTo }) {
 }
 
 // Plain-text first paragraph, for listings and link previews.
+// The OAT brand block (oat-standards templates/brand_block.md) opens many
+// articles. It is the same on every one, so it is never used as a caption.
+const BRAND_BLOCK_LINES = new Set([
+  'Exploring the hidden logic and overlooked systems of everyday life, from the perspective of an engineer.',
+  "It's not activism. It's not theory. It's engineering."
+]);
+
+function isBrandLine(line) {
+  const text = line.replace(/[*_]/g, '').replace(/[\u2018\u2019]/g, "'").trim();
+  return BRAND_BLOCK_LINES.has(text);
+}
+
 function firstParagraph(body, max = 220) {
-  const blocks = dropLeadingTitle(body).split(/\n\s*\n/);
+  const withoutBrand = dropLeadingTitle(body).split('\n').filter((line) => !isBrandLine(line)).join('\n');
+  const blocks = withoutBrand.split(/\n\s*\n/);
   for (const block of blocks) {
     const text = block
       .replace(/<[^>]+>/g, ' ')
       .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
       .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
-      .replace(/[#>*_`|-]/g, ' ')
+      .replace(/^\s*(?:[-*+]|\d+\.)\s+/gm, ' ') // list markers
+      .replace(/[#>*_`|]/g, ' ')
+      .replace(/(^|\s)-+(?=\s|$)/g, ' ') // table rules and lone dashes, not hyphens in words
       .replace(/\s+/g, ' ')
       .trim();
     if (text.length >= 40) {
