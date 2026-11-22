@@ -14,7 +14,7 @@ const { DEFAULT_SERIES, LEGACY_SERIES } = require('./series');
 const SITE_NAME = "Owen's Applied Thinking";
 const TAGLINE = "It's not activism. It's not theory. It's engineering.";
 // Sign-off from oat-standards templates/brand_block.md.
-const SIGN_OFF = 'Owen Corpening, PE · Austin, Texas';
+const SIGN_OFF = 'Owen Corpening · Austin, Texas';
 // Brand files (oat-standards sop-branding.md, owencorpening/images brand/),
 // resized and committed here so the build makes no outside request for them.
 const BRAND_SRC = path.join(__dirname, '..', 'brand');

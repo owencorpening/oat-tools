@@ -154,7 +154,7 @@ test('builds home, series, article and not-found pages with no JavaScript', asyn
     assert.ok(p1.includes('<link rel="stylesheet" href="../../style.css">'));
     assert.ok(p1.includes('<img src="../../brand/oat-mark.png" alt="OAT"'), 'header logo on article pages');
     assert.ok(p1.includes('<link rel="icon" type="image/png" sizes="32x32" href="../../brand/favicon-32.png">'));
-    assert.ok(p1.includes('Owen Corpening, PE'), 'sign-off in footer');
+    assert.ok(p1.includes('Owen Corpening · Austin, Texas') && !p1.includes('Corpening, PE'), 'sign-off in footer');
     assert.strictEqual(p1.split('<body>')[1].split("It's not activism.").length - 1, 1, 'tagline in the article footer');
     assert.ok(!p1.includes('cornerstone.jpg'), 'hero only on the home page');
 
