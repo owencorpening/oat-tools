@@ -42,8 +42,8 @@ contain real drafts.
 
 Home (`/`), one page per series with a published article (`/<series>/`,
 plus `/vectors/`), one page per article (`/<series>/<slug>/`) and
-`404.html`. Plain HTML and one stylesheet: no JavaScript, no outside
-requests. Every image a published article uses is downloaded into
+`404.html`. Plain HTML and one stylesheet: no JavaScript. The only outside
+request is the optional visitor counter below. Every image a published article uses is downloaded into
 `assets/` and the page points at the copy. Links between published
 articles become site links; Substack `?r=` referral codes are removed.
 
@@ -53,6 +53,16 @@ tagline plus sign-off in the footer; the home page opens with the cornerstone
 photo. The files are resized copies from `owencorpening/images` `brand/`,
 committed in `brand/` and copied to the output's `brand/` folder, so the build
 downloads nothing for them.
+
+Custom domain: the base URL (`DEFAULT_BASE_URL` in `build-site.js`, or
+`--base-url`) sets canonical links and social preview images. When it isn't a
+`*.github.io` address the build writes a `CNAME` file, so GitHub Pages keeps
+the custom domain after every publish.
+
+Visitor counter: when `GOATCOUNTER_CODE` (or `--goatcounter`) is set, each
+page except 404 and redirects ends with a 1×1 GoatCounter image
+(`https://CODE.goatcounter.com/count?p=/path/`). It counts page views with no
+JavaScript and no cookies; it can't see referrers. Unset means no counter.
 
 Series names, descriptions and order come from `site/series.json` in
 oat-content (read from `main`):

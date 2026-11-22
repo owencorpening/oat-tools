@@ -186,6 +186,7 @@ main>*:nth-child(3){animation-delay:.16s}
 footer .links{display:block;margin-top:.5rem}
 footer .links a{color:var(--quiet)}
 .visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.count{position:absolute;width:1px;height:1px;opacity:0}
 `;
 // Changes whenever the stylesheet does, so browsers and the Pages cache
 // fetch the new one instead of reusing a stale copy.
@@ -221,7 +222,8 @@ function seriesOrder(a, b) {
 }
 
 // footerTagline: false on the home page, which shows the tagline under the hero.
-function page({ title, description, canonical, rootPrefix, body, footerTagline = true, image = null, current = null }) {
+// pixel: GoatCounter count URL for this page, or null for no counter.
+function page({ title, description, canonical, rootPrefix, body, footerTagline = true, image = null, current = null, pixel = null }) {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -238,7 +240,7 @@ ${description ? `<meta name="description" content="${escapeHtml(description)}">\
 ${body}
 </main>
 <footer>${footerTagline ? escapeHtml(TAGLINE) : ''}<span class="sig">${escapeHtml(SIGN_OFF)}</span><span class="links"><a href="${rootPrefix}about/">About</a> · <a href="${SUBSTACK_URL}">Substack</a> · <a href="${LINKEDIN_URL}">LinkedIn</a></span></footer>
-</body>
+${pixel ? `<img class="count" src="${escapeHtml(pixel)}" alt="" width="1" height="1">\n` : ''}</body>
 </html>
 `;
 }
@@ -266,7 +268,7 @@ function writeFile(outDir, relPath, content) {
   fs.writeFileSync(full, content);
 }
 
-// options: { series: Map from readSeries, baseUrl: 'https://…/oat-web/', fetchImpl }
+// options: { series: Map from readSeries, baseUrl: 'https://owensappliedthinking.com/', goatcounter: 'code', fetchImpl }
 // Refuses a non-empty output directory, so stale pages from an earlier
 // build can never survive an unpublish.
 async function writeSite(articles, outDir, options = {}) {
@@ -277,6 +279,10 @@ async function writeSite(articles, outDir, options = {}) {
   const baseUrl = options.baseUrl ? options.baseUrl.replace(/\/?$/, '/') : null;
   const basePath = baseUrl ? new URL(baseUrl).pathname : '/';
   const canonical = (rel) => (baseUrl ? baseUrl + rel : null);
+  // Visitor counter: a GoatCounter image, no JavaScript and no cookies.
+  const code = options.goatcounter || null;
+  if (code && !/^[a-z0-9-]+$/.test(code)) throw new Error(`bad GoatCounter code: ${code}`);
+  const pixel = (rel) => (code ? `https://${code}.goatcounter.com/count?p=${encodeURI('/' + rel)}` : null);
 
   const problems = [];
   for (const a of articles) {
@@ -337,6 +343,7 @@ async function writeSite(articles, outDir, options = {}) {
     description: TAGLINE,
     footerTagline: false,
     canonical: canonical(''),
+    pixel: pixel(''),
     rootPrefix: '',
     body: `<h1 class="visually-hidden">${escapeHtml(SITE_NAME)}</h1>\n<figure class="hero"><img src="brand/cornerstone.jpg" alt="OAT carved in a granite cornerstone" width="1200" height="800"></figure>\n<p class="meta">${escapeHtml(TAGLINE)}</p>\n<ul class="list">\n${homeList}\n</ul>`
   }));
@@ -352,6 +359,7 @@ async function writeSite(articles, outDir, options = {}) {
       title: `${s.name} · ${SITE_NAME}`,
       description: s.description,
       canonical: canonical(`${s.id}/`),
+      pixel: pixel(`${s.id}/`),
       rootPrefix: '../',
       body: `<h1>${escapeHtml(s.name)}</h1>\n<p class="meta">${escapeHtml(s.description)}</p>\n<ul class="list">\n${items}\n</ul>`
     }));
@@ -387,6 +395,7 @@ async function writeSite(articles, outDir, options = {}) {
         title: `${a.title} · ${SITE_NAME}`,
         description: a.description || firstParagraph(a.body),
         canonical: canonical(`${s.id}/${a.slug}/`),
+        pixel: pixel(`${s.id}/${a.slug}/`),
         image: cover && baseUrl ? baseUrl + cover : null,
         rootPrefix: '../../',
         body: `<article>\n${coverOnTop ? `<figure class="cover"><img src="../../${cover}" alt=""></figure>\n` : ''}<h1>${escapeHtml(a.title)}</h1>\n<p class="meta">${meta}</p>\n${topPager}${html}\n</article>\n${also.length ? `<p class="also">Also on ${also.join(' and ')}.</p>\n` : ''}${pager}`
@@ -428,6 +437,7 @@ async function writeSite(articles, outDir, options = {}) {
     title: `About · ${SITE_NAME}`,
     description: TAGLINE,
     canonical: canonical('about/'),
+    pixel: pixel('about/'),
     rootPrefix: '../',
     current: 'about',
     body: ABOUT_BODY
@@ -438,6 +448,7 @@ async function writeSite(articles, outDir, options = {}) {
     title: `Search Grid & Recency Filter for YouTube · ${SITE_NAME}`,
     description: 'Free Chrome extension: YouTube search results as a grid, plus a filter that hides older videos.',
     canonical: canonical('tools/search-grid/'),
+    pixel: pixel('tools/search-grid/'),
     rootPrefix: '../../',
     body: SEARCH_GRID_BODY
   }));
@@ -445,6 +456,7 @@ async function writeSite(articles, outDir, options = {}) {
     title: `Privacy policy · Search Grid & Recency Filter for YouTube · ${SITE_NAME}`,
     description: 'Privacy policy for the Search Grid & Recency Filter Chrome extension.',
     canonical: canonical('tools/search-grid/privacy/'),
+    pixel: pixel('tools/search-grid/privacy/'),
     rootPrefix: '../../../',
     body: SEARCH_GRID_PRIVACY_BODY
   }));
@@ -456,6 +468,13 @@ async function writeSite(articles, outDir, options = {}) {
     rootPrefix: basePath,
     body: `<h1>Page not found</h1>\n<p><a href="${escapeHtml(basePath)}">Go to the home page</a></p>`
   }));
+
+  // Custom domain: GitHub Pages reads it from a CNAME file at the site root.
+  // Writing it on every build means a publish run can never drop the domain.
+  if (baseUrl) {
+    const host = new URL(baseUrl).hostname;
+    if (!host.endsWith('.github.io')) writeFile(outDir, 'CNAME', `${host}\n`);
+  }
 }
 
 module.exports = { writeSite, escapeHtml };

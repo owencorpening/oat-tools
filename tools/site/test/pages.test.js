@@ -182,9 +182,34 @@ test('builds home, series, article and not-found pages with no JavaScript', asyn
     assert.ok(/href="\/oat-web\/style\.css\?v=[0-9a-f]{10}"/.test(nf) && nf.includes('href="/oat-web/"'));
     assert.ok(nf.includes('src="/oat-web/brand/oat-mark.png"'), '404 logo uses an absolute path');
     assert.ok(!nf.includes('part-01') && !nf.includes('rel="canonical"'), '404 lists nothing');
+    assert.ok(!files.includes('CNAME'), 'no CNAME file on a github.io address');
   } finally {
     img.close();
   }
+});
+
+test('a custom domain writes CNAME and serves from the root', async () => {
+  const out = path.join(tmpDir('oat-pages-'), 'site');
+  await writeSite([art('water', 'part-01', { part: '01' })], out, { series: SERIES, baseUrl: 'https://owensappliedthinking.com' });
+  assert.strictEqual(read(out, 'CNAME'), 'owensappliedthinking.com\n');
+  assert.ok(read(out, 'index.html').includes('<link rel="canonical" href="https://owensappliedthinking.com/">'));
+  assert.ok(read(out, 'water/part-01/index.html').includes('<link rel="canonical" href="https://owensappliedthinking.com/water/part-01/">'));
+  const nf = read(out, '404.html');
+  assert.ok(nf.includes('href="/"') && nf.includes('src="/brand/oat-mark.png"'), '404 uses root paths');
+});
+
+test('a GoatCounter code adds a no-JavaScript counter image to each page', async () => {
+  const out = path.join(tmpDir('oat-pages-'), 'site');
+  await writeSite([art('water', 'part-01', { part: '01' })], out, { series: SERIES, baseUrl: 'https://owensappliedthinking.com', goatcounter: 'oat' });
+  assert.ok(read(out, 'index.html').includes('<img class="count" src="https://oat.goatcounter.com/count?p=/" alt="" width="1" height="1">'));
+  assert.ok(read(out, 'water/part-01/index.html').includes('src="https://oat.goatcounter.com/count?p=/water/part-01/"'));
+  assert.ok(read(out, 'about/index.html').includes('count?p=/about/'));
+  assert.ok(!read(out, '404.html').includes('goatcounter'), 'not-found pages are not counted');
+  for (const f of ['index.html', 'water/part-01/index.html']) assert.ok(!/<script/i.test(read(out, f)), `${f} still has no JavaScript`);
+  const plain = path.join(tmpDir('oat-pages-'), 'site');
+  await writeSite([art('water', 'part-01', { part: '01' })], plain, { series: SERIES, baseUrl: 'https://owensappliedthinking.com' });
+  assert.ok(!read(plain, 'index.html').includes('goatcounter'), 'no code, no counter');
+  await assert.rejects(() => writeSite([], path.join(tmpDir('oat-pages-'), 'site'), { series: SERIES, goatcounter: 'evil.com/x?' }), /bad GoatCounter code/);
 });
 
 test('fails on an article whose series is not in the series file', async () => {
