@@ -9,6 +9,7 @@ const path = require('path');
 const { renderBody, firstParagraph } = require('./render');
 const { copyImages, pointAtCopies } = require('./images');
 const { GateError } = require('./gate');
+const { DEFAULT_SERIES, LEGACY_SERIES } = require('./series');
 
 const SITE_NAME = "Owen's Applied Thinking";
 const TAGLINE = "It's not activism. It's not theory. It's engineering.";
@@ -88,6 +89,23 @@ ${body}
 `;
 }
 
+function redirectPage(target, canonicalUrl) {
+  const t = escapeHtml(target);
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Moved · ${escapeHtml(SITE_NAME)}</title>
+<meta name="robots" content="noindex">
+<meta http-equiv="refresh" content="0; url=${t}">
+${canonicalUrl ? `<link rel="canonical" href="${escapeHtml(canonicalUrl)}">\n` : ''}</head>
+<body>
+<p>This page has moved to <a href="${t}">${t}</a>.</p>
+</body>
+</html>
+`;
+}
+
 function writeFile(outDir, relPath, content) {
   const full = path.join(outDir, relPath);
   fs.mkdirSync(path.dirname(full), { recursive: true });
@@ -101,7 +119,7 @@ async function writeSite(articles, outDir, options = {}) {
   if (fs.existsSync(outDir) && fs.readdirSync(outDir).length > 0) {
     throw new Error(`output directory ${outDir} is not empty`);
   }
-  const series = options.series || new Map([['standalone', { id: 'standalone', name: 'Standalone', description: '', order: 1000 }]]);
+  const series = options.series || new Map([[DEFAULT_SERIES, { id: DEFAULT_SERIES, name: 'Vectors', description: '', order: 1000 }]]);
   const baseUrl = options.baseUrl ? options.baseUrl.replace(/\/?$/, '/') : null;
   const basePath = baseUrl ? new URL(baseUrl).pathname : '/';
   const canonical = (rel) => (baseUrl ? baseUrl + rel : null);
@@ -199,6 +217,17 @@ async function writeSite(articles, outDir, options = {}) {
         body: `<article>\n<h1>${escapeHtml(a.title)}</h1>\n<p class="meta">${meta}</p>\n${html}\n</article>\n${also.length ? `<p class="also">Also on ${also.join(' and ')}.</p>\n` : ''}${pager}`
       }));
     });
+  }
+
+  // Redirects from old series ids (e.g. /standalone/ -> /vectors/), so links
+  // shared before a rename keep working. Plain HTML, no JavaScript.
+  for (const [oldId, newId] of LEGACY_SERIES) {
+    if (!bySeries.has(newId) || series.has(oldId)) continue;
+    writeFile(outDir, `${oldId}/index.html`, redirectPage('../' + newId + '/', canonical(`${newId}/`)));
+    for (const a of bySeries.get(newId)) {
+      writeFile(outDir, `${oldId}/${a.slug}/index.html`,
+        redirectPage(`../../${newId}/${a.slug}/`, canonical(`${newId}/${a.slug}/`)));
+    }
   }
 
   // Not found: served at any depth, so it uses absolute paths and lists nothing.
