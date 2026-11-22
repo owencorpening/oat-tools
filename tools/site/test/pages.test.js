@@ -201,8 +201,9 @@ test('a custom domain writes CNAME and serves from the root', async () => {
 test('a GoatCounter code adds a no-JavaScript counter image to each page', async () => {
   const out = path.join(tmpDir('oat-pages-'), 'site');
   await writeSite([art('water', 'part-01', { part: '01' })], out, { series: SERIES, baseUrl: 'https://owensappliedthinking.com', goatcounter: 'oat' });
-  assert.ok(read(out, 'index.html').includes('<img class="count" src="https://oat.goatcounter.com/count?p=/" alt="" width="1" height="1">'));
-  assert.ok(read(out, 'water/part-01/index.html').includes('src="https://oat.goatcounter.com/count?p=/water/part-01/"'));
+  assert.ok(read(out, 'index.html').includes(`<img class="count" src="https://oat.goatcounter.com/count?p=/&amp;t=Owen's%20Applied%20Thinking" alt="" width="1" height="1">`), read(out, 'index.html').match(/<img class="count"[^>]*>/));
+  assert.ok(read(out, 'about/index.html').includes('&amp;t=About"'), 'title sent without the site name');
+  assert.ok(read(out, 'water/part-01/index.html').includes('src="https://oat.goatcounter.com/count?p=/water/part-01/&amp;t='));
   assert.ok(read(out, 'about/index.html').includes('count?p=/about/'));
   assert.ok(!read(out, '404.html').includes('goatcounter'), 'not-found pages are not counted');
   for (const f of ['index.html', 'water/part-01/index.html']) assert.ok(!/<script/i.test(read(out, f)), `${f} still has no JavaScript`);

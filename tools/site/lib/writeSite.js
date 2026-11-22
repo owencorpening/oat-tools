@@ -222,6 +222,13 @@ function seriesOrder(a, b) {
 }
 
 // footerTagline: false on the home page, which shows the tagline under the hero.
+// Adds the page title (without the site name) so the GoatCounter dashboard
+// lists pages by name, not just path.
+function pixelWithTitle(pixel, title) {
+  const short = title.replace(new RegExp(`\\s*·\\s*${SITE_NAME.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`), '') || SITE_NAME;
+  return `${pixel}&t=${encodeURIComponent(short)}`;
+}
+
 // pixel: GoatCounter count URL for this page, or null for no counter.
 function page({ title, description, canonical, rootPrefix, body, footerTagline = true, image = null, current = null, pixel = null }) {
   return `<!doctype html>
@@ -240,7 +247,7 @@ ${description ? `<meta name="description" content="${escapeHtml(description)}">\
 ${body}
 </main>
 <footer>${footerTagline ? escapeHtml(TAGLINE) : ''}<span class="sig">${escapeHtml(SIGN_OFF)}</span><span class="links"><a href="${rootPrefix}about/">About</a> · <a href="${SUBSTACK_URL}">Substack</a> · <a href="${LINKEDIN_URL}">LinkedIn</a></span></footer>
-${pixel ? `<img class="count" src="${escapeHtml(pixel)}" alt="" width="1" height="1">\n` : ''}</body>
+${pixel ? `<img class="count" src="${escapeHtml(pixelWithTitle(pixel, title))}" alt="" width="1" height="1">\n` : ''}</body>
 </html>
 `;
 }
