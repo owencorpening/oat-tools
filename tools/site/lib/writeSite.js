@@ -82,7 +82,8 @@ function seriesOrder(a, b) {
   return b.published.localeCompare(a.published);
 }
 
-function page({ title, description, canonical, rootPrefix, body }) {
+// footerTagline: false on the home page, which shows the tagline under the hero.
+function page({ title, description, canonical, rootPrefix, body, footerTagline = true }) {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -98,7 +99,7 @@ ${description ? `<meta name="description" content="${escapeHtml(description)}">\
 <main>
 ${body}
 </main>
-<footer>${escapeHtml(TAGLINE)}<span class="sig">${escapeHtml(SIGN_OFF)}</span></footer>
+<footer>${footerTagline ? escapeHtml(TAGLINE) : ''}<span class="sig">${escapeHtml(SIGN_OFF)}</span></footer>
 </body>
 </html>
 `;
@@ -188,6 +189,7 @@ async function writeSite(articles, outDir, options = {}) {
   writeFile(outDir, 'index.html', page({
     title: SITE_NAME,
     description: TAGLINE,
+    footerTagline: false,
     canonical: canonical(''),
     rootPrefix: '',
     body: `<h1 class="visually-hidden">${escapeHtml(SITE_NAME)}</h1>\n<figure class="hero"><img src="brand/cornerstone.jpg" alt="OAT carved in a granite cornerstone" width="1200" height="800"></figure>\n<p class="meta">${escapeHtml(TAGLINE)}</p>\n<ul class="list">\n${homeList}\n</ul>`
