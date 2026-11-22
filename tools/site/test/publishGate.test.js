@@ -122,7 +122,8 @@ test('only tagged, published articles reach the output; drafts never do', async 
   repo.commit('a v1');
   repo.tag('pub/water/part-01/2025-02-01');
 
-  // B: standalone (no series field).
+  // B: no series field, so the default series (vectors); tagged with the
+  // old pub/standalone/ prefix, which still counts.
   repo.write('substack-published/standalone/b.md', article(good('b-essay'), 'Standalone essay text.'));
   repo.commit('b');
   repo.tag('pub/standalone/b-essay/2025-03-01');
@@ -152,12 +153,12 @@ test('only tagged, published articles reach the output; drafts never do', async 
   repo.tag('baseline-2026-10'); // not a pub/ tag: ignored
 
   const articles = selectPublished(repo.dir);
-  assert.deepStrictEqual(articles.map((a) => `${a.series}/${a.slug}`), ['standalone/b-essay', 'water/part-01']);
+  assert.deepStrictEqual(articles.map((a) => `${a.series}/${a.slug}`), ['vectors/b-essay', 'water/part-01']);
 
   const out = path.join(tmpDir('oat-gate-out-'), 'site');
-  await writeSite(articles, out, { series: new Map([['standalone', { id: 'standalone', name: 'Standalone', description: 'd', order: 2 }], ['water', { id: 'water', name: 'Water', description: 'd', order: 1 }]]), fetchImpl: noFetch });
+  await writeSite(articles, out, { series: new Map([['vectors', { id: 'vectors', name: 'Vectors', description: 'd', order: 2 }], ['water', { id: 'water', name: 'Water', description: 'd', order: 1 }]]), fetchImpl: noFetch });
   const files = allFiles(out).map((f) => path.relative(out, f)).sort();
-  assert.deepStrictEqual(files, ['404.html', 'index.html', 'standalone/b-essay/index.html', 'standalone/index.html', 'style.css', 'water/index.html', 'water/part-01/index.html']);
+  assert.deepStrictEqual(files, ['404.html', 'index.html', 'standalone/b-essay/index.html', 'standalone/index.html', 'style.css', 'vectors/b-essay/index.html', 'vectors/index.html', 'water/index.html', 'water/part-01/index.html']);
   assertNoCanary(out);
   const page = fs.readFileSync(path.join(out, 'water/part-01/index.html'), 'utf8');
   assert.ok(page.includes('Published text of part one.'), 'article text is in the page HTML');
@@ -224,15 +225,15 @@ test('fails on a placeholder link', () => {
   assertGateFails(repo, /placeholder link/);
 });
 
-test('allows a series-guide link from a series article, not from a standalone one', () => {
+test('allows a series-guide link from a series article, not from a vectors one', () => {
   const repo = makeRepo();
   repo.write('a.md', article(good('a', { series: 'water' }), 'See the [series guide](https://owencorpening.substack.com/p/series-guide?r=1gha0n).'));
   repo.write('b.md', article(good('b'), 'See the [series guide](https://owencorpening.substack.com/p/series-guide).'));
   repo.commit('a and b');
   repo.tag('pub/water/a/2025-01-01');
   assert.strictEqual(selectPublished(repo.dir).length, 1);
-  repo.tag('pub/standalone/b/2025-01-01');
-  assertGateFails(repo, /pub\/standalone\/b\/2025-01-01: links to https:\/\/owencorpening\.substack\.com\/p\/series-guide/);
+  repo.tag('pub/vectors/b/2025-01-01');
+  assertGateFails(repo, /pub\/vectors\/b\/2025-01-01: links to https:\/\/owencorpening\.substack\.com\/p\/series-guide/);
 });
 
 test('allows links between published articles', () => {
@@ -297,6 +298,22 @@ test('a same-day .1 re-tag beats the plain date tag', () => {
   repo.tag('pub/water/a/2025-01-01.1');
   const [a] = selectPublished(repo.dir);
   assert.strictEqual(a.tag, 'pub/water/a/2025-01-01.1');
+});
+
+test('old standalone tags and headers count as vectors; the newest tag wins across both', () => {
+  const repo = makeRepo();
+  repo.write('a.md', article(good('a'), 'Old text.'));
+  repo.write('b.md', article(good('b', { series: 'standalone' }), 'B text.'));
+  repo.commit('a v0, b');
+  repo.tag('pub/standalone/a/2025-01-01');
+  repo.tag('pub/vectors/b/2025-01-01');
+  repo.write('a.md', article(good('a'), 'New text.'));
+  repo.commit('a v1');
+  repo.tag('pub/vectors/a/2025-02-01');
+  const articles = selectPublished(repo.dir);
+  assert.deepStrictEqual(articles.map((x) => `${x.series}/${x.slug}`), ['vectors/a', 'vectors/b']);
+  assert.strictEqual(articles[0].tag, 'pub/vectors/a/2025-02-01');
+  assert.ok(articles[0].body.includes('New text.'));
 });
 
 // ---------------------------------------------------------------------------

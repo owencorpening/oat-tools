@@ -5,6 +5,7 @@
 // or an inline event handler fails the build (the site has no JavaScript).
 
 const { marked } = require('marked');
+const { DEFAULT_SERIES } = require('./series');
 
 const ACTIVE_CONTENT = /<\s*(script|iframe|object|embed)\b|\son[a-z]+\s*=/i;
 const SUBSTACK_POST = /^https?:\/\/owencorpening\.substack\.com\/p\/([A-Za-z0-9-]+)/;
@@ -53,7 +54,7 @@ function renderBody(article, { bySubstackSlug, linkTo }) {
   let html = marked.parse(dropLeadingTitle(article.body, article.title), { async: false });
   html = html.replace(/href="([^"]*)"/g, (all, url) => {
     const slug = substackSlug(url);
-    if (SERIES_GUIDE_SLUGS.has(slug) && article.series !== 'standalone') return 'href="../"';
+    if (SERIES_GUIDE_SLUGS.has(slug) && article.series !== DEFAULT_SERIES) return 'href="../"';
     const target = bySubstackSlug.get(slug);
     if (target) return `href="${linkTo(target)}"`;
     return `href="${stripReferral(url)}"`;
