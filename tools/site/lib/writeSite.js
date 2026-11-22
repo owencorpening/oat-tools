@@ -22,8 +22,8 @@ const BRAND_FILES = ['oat-mark.png', 'favicon-32.png', 'apple-touch-icon.png', '
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
   'August', 'September', 'October', 'November', 'December'];
 
-const CSS = `:root{--ink:#1f2328;--quiet:#5c636a;--line:#d8dadc;--bg:#ffffff;--granite:#4a4f54;--brass:#b8860b}
-@media (prefers-color-scheme:dark){:root{--ink:#e6e7e8;--quiet:#a3a8ad;--line:#3a3f44;--bg:#16181a;--granite:#c9ccd0;--brass:#d4a017}}
+const CSS = `:root{--ink:#1f2328;--quiet:#5c636a;--line:#d8dadc;--bg:#ffffff;--granite:#4a4f54;--brass:#b8860b;--band:#f5f4f1;--press:#e6e3dc;--edge:#c9ccd0}
+@media (prefers-color-scheme:dark){:root{--ink:#e6e7e8;--quiet:#a3a8ad;--line:#3a3f44;--bg:#16181a;--granite:#c9ccd0;--brass:#d4a017;--band:#1d2023;--press:#2c3035;--edge:#34383d}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:18px/1.6 Georgia,"Times New Roman",serif}
 header,main,footer{max-width:42rem;margin:0 auto;padding:0 1rem}
@@ -42,10 +42,21 @@ th,td{border:1px solid var(--line);padding:.3rem .5rem}
 blockquote{border-left:3px solid var(--brass);margin-left:0;padding-left:1rem;color:var(--quiet)}
 .meta{color:var(--quiet);font:.95rem/1.4 system-ui,sans-serif}
 .list{list-style:none;padding:0}
-.list li{border-bottom:1px solid var(--line);padding:.9rem 0}
-.list a{font:600 1.1rem/1.3 system-ui,sans-serif}
+.list li{position:relative;border:1px solid var(--line);border-radius:8px;padding:.9rem 1rem;margin:0 0 .85rem;background:var(--bg);box-shadow:0 4px 0 var(--edge);transition:transform .06s,box-shadow .06s,background .06s}
+.list li:nth-child(even){background:var(--band)}
+.list li:hover{border-color:var(--brass)}
+.list li:active{transform:translateY(4px);box-shadow:0 0 0 var(--edge);background:var(--press)}
+.list a{font:600 1.1rem/1.3 system-ui,sans-serif;text-decoration:none}
+.list a::after{content:"";position:absolute;inset:0;border-radius:8px}
 .list p{margin:.3rem 0 0;color:var(--quiet);font-size:.95rem}
-.pager{display:flex;justify-content:space-between;gap:1rem;border-top:1px solid var(--line);margin-top:2rem;padding-top:1rem;font:.95rem/1.4 system-ui,sans-serif}
+.pager{display:flex;justify-content:space-between;align-items:stretch;gap:1rem;border-top:1px solid var(--line);margin-top:2rem;padding-top:1rem;font:.95rem/1.4 system-ui,sans-serif}
+.pager a{flex:1 1 0;max-width:48%;padding:.55rem .85rem;border:1px solid var(--line);border-radius:6px;background:var(--band);color:var(--granite);text-decoration:none;font-weight:600;box-shadow:0 3px 0 var(--edge);transition:transform .06s,box-shadow .06s}
+.pager a:hover{border-color:var(--brass)}
+.pager a:active{transform:translateY(3px);box-shadow:0 0 0 var(--edge);background:var(--press)}
+.pager .next{margin-left:auto;text-align:right}
+.pager small{display:block;margin-bottom:.2rem;color:var(--quiet);font-weight:400;font-size:.8rem;letter-spacing:.04em;text-transform:uppercase}
+.list a:focus-visible,.pager a:focus-visible{outline:3px solid var(--brass);outline-offset:3px}
+@media (prefers-reduced-motion:reduce){.list li,.pager a{transition:none}}
 .also{font:.95rem/1.4 system-ui,sans-serif}
 .hero{margin:1.25rem 0 0;border-radius:4px;overflow:hidden}
 .hero img{display:block;width:100%;aspect-ratio:2.15/1;object-fit:cover;object-position:center 45%}
@@ -225,7 +236,7 @@ async function writeSite(articles, outDir, options = {}) {
         a.linkedinUrl ? `<a href="${escapeHtml(a.linkedinUrl)}">LinkedIn</a>` : null
       ].filter(Boolean);
       const pager = (prev || next)
-        ? `<nav class="pager"><span>${prev ? `← <a href="../${prev.slug}/">${escapeHtml(prev.title)}</a>` : ''}</span><span>${next ? `<a href="../${next.slug}/">${escapeHtml(next.title)}</a> →` : ''}</span></nav>`
+        ? `<nav class="pager">${prev ? `<a class="prev" href="../${prev.slug}/"><small>← Previous</small>${escapeHtml(prev.title)}</a>` : ''}${next ? `<a class="next" href="../${next.slug}/"><small>Next →</small>${escapeHtml(next.title)}</a>` : ''}</nav>`
         : '';
       const html = pointAtCopies(rendered.get(a), imageMap, '../../');
       writeFile(outDir, `${s.id}/${a.slug}/index.html`, page({
