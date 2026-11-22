@@ -33,6 +33,31 @@ function dropLeadingTitle(body, title) {
   return lines.join('\n');
 }
 
+// An <img> tag written across several lines, especially with its closing
+// ">" on a line of its own, is not HTML to Markdown: it prints as text and the
+// lone ">" becomes an empty quote. Joining each tag onto one line fixes that
+// without touching the article's words.
+function joinMultilineImgTags(body) {
+  return body.replace(/<img\b[^>]*>/gi, (tag) => (tag.includes('\n') ? tag.replace(/\s+/g, ' ').replace(/\s+>$/, '>') : tag));
+}
+
+// github.com/<owner>/<repo>/blob/<ref>/<path>?raw=true is a redirect to the
+// raw file; point straight at raw.githubusercontent.com so the build copies it.
+function rawGithubUrl(url) {
+  const m = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/(.+?)(\?raw=true)?$/.exec(url);
+  return m ? `https://raw.githubusercontent.com/${m[1]}/${m[2]}/${m[3]}` : url;
+}
+
+// Escaped tags in the page text mean raw HTML the Markdown parser did not
+// recognise, which readers would see as code. Code samples are exempt.
+const ESCAPED_TAG = /&lt;\/?(img|a|div|p|span|br|table|tr|td|th|figure|figcaption|details|summary|sup|sub|video|audio|source|picture|center|font|b|i|em|strong|hr|h[1-6]|ul|ol|li)\b/i;
+
+function escapedHtmlProblem(html) {
+  const text = html.replace(/<pre>[\s\S]*?<\/pre>|<code>[\s\S]*?<\/code>/g, '');
+  const m = ESCAPED_TAG.exec(text);
+  return m ? text.slice(m.index, m.index + 40).replace(/\s+/g, ' ') : null;
+}
+
 // Removes Substack referral codes such as ?r=1gha0n.
 function stripReferral(url) {
   try {
@@ -51,7 +76,10 @@ function renderBody(article, { bySubstackSlug, linkTo }) {
   if (ACTIVE_CONTENT.test(article.body)) {
     problems.push(`${article.tag}: contains a script, iframe, embed or inline event handler; the site has no JavaScript`);
   }
-  let html = marked.parse(dropLeadingTitle(article.body, article.title), { async: false });
+  let html = marked.parse(joinMultilineImgTags(dropLeadingTitle(article.body, article.title)), { async: false });
+  html = html.replace(/<img\b[^>]*>/gi, (tag) => tag.replace(/src="([^"]*)"/, (all, url) => `src="${rawGithubUrl(url)}"`));
+  const escaped = escapedHtmlProblem(html);
+  if (escaped) problems.push(`${article.tag}: raw HTML would show as text ("${escaped}…"); fix the tag in the article`);
   html = html.replace(/href="([^"]*)"/g, (all, url) => {
     const slug = substackSlug(url);
     if (SERIES_GUIDE_SLUGS.has(slug) && article.series !== DEFAULT_SERIES) return 'href="../"';
