@@ -38,6 +38,7 @@ h1,h2,h3{font-family:system-ui,sans-serif;color:var(--granite);line-height:1.25}
 h1{font-size:2rem;margin:1.5rem 0 .5rem}
 a{color:var(--brass)}
 img{max-width:100%;height:auto}
+@media (max-width:30rem){article img[style*="float"]{float:none!important;display:block;margin:0 auto 1rem!important}}
 table{border-collapse:collapse;display:block;overflow-x:auto}
 th,td{border:1px solid var(--line);padding:.3rem .5rem}
 blockquote{border-left:3px solid var(--brass);margin-left:0;padding-left:1rem;color:var(--quiet)}

@@ -194,6 +194,28 @@ test('fails on an article that carries a script', async () => {
   );
 });
 
+test('an <img> tag written across lines renders as an image and is copied', async () => {
+  const img = await startImageServer();
+  try {
+    const out = path.join(tmpDir('oat-pages-'), 'site');
+    const body = `Opening paragraph that is long enough to describe the piece.\n\n---\n\n<img \n  src="${img.base}/logo.png" \n  alt="Natural Gas Symbol" \n  style="width: 200px; float: right;"\n>\n\n## The Premise\n\nText.`;
+    await writeSite([art('vectors', 'a', { body })], out, { series: SERIES });
+    const page = read(out, 'vectors/a/index.html');
+    assert.ok(/<img src="\.\.\/\.\.\/assets\/[0-9a-f]{16}\.png" alt="Natural Gas Symbol" style="width: 200px; float: right;">/.test(page), 'one-line tag pointing at the copy');
+    assert.ok(!page.includes('&lt;img') && !/<blockquote>\s*<\/blockquote>/.test(page), 'no tag text, no empty quote');
+  } finally {
+    img.close();
+  }
+});
+
+test('fails when raw HTML would show as text', async () => {
+  const out = path.join(tmpDir('oat-pages-'), 'site');
+  await assert.rejects(
+    () => writeSite([art('vectors', 'a', { body: 'Text.\n\n<span \n  class="x"\n>\n\nMore.' })], out, { series: SERIES }),
+    /raw HTML would show as text/
+  );
+});
+
 test('fails when an image cannot be downloaded', async () => {
   const img = await startImageServer();
   try {
