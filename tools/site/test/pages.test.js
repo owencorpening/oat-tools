@@ -106,7 +106,7 @@ test('builds home, series, article and not-found pages with no JavaScript', asyn
     })(out);
     const htmlFiles = files.filter((f) => f.endsWith('.html')).sort();
     assert.deepStrictEqual(htmlFiles, [
-      '404.html', 'index.html', 'standalone/essay/index.html', 'standalone/index.html',
+      '404.html', 'about/index.html', 'index.html', 'standalone/essay/index.html', 'standalone/index.html',
       'vectors/essay/index.html', 'vectors/index.html', 'water/index.html', 'water/manifesto/index.html', 'water/part-01/index.html', 'water/part-02/index.html'
     ]);
     assert.strictEqual(files.filter((f) => f.startsWith('assets/')).length, 1, 'one image, copied once');
