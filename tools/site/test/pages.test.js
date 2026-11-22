@@ -67,7 +67,7 @@ function art(series, slug, extra = {}) {
 }
 
 const SERIES = new Map([
-  ['standalone', { id: 'standalone', name: 'Standalone', description: 'Single articles.', order: 1000 }],
+  ['vectors', { id: 'vectors', name: 'Vectors', description: 'Single articles.', order: 1000 }],
   ['water', { id: 'water', name: 'Water Resilience', description: 'Water engineering.', order: 1 }],
   ['cng', { id: 'cng', name: 'CNG', description: 'Natural gas vehicles.', order: 2 }],
   ['planned', { id: 'planned', name: 'CANARY_PLANNED_SERIES', description: 'x', order: 3 }]
@@ -91,7 +91,7 @@ test('builds home, series, article and not-found pages with no JavaScript', asyn
         body: `# Part one\n\nOpening paragraph of part one, which is long enough to describe it.\n\n![chart](${img.base}/chart.png)\n\n<img src="${img.base}/chart.png" width="400" alt="same chart again">\n\nNext: [part two](https://owencorpening.substack.com/p/part-two?r=1gha0n). See the [guide](https://owencorpening.substack.com/p/series-guide?r=1gha0n). Source: [WHO](https://www.who.int/report?r=keep).`
       }),
       art('water', 'manifesto', { part: 'manifesto', published: '2026-05-14' }),
-      art('standalone', 'essay', { linkedinUrl: 'https://www.linkedin.com/posts/x', body: '<img src="' + img.base + '/chart.png">\n\n# Title essay\n\nEssay opening paragraph that is long enough to stand as a description.' })
+      art('vectors', 'essay', { linkedinUrl: 'https://www.linkedin.com/posts/x', body: '<img src="' + img.base + '/chart.png">\n\n# Title essay\n\nEssay opening paragraph that is long enough to stand as a description.' })
     ];
     const out = path.join(tmpDir('oat-pages-'), 'site');
     await writeSite(articles, out, { series: SERIES, baseUrl: 'https://owencorpening.github.io/oat-web' });
@@ -106,7 +106,7 @@ test('builds home, series, article and not-found pages with no JavaScript', asyn
     const htmlFiles = files.filter((f) => f.endsWith('.html')).sort();
     assert.deepStrictEqual(htmlFiles, [
       '404.html', 'index.html', 'standalone/essay/index.html', 'standalone/index.html',
-      'water/index.html', 'water/manifesto/index.html', 'water/part-01/index.html', 'water/part-02/index.html'
+      'vectors/essay/index.html', 'vectors/index.html', 'water/index.html', 'water/manifesto/index.html', 'water/part-01/index.html', 'water/part-02/index.html'
     ]);
     assert.strictEqual(files.filter((f) => f.startsWith('assets/')).length, 1, 'one image, copied once');
     assert.strictEqual(img.hits.length, 1, 'image downloaded once');
@@ -122,8 +122,14 @@ test('builds home, series, article and not-found pages with no JavaScript', asyn
     }
 
     const home = read(out, 'index.html');
-    assert.ok(home.indexOf('Water Resilience') < home.indexOf('Standalone'), 'series in order, standalone last');
-    assert.ok(home.includes('href="water/"') && home.includes('href="standalone/"'));
+    assert.ok(home.indexOf('Water Resilience') < home.indexOf('Vectors'), 'series in order, vectors last');
+    assert.ok(home.includes('href="water/"') && home.includes('href="vectors/"'));
+    assert.ok(!home.includes('href="standalone/"'), 'old series id is not listed');
+
+    const moved = read(out, 'standalone/essay/index.html');
+    assert.ok(moved.includes('<meta http-equiv="refresh" content="0; url=../../vectors/essay/">'), 'old article URL redirects');
+    assert.ok(moved.includes('<link rel="canonical" href="https://owencorpening.github.io/oat-web/vectors/essay/">'));
+    assert.ok(read(out, 'standalone/index.html').includes('url=../vectors/'), 'old series URL redirects');
     assert.ok(!home.includes('CNG'), 'a series with no published article is hidden');
     assert.ok(home.includes('<link rel="canonical" href="https://owencorpening.github.io/oat-web/">'));
     assert.ok(home.includes('<img src="brand/cornerstone.jpg"'), 'cornerstone hero on the home page');
@@ -150,8 +156,8 @@ test('builds home, series, article and not-found pages with no JavaScript', asyn
     assert.ok(p1.includes('Owen Corpening, PE'), 'sign-off in footer');
     assert.ok(!p1.includes('cornerstone.jpg'), 'hero only on the home page');
 
-    const essay = read(out, 'standalone/essay/index.html');
-    assert.ok(essay.includes('<a href="../">Standalone</a>') && essay.includes('LinkedIn'));
+    const essay = read(out, 'vectors/essay/index.html');
+    assert.ok(essay.includes('<a href="../">Vectors</a>') && essay.includes('LinkedIn'));
     assert.strictEqual(essay.split('<h1>Title essay</h1>').length - 1, 1, 'title heading after a hero image is not repeated');
 
     const nf = read(out, '404.html');
@@ -175,7 +181,7 @@ test('fails on an article whose series is not in the series file', async () => {
 test('fails on an article that carries a script', async () => {
   const out = path.join(tmpDir('oat-pages-'), 'site');
   await assert.rejects(
-    () => writeSite([art('standalone', 'a', { body: 'Text <script>alert(1)</script>' })], out, { series: SERIES }),
+    () => writeSite([art('vectors', 'a', { body: 'Text <script>alert(1)</script>' })], out, { series: SERIES }),
     /no JavaScript/
   );
 });
@@ -185,7 +191,7 @@ test('fails when an image cannot be downloaded', async () => {
   try {
     const out = path.join(tmpDir('oat-pages-'), 'site');
     await assert.rejects(
-      () => writeSite([art('standalone', 'a', { body: `![x](${img.base}/missing.png)` })], out, { series: SERIES }),
+      () => writeSite([art('vectors', 'a', { body: `![x](${img.base}/missing.png)` })], out, { series: SERIES }),
       /HTTP 404/
     );
     assert.strictEqual(img.hits.length, 1, 'a 404 is not retried');
@@ -198,11 +204,11 @@ test('retries a busy image host, then gives up with the reason', async () => {
   const img = await startImageServer();
   try {
     const out = path.join(tmpDir('oat-pages-'), 'site');
-    await writeSite([art('standalone', 'a', { body: `![x](${img.base}/busy.png)` })], out, { series: SERIES, retryDelaysMs: [0, 0] });
+    await writeSite([art('vectors', 'a', { body: `![x](${img.base}/busy.png)` })], out, { series: SERIES, retryDelaysMs: [0, 0] });
     assert.strictEqual(img.hits.length, 3, 'two 503s, then success');
     const out2 = path.join(tmpDir('oat-pages-'), 'site');
     await assert.rejects(
-      () => writeSite([art('standalone', 'b', { body: `![x](${img.base}/down.png)` })], out2, { series: SERIES, retryDelaysMs: [0] }),
+      () => writeSite([art('vectors', 'b', { body: `![x](${img.base}/down.png)` })], out2, { series: SERIES, retryDelaysMs: [0] }),
       /HTTP 503 \(Service Unavailable\) after 2 tries/
     );
   } finally {
@@ -222,7 +228,11 @@ test('reads the series file from main', () => {
   git('add', '-A');
   git('commit', '-q', '-m', 'series');
   const s = readSeries(dir);
-  assert.deepStrictEqual([...s.keys()].sort(), ['standalone', 'water']);
+  assert.deepStrictEqual([...s.keys()].sort(), ['vectors', 'water']);
+
+  fs.writeFileSync(path.join(dir, 'site/series.json'), JSON.stringify([{ id: 'standalone', name: 'S', description: 'S', order: 9 }]));
+  git('commit', '-q', '-am', 'old id');
+  assert.throws(() => readSeries(dir), /old series id; use "vectors"/);
 
   fs.writeFileSync(path.join(dir, 'site/series.json'), '[{"id":"Bad Id"}]');
   git('commit', '-q', '-am', 'bad');

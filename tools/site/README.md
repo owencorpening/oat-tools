@@ -14,10 +14,10 @@ npm run test:site
 An article is published only when all of these hold:
 
 1. A tag `pub/<series>/<slug>/<YYYY-MM-DD>[.N]` exists. The newest tag for an
-   article wins. Standalone articles use `pub/standalone/<slug>/...`.
+   article wins. Articles outside a series use `pub/vectors/<slug>/...`.
 2. The tagged commit is on `main`.
 3. At that commit exactly one Markdown file has front matter with that
-   `slug` and `series` (no `series` means standalone).
+   `slug` and `series` (no `series` means the default series, `vectors`).
 4. That file has `text_status: published`, `title`, `published`
    (YYYY-MM-DD), `slug` and `type` (`substack-article`, `linkedin-article`
    or `linkedin-post`), and is not a carousel (`marp: true`).
@@ -41,7 +41,7 @@ contain real drafts.
 ## Pages (`lib/writeSite.js`)
 
 Home (`/`), one page per series with a published article (`/<series>/`,
-plus `/standalone/`), one page per article (`/<series>/<slug>/`) and
+plus `/vectors/`), one page per article (`/<series>/<slug>/`) and
 `404.html`. Plain HTML and one stylesheet: no JavaScript, no outside
 requests. Every image a published article uses is downloaded into
 `assets/` and the page points at the copy. Links between published
@@ -60,6 +60,18 @@ oat-content (read from `main`):
 ```json
 [{ "id": "water", "name": "Water Resilience", "description": "…", "order": 1 }]
 ```
+
+## The Vectors series (formerly "standalone")
+
+Articles with no `series` field are in the `vectors` series, named
+"Vectors" on the site. It was called `standalone` until 2026-11-21. The old
+id still works, so nothing has to be re-tagged: `pub/standalone/...` tags and
+`series: standalone` headers both count as `vectors`, and if an article has
+tags under both prefixes the newest date wins. The build also writes small
+redirect pages at `/standalone/` and `/standalone/<slug>/` (meta refresh, no
+JavaScript) so links shared before the rename still land on the right page.
+`site/series.json` may give Vectors its own name, description and order with
+`"id": "vectors"`; using `"id": "standalone"` there is an error.
 
 ## Status
 

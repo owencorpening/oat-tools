@@ -6,7 +6,8 @@
 //   1. A tag named pub/<series>/<slug>/<YYYY-MM-DD>[.N] exists (newest wins).
 //   2. The tagged commit is on the main branch.
 //   3. At that commit, exactly one Markdown file has front matter with that
-//      slug and series (no `series` field means "standalone").
+//      slug and series (no `series` field means the default series,
+//      "vectors"; the old id "standalone" is accepted as the same series).
 //   4. That file says `text_status: published` and has every required field.
 //   5. On main today, that article still says `text_status: published`
 //      (otherwise it has been unpublished and is dropped).
@@ -19,12 +20,12 @@ const { execFileSync } = require('child_process');
 const { parseFrontMatter } = require('./frontMatter');
 const { extractLinks, placeholderProblems } = require('./sopChecks');
 const { SERIES_GUIDE_SLUGS } = require('./render');
+const { DEFAULT_SERIES, normalizeSeriesId } = require('./series');
 
 const TAG_PATTERN = /^pub\/([a-z0-9][a-z0-9-]*)\/([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2})(?:\.(\d+))?$/;
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?$/; // a time after the date is allowed and ignored
 const TYPES = new Set(['substack-article', 'linkedin-article', 'linkedin-post']);
-const STANDALONE = 'standalone';
 
 class GateError extends Error {
   constructor(problems) {
@@ -51,7 +52,7 @@ function gitOk(repoDir, args) {
 }
 
 function seriesOf(data) {
-  return data.series && data.series.trim() ? data.series.trim() : STANDALONE;
+  return normalizeSeriesId(data.series);
 }
 
 // Newest tag per series/slug. Malformed pub/ tags are errors, not skipped.
@@ -65,7 +66,8 @@ function listPublishTags(repoDir, problems) {
       problems.push(`tag ${name}: name must be pub/<series>/<slug>/<YYYY-MM-DD>[.N]`);
       continue;
     }
-    const [, series, slug, date, seq] = m;
+    const [, tagSeries, slug, date, seq] = m;
+    const series = normalizeSeriesId(tagSeries); // pub/standalone/... counts as vectors
     const key = `${series}/${slug}`;
     const rank = `${date}.${String(Number(seq || 0)).padStart(6, '0')}`;
     const prev = newest.get(key);
@@ -191,7 +193,7 @@ function checkLinksToUnpublished(articles) {
     problems.push(...placeholderProblems(a));
     for (const { url } of extractLinks(a.body)) {
       const substack = normalizeSubstack(url);
-      if (SERIES_GUIDE_SLUGS.has(substack) && a.series !== STANDALONE) {
+      if (SERIES_GUIDE_SLUGS.has(substack) && a.series !== DEFAULT_SERIES) {
         continue; // becomes a link to the article's series page
       }
       if (substack && !publishedSubstack.has(substack)) {
