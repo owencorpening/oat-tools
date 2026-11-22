@@ -316,6 +316,58 @@ test('old standalone tags and headers count as vectors; the newest tag wins acro
   assert.ok(articles[0].body.includes('New text.'));
 });
 
+test('a moved article builds once, in its new series, with redirects from the old URLs', async () => {
+  const repo = makeRepo();
+  repo.write('g.md', article(good('genome', { series: 'family' }), 'Genome text.'));
+  repo.write('u.md', article(good('code'), 'Code text.'));
+  repo.write('v.md', article(good('stays'), 'Stays text.'));
+  repo.commit('three pieces');
+  repo.tag('pub/family/genome/2025-01-01');
+  repo.tag('pub/standalone/code/2025-01-01');
+  repo.tag('pub/vectors/stays/2025-01-01');
+  repo.write('g.md', article(good('genome', { series: 'science' }), 'Genome text.'));
+  repo.write('u.md', article(good('code', { series: 'science' }), 'Code text.'));
+  repo.commit('move two pieces to science');
+  repo.tag('pub/science/genome/2025-01-01'); // same date as the old tag
+  repo.tag('pub/science/code/2025-02-01');
+
+  const articles = selectPublished(repo.dir);
+  assert.deepStrictEqual(articles.map((x) => `${x.series}/${x.slug}`), ['science/code', 'science/genome', 'vectors/stays']);
+  assert.deepStrictEqual(articles.find((x) => x.slug === 'genome').formerSeries, ['family']);
+  assert.deepStrictEqual(articles.find((x) => x.slug === 'code').formerSeries, ['vectors']);
+
+  const out = path.join(tmpDir('oat-gate-out-'), 'site');
+  const series = new Map([
+    ['vectors', { id: 'vectors', name: 'Vectors', description: 'd', order: 3 }],
+    ['science', { id: 'science', name: 'Science', description: 'd', order: 1 }],
+    ['family', { id: 'family', name: 'Family', description: 'd', order: 2 }]
+  ]);
+  await writeSite(articles, out, { series, fetchImpl: noFetch });
+  const files = allFiles(out).map((f) => path.relative(out, f)).sort().filter((f) => !f.startsWith('brand/'));
+  assert.deepStrictEqual(files, ['404.html', 'family/genome/index.html', 'family/index.html', 'index.html',
+    'science/code/index.html', 'science/genome/index.html', 'science/index.html',
+    'standalone/code/index.html', 'standalone/index.html', 'standalone/stays/index.html', 'style.css',
+    'vectors/code/index.html', 'vectors/index.html', 'vectors/stays/index.html']);
+  const read = (rel) => fs.readFileSync(path.join(out, rel), 'utf8');
+  assert.ok(read('family/genome/index.html').includes('url=../../science/genome/'));
+  assert.ok(read('family/index.html').includes('url=../"'), 'empty former series redirects home');
+  assert.ok(read('vectors/code/index.html').includes('url=../../science/code/'));
+  assert.ok(read('standalone/code/index.html').includes('url=../../science/code/'));
+  assert.ok(read('vectors/index.html').includes('Title stays'), 'remaining series page is still real');
+  assert.ok(!read('vectors/index.html').includes('code/'), 'moved piece is not listed in its old series');
+  assert.ok(!read('index.html').includes('href="family/"'), 'empty series is not on the home page');
+});
+
+test('fails when main moves an article to a series it has no tag in yet', () => {
+  const repo = makeRepo();
+  repo.write('g.md', article(good('genome', { series: 'family' }), 'Genome text.'));
+  repo.commit('g');
+  repo.tag('pub/family/genome/2025-01-01');
+  repo.write('g.md', article(good('genome', { series: 'science' }), 'Genome text.'));
+  repo.commit('move on main only');
+  assertGateFails(repo, /genome: main puts it in series "science" but it has no pub\/science\/genome/);
+});
+
 // ---------------------------------------------------------------------------
 
 (async () => {

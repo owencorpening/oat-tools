@@ -73,6 +73,20 @@ JavaScript) so links shared before the rename still land on the right page.
 `site/series.json` may give Vectors its own name, description and order with
 `"id": "vectors"`; using `"id": "standalone"` there is an error.
 
+## Moving an article to another series
+
+1. On main, change the article's `series` header (and add the new series to
+   `site/series.json` if it is new).
+2. Tag it under the new series: `pub/<new-series>/<slug>/<YYYY-MM-DD>`.
+
+Once main and a tag agree on the new series, tags under the old series are
+ignored, even if they are newer or the same date. The build writes redirect
+pages from `/<old-series>/<slug>/` (and `/standalone/<slug>/` if it was in
+Vectors) to the new address. A series left with no articles drops off the
+home page, and its `/<old-series>/` page redirects to the home page until it
+has an article again. If main names a series the article has no tag in yet,
+the build fails, so the live site stays as it was until you tag.
+
 ## Status
 
 Still to come: the remaining pre-publish checks (placeholder links, sources
