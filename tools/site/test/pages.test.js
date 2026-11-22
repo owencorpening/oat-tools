@@ -107,6 +107,7 @@ test('builds home, series, article and not-found pages with no JavaScript', asyn
     const htmlFiles = files.filter((f) => f.endsWith('.html')).sort();
     assert.deepStrictEqual(htmlFiles, [
       '404.html', 'about/index.html', 'index.html', 'standalone/essay/index.html', 'standalone/index.html',
+      'tools/search-grid/index.html', 'tools/search-grid/privacy/index.html',
       'vectors/essay/index.html', 'vectors/index.html', 'water/index.html', 'water/manifesto/index.html', 'water/part-01/index.html', 'water/part-02/index.html'
     ]);
     assert.strictEqual(files.filter((f) => f.startsWith('assets/')).length, 1, 'one image, copied once');
@@ -123,6 +124,15 @@ test('builds home, series, article and not-found pages with no JavaScript', asyn
     }
 
     const home = read(out, 'index.html');
+
+    // Search Grid extension pages: the Chrome Web Store links to these fixed URLs.
+    const grid = read(out, 'tools/search-grid/index.html');
+    assert.ok(grid.includes('href="privacy/"'), 'support page links its privacy policy');
+    assert.ok(grid.includes('<link rel="stylesheet" href="../../style.css'), 'support page finds the stylesheet');
+    const privacy = read(out, 'tools/search-grid/privacy/index.html');
+    assert.ok(privacy.includes('collects no personal information'));
+    assert.ok(privacy.includes('<link rel="canonical" href="https://owencorpening.github.io/oat-web/tools/search-grid/privacy/">'));
+    assert.ok(read(out, 'about/index.html').includes('href="../tools/search-grid/"'), 'About links the extension page');
     assert.ok(home.indexOf('Water Resilience') < home.indexOf('Vectors'), 'series in order, vectors last');
     assert.ok(home.includes('href="water/"') && home.includes('href="vectors/"'));
     assert.ok(!home.includes('href="standalone/"'), 'old series id is not listed');

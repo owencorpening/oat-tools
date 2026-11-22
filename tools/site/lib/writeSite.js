@@ -23,7 +23,8 @@ const BRAND_FILES = ['oat-mark.png', 'favicon-32.png', 'apple-touch-icon.png', '
 // About page wording: oat-standards templates/brand_block.md (intro, mission,
 // disclaimer) and sops/actions/sop-pre-publish-review.md (bio footer).
 // "35+ years" replaces brand_block's "five decades" (Owen, 2026-11-22).
-// "Things I've built" lines are the GitHub repo descriptions.
+// "Things I've built" lines are the GitHub repo descriptions (Search Grid:
+// the one-line description proposed for yt-grid-extension, 2026-11-22).
 // Never add new wording here; change oat-standards first.
 const SUBSTACK_URL = 'https://owencorpening.substack.com/';
 const LINKEDIN_URL = 'https://www.linkedin.com/in/owencorpening/';
@@ -45,10 +46,58 @@ const ABOUT_BODY = `<div class="about">
 <ul class="list">
 <li><a href="https://github.com/owencorpening/riffkit">riffkit</a><p>Free, install from GitHub · Turn any song into a practice project: stems you can mute, lyrics on your TV, your phone as the remote. Also splits live concerts into songs.</p></li>
 <li><a href="https://github.com/owencorpening/image-capture">Image Attribution Logger</a><p>Free, install from GitHub · The Image Attribution Logger is a seamless, zero-friction tool that automates image compliance for content creation.</p></li>
-<li><a href="https://github.com/owencorpening/yt-grid-extension">YouTube Search Grid + Recency Filter</a><p>Free, install from GitHub.</p></li>
+<li><a href="../tools/search-grid/">Search Grid &amp; Recency Filter for YouTube™</a><p>Free Chrome extension · Shows YouTube search results as a grid and hides videos older than a number of days you choose.</p></li>
 </ul>
 <h2>Elsewhere</h2>
 <ul class="elsewhere"><li><a href="${SUBSTACK_URL}">Substack</a></li><li><a href="${LINKEDIN_URL}">LinkedIn</a></li></ul>
+</div>`;
+// Product pages for the Search Grid Chrome extension
+// (owencorpening/yt-grid-extension). The Chrome Web Store links to these as
+// the extension's support page and privacy policy, so their URLs must not
+// change. Wording matches that repo's store/listing.md.
+const SEARCH_GRID_NAME = 'Search Grid &amp; Recency Filter for YouTube™';
+const SEARCH_GRID_REPO = 'https://github.com/owencorpening/yt-grid-extension';
+const SEARCH_GRID_BODY = `<div class="about">
+<h1>${SEARCH_GRID_NAME}</h1>
+<p class="meta">Free Chrome extension</p>
+<p class="lede">Search results on YouTube come as one long list. This extension lays them out as a grid instead, and can hide videos older than a number of days you choose.</p>
+<h2>What it does</h2>
+<ul>
+<li><strong>Grid view for search results.</strong> Pick a card width; the number of columns follows your window size.</li>
+<li><strong>Recency filter.</strong> Hide videos older than a number of days you choose, on search results and on the home page. Off until you turn it on.</li>
+</ul>
+<p>Click the toolbar icon, set the card width and the number of days, and press Save. Changes apply right away.</p>
+<h2>Install</h2>
+<p>The Chrome Web Store listing is coming soon. Until then you can install it from <a href="${SEARCH_GRID_REPO}">the source on GitHub</a> by following the README there.</p>
+<h2>Limits</h2>
+<p>The recency filter reads YouTube's English date text, so it works when YouTube is set to English. Videos with no date, such as live streams and Shorts shelves, are always shown.</p>
+<h2>Support</h2>
+<p>Found a bug or have a question? <a href="${SEARCH_GRID_REPO}/issues">Open an issue on GitHub</a>. It's a free side project, so replies may take a few days.</p>
+<p><a href="privacy/">Privacy policy</a> · <a href="${SEARCH_GRID_REPO}">Source code (MIT)</a></p>
+<p class="meta">YouTube is a trademark of Google LLC. This extension is not made, endorsed, or sponsored by Google or YouTube.</p>
+</div>`;
+const SEARCH_GRID_PRIVACY_BODY = `<div class="about">
+<h1>Privacy policy</h1>
+<p class="meta">${SEARCH_GRID_NAME} · Effective November 22, 2026</p>
+<p class="lede">This extension collects no personal information and sends nothing anywhere.</p>
+<h2>What it stores</h2>
+<p>Two settings you choose in its popup: the card width and the maximum video age in days. They are saved with Chrome's own settings storage (<code>chrome.storage.sync</code>). If you have Chrome sync turned on, Chrome copies them to your other computers through your Google account, the same way it syncs your other Chrome settings. The extension's author never receives them.</p>
+<h2>What it reads</h2>
+<p>It runs only on youtube.com. To apply the recency filter it reads the date text shown on each video card, such as "3 days ago", in your browser. That text is used only to decide whether to hide the card. It is not saved or sent anywhere.</p>
+<h2>What it doesn't do</h2>
+<ul>
+<li>No analytics, tracking, ads, or cookies.</li>
+<li>No network requests of its own and no remote code.</li>
+<li>No reading of your browsing history, account, or anything outside youtube.com.</li>
+<li>Nothing is sold or shared with anyone.</li>
+</ul>
+<h2>Permissions</h2>
+<p><strong>Storage</strong>, to save the two settings. <strong>Access to youtube.com</strong>, to change how YouTube lists videos.</p>
+<h2>Changes</h2>
+<p>If this ever changes, this page will be updated before the extension does, with a new effective date.</p>
+<h2>Contact</h2>
+<p><a href="${SEARCH_GRID_REPO}/issues">Open an issue on GitHub</a>.</p>
+<p><a href="../">Back to the extension page</a></p>
 </div>`;
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
   'August', 'September', 'October', 'November', 'December'];
@@ -382,6 +431,22 @@ async function writeSite(articles, outDir, options = {}) {
     rootPrefix: '../',
     current: 'about',
     body: ABOUT_BODY
+  }));
+
+  // Search Grid extension: support page and privacy policy (fixed URLs).
+  writeFile(outDir, 'tools/search-grid/index.html', page({
+    title: `Search Grid & Recency Filter for YouTube · ${SITE_NAME}`,
+    description: 'Free Chrome extension: YouTube search results as a grid, plus a filter that hides older videos.',
+    canonical: canonical('tools/search-grid/'),
+    rootPrefix: '../../',
+    body: SEARCH_GRID_BODY
+  }));
+  writeFile(outDir, 'tools/search-grid/privacy/index.html', page({
+    title: `Privacy policy · Search Grid & Recency Filter for YouTube · ${SITE_NAME}`,
+    description: 'Privacy policy for the Search Grid & Recency Filter Chrome extension.',
+    canonical: canonical('tools/search-grid/privacy/'),
+    rootPrefix: '../../../',
+    body: SEARCH_GRID_PRIVACY_BODY
   }));
 
   // Not found: served at any depth, so it uses absolute paths and lists nothing.
