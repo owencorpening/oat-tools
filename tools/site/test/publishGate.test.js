@@ -200,6 +200,14 @@ test('fails when a required field is missing', () => {
   assertGateFails(repo, /missing title/);
 });
 
+test('fails when cover is not a full image URL', () => {
+  const repo = makeRepo();
+  repo.write('a.md', article(good('a', { cover: 'images/cover.png' }), 'text'));
+  repo.commit('a');
+  repo.tag('pub/standalone/a/2025-01-01');
+  assertGateFails(repo, /cover must be a full http\(s\) image URL/);
+});
+
 test('fails when a published article links to an unpublished one', () => {
   const repo = makeRepo();
   repo.write('a.md', article(good('a', { substack_url: 'https://owencorpening.substack.com/p/a-live' }),

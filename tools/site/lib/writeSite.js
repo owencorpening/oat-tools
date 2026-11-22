@@ -78,6 +78,12 @@ main>*:nth-child(3){animation-delay:.16s}
 .list li:nth-child(n+4){animation-delay:.4s}
 @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+.list li.has-thumb{display:flex;gap:.9rem;align-items:flex-start}
+.list li.has-thumb>div{min-width:0}
+.thumb{flex:none;display:block;width:72px;height:72px;border-radius:6px;object-fit:cover;border:1px solid var(--edge);box-shadow:0 1px 0 var(--edge)}
+.thumb.none{display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--stone),var(--bg));color:var(--brass);font:600 .8rem/1 Georgia,"Times New Roman",serif;letter-spacing:.12em}
+.cover{margin:1.25rem 0 0}
+.cover img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:6px;box-shadow:0 2px 0 var(--edge),0 8px 20px var(--glow)}
 .also{font:.95rem/1.4 system-ui,sans-serif}
 .hero{margin:1.25rem 0 0;border-radius:4px;overflow:hidden}
 .hero img{display:block;width:100%;aspect-ratio:2.15/1;object-fit:cover;object-position:center 45%}
@@ -118,14 +124,14 @@ function seriesOrder(a, b) {
 }
 
 // footerTagline: false on the home page, which shows the tagline under the hero.
-function page({ title, description, canonical, rootPrefix, body, footerTagline = true }) {
+function page({ title, description, canonical, rootPrefix, body, footerTagline = true, image = null }) {
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(title)}</title>
-${description ? `<meta name="description" content="${escapeHtml(description)}">\n` : ''}${canonical ? `<link rel="canonical" href="${escapeHtml(canonical)}">\n` : ''}<link rel="stylesheet" href="${rootPrefix}style.css?v=${CSS_VERSION}">
+${description ? `<meta name="description" content="${escapeHtml(description)}">\n` : ''}${canonical ? `<link rel="canonical" href="${escapeHtml(canonical)}">\n` : ''}${image ? `<meta property="og:image" content="${escapeHtml(image)}">\n` : ''}<link rel="stylesheet" href="${rootPrefix}style.css?v=${CSS_VERSION}">
 <link rel="icon" type="image/png" sizes="32x32" href="${rootPrefix}brand/favicon-32.png">
 <link rel="apple-touch-icon" href="${rootPrefix}brand/apple-touch-icon.png">
 </head>
@@ -210,7 +216,14 @@ async function writeSite(articles, outDir, options = {}) {
   if (problems.length) throw new GateError(problems);
 
   fs.mkdirSync(outDir, { recursive: true });
-  const imageMap = await copyImages([...rendered.values()].map((html) => ({ html })), outDir, options.fetchImpl, options.retryDelaysMs);
+  // Covers (header `cover:`) are copied like any other image.
+  const coverPages = articles.filter((a) => a.cover).map((a) => ({ html: `<img src="${escapeHtml(a.cover)}">` }));
+  const imageMap = await copyImages([...[...rendered.values()].map((html) => ({ html })), ...coverPages], outDir, options.fetchImpl, options.retryDelaysMs);
+  const coverOf = (a) => (a && a.cover ? imageMap.get(a.cover) : null);
+  // A small square on a list card: the cover, or a plain OAT tile.
+  const thumb = (local, rootPrefix) => (local
+    ? `<img class="thumb" src="${rootPrefix}${local}" alt="" width="72" height="72" loading="lazy">`
+    : '<span class="thumb none" aria-hidden="true">OAT</span>');
 
   writeFile(outDir, 'style.css', CSS);
   fs.mkdirSync(path.join(outDir, 'brand'), { recursive: true });
@@ -219,7 +232,8 @@ async function writeSite(articles, outDir, options = {}) {
   // Home.
   const homeList = shownSeries.map((s) => {
     const n = bySeries.get(s.id).length;
-    return `<li><a href="${s.id}/">${escapeHtml(s.name)}</a><p>${escapeHtml(s.description)} · ${n} article${n === 1 ? '' : 's'}</p></li>`;
+    const first = bySeries.get(s.id).find((a) => a.cover);
+    return `<li class="has-thumb">${thumb(coverOf(first), '')}<div><a href="${s.id}/">${escapeHtml(s.name)}</a><p>${escapeHtml(s.description)} · ${n} article${n === 1 ? '' : 's'}</p></div></li>`;
   }).join('\n');
   writeFile(outDir, 'index.html', page({
     title: SITE_NAME,
@@ -235,7 +249,7 @@ async function writeSite(articles, outDir, options = {}) {
     const items = bySeries.get(s.id).map((a) => {
       const label = partLabel(a.part);
       const desc = a.description || firstParagraph(a.body);
-      return `<li><a href="${a.slug}/">${escapeHtml(a.title)}</a><p>${label ? `${escapeHtml(label)} · ` : ''}${formatDate(a.published)}${desc ? ` · ${escapeHtml(desc)}` : ''}</p></li>`;
+      return `<li class="has-thumb">${thumb(coverOf(a), '../')}<div><a href="${a.slug}/">${escapeHtml(a.title)}</a><p>${label ? `${escapeHtml(label)} · ` : ''}${formatDate(a.published)}${desc ? ` · ${escapeHtml(desc)}` : ''}</p></div></li>`;
     }).join('\n');
     writeFile(outDir, `${s.id}/index.html`, page({
       title: `${s.name} · ${SITE_NAME}`,
@@ -268,12 +282,17 @@ async function writeSite(articles, outDir, options = {}) {
       const topPager = (prev || next)
         ? `<nav class="pager-top" aria-label="Previous and next">${prev ? `<a class="prev" href="../${prev.slug}/" title="${escapeHtml(prev.title)}">← Previous</a>` : ''}${next ? `<a class="next" href="../${next.slug}/" title="${escapeHtml(next.title)}">Next →</a>` : ''}</nav>\n`
         : '';
+      // A cover that the article already shows (same image file) is not
+      // repeated above the title; it still appears on the cards.
+      const cover = coverOf(a);
+      const coverOnTop = cover && !html.includes(`src="../../${cover}"`);
       writeFile(outDir, `${s.id}/${a.slug}/index.html`, page({
         title: `${a.title} · ${SITE_NAME}`,
         description: a.description || firstParagraph(a.body),
         canonical: canonical(`${s.id}/${a.slug}/`),
+        image: cover && baseUrl ? baseUrl + cover : null,
         rootPrefix: '../../',
-        body: `<article>\n<h1>${escapeHtml(a.title)}</h1>\n<p class="meta">${meta}</p>\n${topPager}${html}\n</article>\n${also.length ? `<p class="also">Also on ${also.join(' and ')}.</p>\n` : ''}${pager}`
+        body: `<article>\n${coverOnTop ? `<figure class="cover"><img src="../../${cover}" alt=""></figure>\n` : ''}<h1>${escapeHtml(a.title)}</h1>\n<p class="meta">${meta}</p>\n${topPager}${html}\n</article>\n${also.length ? `<p class="also">Also on ${also.join(' and ')}.</p>\n` : ''}${pager}`
       }));
     });
   }
