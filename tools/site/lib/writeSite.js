@@ -14,7 +14,7 @@ const { DEFAULT_SERIES, LEGACY_SERIES } = require('./series');
 const SITE_NAME = "Owen's Applied Thinking";
 const TAGLINE = "It's not activism. It's not theory. It's engineering.";
 // Sign-off from oat-standards templates/brand_block.md.
-const SIGN_OFF = 'Owen Corpening, PE · Austin, Texas';
+const SIGN_OFF = 'Owen Corpening · Austin, Texas';
 // Brand files (oat-standards sop-branding.md, owencorpening/images brand/),
 // resized and committed here so the build makes no outside request for them.
 const BRAND_SRC = path.join(__dirname, '..', 'brand');
@@ -82,7 +82,8 @@ function seriesOrder(a, b) {
   return b.published.localeCompare(a.published);
 }
 
-function page({ title, description, canonical, rootPrefix, body }) {
+// footerTagline: false on the home page, which shows the tagline under the hero.
+function page({ title, description, canonical, rootPrefix, body, footerTagline = true }) {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -98,7 +99,7 @@ ${description ? `<meta name="description" content="${escapeHtml(description)}">\
 <main>
 ${body}
 </main>
-<footer>${escapeHtml(TAGLINE)}<span class="sig">${escapeHtml(SIGN_OFF)}</span></footer>
+<footer>${footerTagline ? escapeHtml(TAGLINE) : ''}<span class="sig">${escapeHtml(SIGN_OFF)}</span></footer>
 </body>
 </html>
 `;
@@ -188,6 +189,7 @@ async function writeSite(articles, outDir, options = {}) {
   writeFile(outDir, 'index.html', page({
     title: SITE_NAME,
     description: TAGLINE,
+    footerTagline: false,
     canonical: canonical(''),
     rootPrefix: '',
     body: `<h1 class="visually-hidden">${escapeHtml(SITE_NAME)}</h1>\n<figure class="hero"><img src="brand/cornerstone.jpg" alt="OAT carved in a granite cornerstone" width="1200" height="800"></figure>\n<p class="meta">${escapeHtml(TAGLINE)}</p>\n<ul class="list">\n${homeList}\n</ul>`

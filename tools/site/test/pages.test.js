@@ -134,6 +134,7 @@ test('builds home, series, article and not-found pages with no JavaScript', asyn
     assert.ok(home.includes('<link rel="canonical" href="https://owencorpening.github.io/oat-web/">'));
     assert.ok(home.includes('<img src="brand/cornerstone.jpg"'), 'cornerstone hero on the home page');
     assert.ok(home.includes('<h1 class="visually-hidden">'), 'home keeps its h1 for screen readers');
+    assert.strictEqual(home.split('<body>')[1].split("It's not activism.").length - 1, 1, 'tagline shown once on the home page');
 
     const series = read(out, 'water/index.html');
     const order = ['part-01/', 'part-02/', 'manifesto/'].map((s) => series.indexOf(`href="${s}"`));
@@ -153,7 +154,8 @@ test('builds home, series, article and not-found pages with no JavaScript', asyn
     assert.ok(p1.includes('<link rel="stylesheet" href="../../style.css">'));
     assert.ok(p1.includes('<img src="../../brand/oat-mark.png" alt="OAT"'), 'header logo on article pages');
     assert.ok(p1.includes('<link rel="icon" type="image/png" sizes="32x32" href="../../brand/favicon-32.png">'));
-    assert.ok(p1.includes('Owen Corpening, PE'), 'sign-off in footer');
+    assert.ok(p1.includes('Owen Corpening · Austin, Texas') && !p1.includes('Corpening, PE'), 'sign-off in footer');
+    assert.strictEqual(p1.split('<body>')[1].split("It's not activism.").length - 1, 1, 'tagline in the article footer');
     assert.ok(!p1.includes('cornerstone.jpg'), 'hero only on the home page');
 
     const essay = read(out, 'vectors/essay/index.html');
