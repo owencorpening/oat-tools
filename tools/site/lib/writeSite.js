@@ -20,9 +20,6 @@ const SIGN_OFF = 'Owen Corpening · Austin, Texas';
 // resized and committed here so the build makes no outside request for them.
 const BRAND_SRC = path.join(__dirname, '..', 'brand');
 const BRAND_FILES = ['oat-mark.png', 'favicon-32.png', 'apple-touch-icon.png', 'cornerstone.jpg'];
-// Articles at least this long (words of rendered text) also get a compact
-// Previous/Next pair under the date line (Owen, 2026-11-22).
-const TOP_PAGER_MIN_WORDS = 1000;
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
   'August', 'September', 'October', 'November', 'December'];
 
@@ -76,11 +73,6 @@ blockquote{border-left:3px solid var(--brass);margin-left:0;padding-left:1rem;co
 // Changes whenever the stylesheet does, so browsers and the Pages cache
 // fetch the new one instead of reusing a stale copy.
 const CSS_VERSION = crypto.createHash('sha256').update(CSS).digest('hex').slice(0, 10);
-
-function wordCount(html) {
-  const text = html.replace(/<[^>]+>/g, ' ').replace(/&[a-z#0-9]+;/gi, ' ').trim();
-  return text ? text.split(/\s+/).length : 0;
-}
 
 function escapeHtml(text) {
   return String(text)
@@ -257,7 +249,9 @@ async function writeSite(articles, outDir, options = {}) {
         ? `<nav class="pager">${prev ? `<a class="prev" href="../${prev.slug}/"><small>← Previous</small>${escapeHtml(prev.title)}</a>` : ''}${next ? `<a class="next" href="../${next.slug}/"><small>Next →</small>${escapeHtml(next.title)}</a>` : ''}</nav>`
         : '';
       const html = pointAtCopies(rendered.get(a), imageMap, '../../');
-      const topPager = (prev || next) && wordCount(html) >= TOP_PAGER_MIN_WORDS
+      // Every article with a neighbour gets the compact pair under the date line,
+      // so the buttons never seem to vanish while paging through a series.
+      const topPager = (prev || next)
         ? `<nav class="pager-top" aria-label="Previous and next">${prev ? `<a class="prev" href="../${prev.slug}/" title="${escapeHtml(prev.title)}">← Previous</a>` : ''}${next ? `<a class="next" href="../${next.slug}/" title="${escapeHtml(next.title)}">Next →</a>` : ''}</nav>\n`
         : '';
       writeFile(outDir, `${s.id}/${a.slug}/index.html`, page({

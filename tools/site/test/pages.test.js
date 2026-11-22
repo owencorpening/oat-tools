@@ -85,7 +85,7 @@ test('builds home, series, article and not-found pages with no JavaScript', asyn
   const img = await startImageServer();
   try {
     const articles = [
-      art('water', 'part-02', { part: '02', published: '2025-11-18', substackUrl: 'https://owencorpening.substack.com/p/part-two', body: `# Part two\n\nOpening paragraph of part two, long enough to describe it.\n\n${'word '.repeat(1000)}` }),
+      art('water', 'part-02', { part: '02', published: '2025-11-18', substackUrl: 'https://owencorpening.substack.com/p/part-two' }),
       art('water', 'part-01', {
         part: '01',
         substackUrl: 'https://owencorpening.substack.com/p/part-one',
@@ -150,10 +150,10 @@ test('builds home, series, article and not-found pages with no JavaScript', asyn
     assert.ok(p1.includes('<a href="../">Water Resilience</a>') && p1.includes('Part 1'));
     assert.ok(p1.includes('<a class="next" href="../part-02/"><small>Next →</small>'), 'next button');
     assert.ok(!p1.includes('class="prev"'), 'no previous button on the first part');
-    assert.ok(!p1.includes('pager-top'), 'short article: buttons only at the bottom');
+    assert.ok(/<p class="meta">.*<\/p>\n<nav class="pager-top"[^>]*><a class="next" href="\.\.\/part-02\/"/.test(p1), 'short first part still gets the top Next button');
     const p2page = read(out, 'water/part-02/index.html');
     assert.ok(p2page.includes('<a class="prev" href="../part-01/"><small>← Previous</small>'), 'previous button');
-    assert.ok(/<p class="meta">.*<\/p>\n<nav class="pager-top"[^>]*><a class="prev" href="\.\.\/part-01\/" title="[^"]*">← Previous<\/a><a class="next" href="\.\.\/manifesto\/"/.test(p2page), 'long article: compact buttons under the date line');
+    assert.ok(/<p class="meta">.*<\/p>\n<nav class="pager-top"[^>]*><a class="prev" href="\.\.\/part-01\/" title="[^"]*">← Previous<\/a><a class="next" href="\.\.\/manifesto\/"/.test(p2page), 'compact buttons under the date line');
     assert.ok(p1.includes('<a href="../">guide</a>') && !p1.includes('series-guide'), 'series-guide link goes to the series page');
     assert.ok(p1.includes('Also on <a href="https://owencorpening.substack.com/p/part-one">Substack</a>'));
     assert.ok(p1.includes('<link rel="canonical" href="https://owencorpening.github.io/oat-web/water/part-01/">'));
