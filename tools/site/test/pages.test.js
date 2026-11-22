@@ -12,6 +12,7 @@ const { execFileSync } = require('child_process');
 const { writeSite } = require('../lib/writeSite');
 const { readSeries } = require('../lib/series');
 const { GateError } = require('../lib/gate');
+const { firstParagraph } = require('../lib/render');
 
 const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d4944415478da63f8ffff3f0005fe02fea7d6a4ab0000000049454e44ae426082', 'hex');
 const tmpRoots = [];
@@ -239,6 +240,22 @@ test('reads the series file from main', () => {
   fs.writeFileSync(path.join(dir, 'site/series.json'), '[{"id":"Bad Id"}]');
   git('commit', '-q', '-am', 'bad');
   assert.throws(() => readSeries(dir), /lowercase/);
+});
+
+test('captions skip the brand block and keep hyphens', () => {
+  const body = [
+    '<img src="x.png" alt="It\'s not activism. It\'s not theory. It\'s engineering.">',
+    '',
+    '*Exploring the hidden logic and overlooked systems of everyday life, from the perspective of an engineer.*',
+    '',
+    '*It\u2019s not activism. It\u2019s not theory. It\u2019s engineering.*',
+    '',
+    'Sixty-four codons. Twenty amino acids. One code, from the Jordan-Euphrates-Nile corridor.',
+    ''
+  ].join('\n');
+  assert.strictEqual(firstParagraph(body), 'Sixty-four codons. Twenty amino acids. One code, from the Jordan-Euphrates-Nile corridor.');
+  assert.strictEqual(firstParagraph('- a list item that is long enough to be used as a caption here\n'),
+    'a list item that is long enough to be used as a caption here');
 });
 
 (async () => {
