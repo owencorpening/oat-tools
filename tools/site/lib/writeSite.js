@@ -23,16 +23,21 @@ const BRAND_FILES = ['oat-mark.png', 'favicon-32.png', 'apple-touch-icon.png', '
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
   'August', 'September', 'October', 'November', 'December'];
 
-const CSS = `:root{--ink:#1f2328;--quiet:#5c636a;--line:#d8dadc;--bg:#ffffff;--granite:#4a4f54;--brass:#b8860b;--band:#f5f4f1;--press:#e6e3dc;--edge:#c9ccd0}
-@media (prefers-color-scheme:dark){:root{--ink:#e6e7e8;--quiet:#a3a8ad;--line:#3a3f44;--bg:#16181a;--granite:#c9ccd0;--brass:#d4a017;--band:#1d2023;--press:#2c3035;--edge:#34383d}}
+const CSS = `:root{--ink:#1f2328;--quiet:#5c636a;--line:#d8dadc;--bg:#ffffff;--granite:#4a4f54;--brass:#b8860b;--band:#f5f4f1;--press:#e6e3dc;--edge:#c9ccd0;--stone:#e9e8e5;--brass-hi:#e9c46a;--glow:rgba(184,134,11,.22)}
+@media (prefers-color-scheme:dark){:root{--ink:#e6e7e8;--quiet:#a3a8ad;--line:#3a3f44;--bg:#16181a;--granite:#c9ccd0;--brass:#d4a017;--band:#1d2023;--press:#2c3035;--edge:#34383d;--stone:#212427;--brass-hi:#f3d27a;--glow:rgba(212,160,23,.25)}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:18px/1.6 Georgia,"Times New Roman",serif}
 header,main,footer{max-width:42rem;margin:0 auto;padding:0 1rem}
 header{border-bottom:3px solid var(--brass);padding-top:1rem;padding-bottom:.75rem}
-header{padding-top:1.1rem;padding-bottom:.9rem}
+header{padding-top:1.1rem;padding-bottom:.9rem;background:linear-gradient(180deg,var(--stone),var(--bg) 85%);border-image:linear-gradient(90deg,var(--brass),var(--brass-hi) 45%,var(--brass) 70%,var(--brass)) 1}
 header a{display:flex;align-items:center;gap:.75rem;color:var(--granite);text-decoration:none}
-header img{display:block;height:40px;width:auto;border-radius:3px}
-header span{font:400 .95rem/1.2 Georgia,"Times New Roman",serif;letter-spacing:.18em;text-transform:uppercase}
+header img{display:block;height:40px;width:auto}
+.mark{position:relative;display:block;border-radius:3px;overflow:hidden;line-height:0}
+.mark::after{content:"";position:absolute;inset:0;background:linear-gradient(105deg,transparent 30%,rgba(255,255,255,.55) 48%,transparent 66%);transform:translateX(-120%);pointer-events:none;animation:sheen 1.4s .35s ease-out both}
+header a:hover .mark::after{animation:sheen2 1s ease-out}
+@keyframes sheen{to{transform:translateX(120%)}}
+@keyframes sheen2{from{transform:translateX(-120%)}to{transform:translateX(120%)}}
+header span.name{font:400 .95rem/1.2 Georgia,"Times New Roman",serif;letter-spacing:.18em;text-transform:uppercase}
 footer{border-top:1px solid var(--line);margin-top:3rem;padding-top:1rem;padding-bottom:2rem;color:var(--quiet);font:.9rem/1.5 system-ui,sans-serif}
 h1,h2,h3{font-family:system-ui,sans-serif;color:var(--granite);line-height:1.25}
 h1{font-size:2rem;margin:1.5rem 0 .5rem}
@@ -44,27 +49,35 @@ th,td{border:1px solid var(--line);padding:.3rem .5rem}
 blockquote{border-left:3px solid var(--brass);margin-left:0;padding-left:1rem;color:var(--quiet)}
 .meta{color:var(--quiet);font:.95rem/1.4 system-ui,sans-serif}
 .list{list-style:none;padding:0}
-.list li{position:relative;border:1px solid var(--line);border-radius:8px;padding:.9rem 1rem;margin:0 0 .85rem;background:var(--bg);box-shadow:0 4px 0 var(--edge);transition:transform .06s,box-shadow .06s,background .06s}
+.list li{position:relative;border:1px solid var(--line);border-radius:8px;padding:.9rem 1rem;margin:0 0 .85rem;background:var(--bg);box-shadow:0 4px 0 var(--edge);transition:transform .12s,box-shadow .12s,background .12s,border-color .12s}
 .list li:nth-child(even){background:var(--band)}
 .list li:hover{border-color:var(--brass)}
+.list li:hover{transform:translateY(-2px);box-shadow:0 6px 0 var(--edge),0 10px 24px var(--glow)}
 .list li:active{transform:translateY(4px);box-shadow:0 0 0 var(--edge);background:var(--press)}
 .list a{font:600 1.1rem/1.3 system-ui,sans-serif;text-decoration:none}
 .list a::after{content:"";position:absolute;inset:0;border-radius:8px}
 .list p{margin:.3rem 0 0;color:var(--quiet);font-size:.95rem}
 .pager{display:flex;justify-content:space-between;align-items:stretch;gap:1rem;border-top:1px solid var(--line);margin-top:2rem;padding-top:1rem;font:.95rem/1.4 system-ui,sans-serif}
 .pager a{flex:1 1 0;max-width:48%;padding:.55rem .85rem;border:1px solid var(--line);border-radius:6px;background:var(--band);color:var(--granite);text-decoration:none;font-weight:600;box-shadow:0 3px 0 var(--edge);transition:transform .06s,box-shadow .06s}
-.pager a:hover{border-color:var(--brass)}
+.pager a:hover{border-color:var(--brass);box-shadow:0 3px 0 var(--edge),0 6px 16px var(--glow)}
 .pager a:active{transform:translateY(3px);box-shadow:0 0 0 var(--edge);background:var(--press)}
 .pager .next{margin-left:auto;text-align:right}
 .pager-top{display:flex;justify-content:space-between;gap:.75rem;margin:.25rem 0 1.25rem;font:600 .85rem/1 system-ui,sans-serif}
 .pager-top a{padding:.45rem .75rem;border:1px solid var(--line);border-radius:6px;background:var(--band);color:var(--granite);text-decoration:none;box-shadow:0 3px 0 var(--edge);transition:transform .06s,box-shadow .06s}
-.pager-top a:hover{border-color:var(--brass)}
+.pager-top a:hover{border-color:var(--brass);box-shadow:0 3px 0 var(--edge),0 6px 16px var(--glow)}
 .pager-top a:active{transform:translateY(3px);box-shadow:0 0 0 var(--edge);background:var(--press)}
 .pager-top .next{margin-left:auto}
 .pager-top a:focus-visible{outline:3px solid var(--brass);outline-offset:3px}
 .pager small{display:block;margin-bottom:.2rem;color:var(--quiet);font-weight:400;font-size:.8rem;letter-spacing:.04em;text-transform:uppercase}
 .list a:focus-visible,.pager a:focus-visible{outline:3px solid var(--brass);outline-offset:3px}
-@media (prefers-reduced-motion:reduce){.list li,.pager a,.pager-top a{transition:none}}
+main>*,.list li{animation:rise .5s ease-out both}
+main>*:nth-child(2){animation-delay:.08s}
+main>*:nth-child(3){animation-delay:.16s}
+.list li:nth-child(2){animation-delay:.24s}
+.list li:nth-child(3){animation-delay:.32s}
+.list li:nth-child(n+4){animation-delay:.4s}
+@keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 .also{font:.95rem/1.4 system-ui,sans-serif}
 .hero{margin:1.25rem 0 0;border-radius:4px;overflow:hidden}
 .hero img{display:block;width:100%;aspect-ratio:2.15/1;object-fit:cover;object-position:center 45%}
@@ -117,7 +130,7 @@ ${description ? `<meta name="description" content="${escapeHtml(description)}">\
 <link rel="apple-touch-icon" href="${rootPrefix}brand/apple-touch-icon.png">
 </head>
 <body>
-<header><a href="${rootPrefix || './'}"><img src="${rootPrefix}brand/oat-mark.png" alt="OAT" width="100" height="40"><span>${escapeHtml(SITE_NAME)}</span></a></header>
+<header><a href="${rootPrefix || './'}"><span class="mark"><img src="${rootPrefix}brand/oat-mark.png" alt="OAT" width="100" height="40"></span><span class="name">${escapeHtml(SITE_NAME)}</span></a></header>
 <main>
 ${body}
 </main>
