@@ -4,7 +4,7 @@
 // Builds the OAT public site from oat-content.
 //
 //   node tools/site/build-site.js --content <path to oat-content> --out <empty dir>
-//       [--base-url https://owencorpening.github.io/oat-web/] [--main main]
+//       [--base-url https://owensappliedthinking.com/] [--main main]
 //
 // Runs inside the private oat-content repo's CI. Only the --out directory is
 // ever pushed to the public site repo. On any failure the output directory
@@ -17,7 +17,7 @@ const { readSeries } = require('./lib/series');
 const { writeSite } = require('./lib/writeSite');
 const { sourcesProblem } = require('./lib/sopChecks');
 
-const DEFAULT_BASE_URL = 'https://owencorpening.github.io/oat-web/';
+const DEFAULT_BASE_URL = 'https://owensappliedthinking.com/';
 
 function parseArgs(argv) {
   const args = {};

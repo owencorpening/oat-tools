@@ -182,9 +182,20 @@ test('builds home, series, article and not-found pages with no JavaScript', asyn
     assert.ok(/href="\/oat-web\/style\.css\?v=[0-9a-f]{10}"/.test(nf) && nf.includes('href="/oat-web/"'));
     assert.ok(nf.includes('src="/oat-web/brand/oat-mark.png"'), '404 logo uses an absolute path');
     assert.ok(!nf.includes('part-01') && !nf.includes('rel="canonical"'), '404 lists nothing');
+    assert.ok(!files.includes('CNAME'), 'no CNAME file on a github.io address');
   } finally {
     img.close();
   }
+});
+
+test('a custom domain writes CNAME and serves from the root', async () => {
+  const out = path.join(tmpDir('oat-pages-'), 'site');
+  await writeSite([art('water', 'part-01', { part: '01' })], out, { series: SERIES, baseUrl: 'https://owensappliedthinking.com' });
+  assert.strictEqual(read(out, 'CNAME'), 'owensappliedthinking.com\n');
+  assert.ok(read(out, 'index.html').includes('<link rel="canonical" href="https://owensappliedthinking.com/">'));
+  assert.ok(read(out, 'water/part-01/index.html').includes('<link rel="canonical" href="https://owensappliedthinking.com/water/part-01/">'));
+  const nf = read(out, '404.html');
+  assert.ok(nf.includes('href="/"') && nf.includes('src="/brand/oat-mark.png"'), '404 uses root paths');
 });
 
 test('fails on an article whose series is not in the series file', async () => {

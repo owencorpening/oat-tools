@@ -266,7 +266,7 @@ function writeFile(outDir, relPath, content) {
   fs.writeFileSync(full, content);
 }
 
-// options: { series: Map from readSeries, baseUrl: 'https://…/oat-web/', fetchImpl }
+// options: { series: Map from readSeries, baseUrl: 'https://owensappliedthinking.com/', fetchImpl }
 // Refuses a non-empty output directory, so stale pages from an earlier
 // build can never survive an unpublish.
 async function writeSite(articles, outDir, options = {}) {
@@ -456,6 +456,13 @@ async function writeSite(articles, outDir, options = {}) {
     rootPrefix: basePath,
     body: `<h1>Page not found</h1>\n<p><a href="${escapeHtml(basePath)}">Go to the home page</a></p>`
   }));
+
+  // Custom domain: GitHub Pages reads it from a CNAME file at the site root.
+  // Writing it on every build means a publish run can never drop the domain.
+  if (baseUrl) {
+    const host = new URL(baseUrl).hostname;
+    if (!host.endsWith('.github.io')) writeFile(outDir, 'CNAME', `${host}\n`);
+  }
 }
 
 module.exports = { writeSite, escapeHtml };
