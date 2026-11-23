@@ -21,7 +21,7 @@ const SIGN_OFF = 'Owen Corpening · Austin, Texas';
 // Brand files (oat-standards sop-branding.md, owencorpening/images brand/),
 // resized and committed here so the build makes no outside request for them.
 const BRAND_SRC = path.join(__dirname, '..', 'brand');
-const BRAND_FILES = ['oat-mark.png', 'favicon-32.png', 'apple-touch-icon.png', 'cornerstone.jpg', 'search-grid-icon.png'];
+const BRAND_FILES = ['oat-mark.png', 'favicon-32.png', 'apple-touch-icon.png', 'cornerstone.jpg', 'search-grid-icon.png', 'cheatsheets-icon.png'];
 // Writing lives under this folder. Old /<series>/... addresses redirect here.
 const WRITING = 'writing';
 // Top-level folders a series id must not take, since old /<series>/ addresses
@@ -47,7 +47,7 @@ const FREE_TOOLS = [
   { name: 'Image Attribution Logger', short: 'Image Attribution Logger', href: 'https://github.com/owencorpening/image-capture',
     note: 'Free, install from GitHub · The Image Attribution Logger is a seamless, zero-friction tool that automates image compliance for content creation.' },
   // Wording: oat-standards product-inventory.md (added 2026-11-22 at Owen's request).
-  { name: 'Cheatsheets', short: 'Cheatsheets', href: 'https://github.com/owencorpening/cheatsheets-vscode',
+  { name: 'Cheatsheets', short: 'Cheatsheets', href: 'tools/cheatsheets/', local: true, icon: 'brand/cheatsheets-icon.png',
     note: 'Free VS Code extension, install from GitHub · Shows your own Markdown and HTML cheatsheets in the secondary sidebar.' }
 ];
 function toolsList(rootPrefix, thumbs) {
@@ -132,6 +132,31 @@ const SEARCH_GRID_PRIVACY_BODY = `<div class="about">
 <h2>Contact</h2>
 <p><a href="${SEARCH_GRID_REPO}/issues">Open an issue on GitHub</a>.</p>
 <p><a href="../">Back to the extension page</a></p>
+</div>`;
+// Product page for the Cheatsheets VS Code extension
+// (owencorpening/cheatsheets-vscode). Its package.json names this page as the
+// extension's homepage, so the URL must not change. Wording matches that
+// repo's README.
+const CHEATSHEETS_REPO = 'https://github.com/owencorpening/cheatsheets-vscode';
+const CHEATSHEETS_BODY = `<div class="about">
+<h1>Cheatsheets</h1>
+<p class="meta">Free VS Code extension</p>
+<p class="lede">Keep your own reference notes open while you code. Cheatsheets shows the Markdown and HTML files from a folder you choose in VS Code's secondary sidebar: the list on the left, the sheet on the right. One shortcut shows it and hides it.</p>
+<h2>What it does</h2>
+<ul>
+<li><strong>Markdown and HTML.</strong> Write quick sheets in Markdown, with tables, code blocks, and task lists, or build fully styled reference pages in HTML.</li>
+<li><strong>Your own folder.</strong> Every <code>.md</code> and <code>.html</code> file in the folder appears in the list, sorted by name.</li>
+<li><strong>Stays current.</strong> Add, rename, or edit a file and the panel updates on its own.</li>
+<li><strong>Checklists that remember.</strong> Tick a box and it stays ticked the next time you open the sheet.</li>
+</ul>
+<h2>Install</h2>
+<p>The VS Code Marketplace listing is coming soon. Until then you can install it from <a href="${CHEATSHEETS_REPO}">the source on GitHub</a> by following the README there.</p>
+<p>Then open Settings, search for <strong>cheatsheets</strong>, and set <strong>Cheatsheets: Folder</strong> to your cheatsheets folder. Press <kbd>Ctrl+Alt+C</kbd> (Mac: <kbd>Ctrl+Cmd+C</kbd>) to open the panel.</p>
+<h2>Privacy</h2>
+<p>Cheatsheets reads files only from the folder you choose. It collects nothing, sends nothing, and has no analytics or network requests of its own. Which boxes you've ticked is kept by VS Code on your own computer.</p>
+<h2>Support</h2>
+<p>Found a bug or have a question? <a href="${CHEATSHEETS_REPO}/issues">Open an issue on GitHub</a>. It's a free side project, so replies may take a few days.</p>
+<p><a href="${CHEATSHEETS_REPO}">Source code (MIT)</a></p>
 </div>`;
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
   'August', 'September', 'October', 'November', 'December'];
@@ -575,6 +600,18 @@ async function writeSite(articles, outDir, options = {}) {
     current: 'tools',
     crumbs: [['OAT', '../../../'], ['Free tools', '../../'], ['Search Grid', '../'], ['Privacy', null]],
     body: SEARCH_GRID_PRIVACY_BODY
+  }));
+
+  // Cheatsheets extension page (fixed URL: the extension's homepage).
+  writeFile(outDir, 'tools/cheatsheets/index.html', page({
+    title: `Cheatsheets for VS Code · ${SITE_NAME}`,
+    description: 'Free VS Code extension: your own Markdown and HTML cheatsheets in the secondary sidebar.',
+    canonical: canonical('tools/cheatsheets/'),
+    pixel: pixel('tools/cheatsheets/'),
+    rootPrefix: '../../',
+    current: 'tools',
+    crumbs: [['OAT', '../../'], ['Free tools', '../'], ['Cheatsheets', null]],
+    body: CHEATSHEETS_BODY
   }));
 
   // Not found: served at any depth, so it uses absolute paths and lists nothing.
