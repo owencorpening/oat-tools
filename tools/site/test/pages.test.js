@@ -107,7 +107,7 @@ test('builds home, series, article and not-found pages with no JavaScript', asyn
     const htmlFiles = files.filter((f) => f.endsWith('.html')).sort();
     assert.deepStrictEqual(htmlFiles, [
       '404.html', 'about/index.html', 'index.html', 'products/index.html', 'standalone/essay/index.html', 'standalone/index.html',
-      'tools/index.html', 'tools/search-grid/index.html', 'tools/search-grid/privacy/index.html',
+      'tools/cheatsheets/index.html', 'tools/index.html', 'tools/search-grid/index.html', 'tools/search-grid/privacy/index.html',
       'vectors/essay/index.html', 'vectors/index.html', 'water/index.html', 'water/manifesto/index.html', 'water/part-01/index.html', 'water/part-02/index.html',
       'writing/index.html', 'writing/vectors/essay/index.html', 'writing/vectors/index.html',
       'writing/water/index.html', 'writing/water/manifesto/index.html', 'writing/water/part-01/index.html', 'writing/water/part-02/index.html'
@@ -115,7 +115,7 @@ test('builds home, series, article and not-found pages with no JavaScript', asyn
     assert.strictEqual(files.filter((f) => f.startsWith('assets/')).length, 1, 'one image, copied once');
     assert.strictEqual(img.hits.length, 1, 'image downloaded once');
     assert.deepStrictEqual(files.filter((f) => f.startsWith('brand/')).sort(),
-      ['brand/apple-touch-icon.png', 'brand/cornerstone.jpg', 'brand/favicon-32.png', 'brand/oat-mark.png', 'brand/search-grid-icon.png'],
+      ['brand/apple-touch-icon.png', 'brand/cheatsheets-icon.png', 'brand/cornerstone.jpg', 'brand/favicon-32.png', 'brand/oat-mark.png', 'brand/search-grid-icon.png'],
       'brand files copied from the repo, not downloaded');
 
     for (const f of files.filter((x) => x.endsWith('.html'))) {
@@ -386,7 +386,11 @@ test('OAT home has three doors; every page has the menu; sections get breadcrumb
   const tools = read(out, 'tools/index.html');
   assert.ok(nav(tools).includes('<a href="../tools/" aria-current="page">Free tools</a>'));
   assert.ok(tools.includes('<a href="../tools/search-grid/">Search Grid') && tools.includes('src="../brand/search-grid-icon.png"'));
-  assert.ok(tools.includes('href="https://github.com/owencorpening/riffkit"') && tools.includes('href="https://github.com/owencorpening/image-capture"') && tools.includes('href="https://github.com/owencorpening/cheatsheets-vscode"'));
+  assert.ok(tools.includes('href="https://github.com/owencorpening/riffkit"') && tools.includes('href="https://github.com/owencorpening/image-capture"') && tools.includes('<a href="../tools/cheatsheets/">Cheatsheets</a>') && tools.includes('src="../brand/cheatsheets-icon.png"'));
+  const sheets = read(out, 'tools/cheatsheets/index.html');
+  assert.ok(sheets.includes('<a href="../">Free tools</a><span class="sep" aria-hidden="true">›</span><span aria-current="page">Cheatsheets</span>'));
+  assert.ok(sheets.includes('<link rel="canonical" href="https://owensappliedthinking.com/tools/cheatsheets/">'), 'extension homepage URL fixed');
+  assert.ok(sheets.includes('collects nothing, sends nothing') && sheets.includes('href="https://github.com/owencorpening/cheatsheets-vscode/issues"'));
   const grid = read(out, 'tools/search-grid/index.html');
   assert.ok(grid.includes('<a href="../">Free tools</a><span class="sep" aria-hidden="true">›</span><span aria-current="page">Search Grid</span>'));
   assert.ok(grid.includes('<link rel="canonical" href="https://owensappliedthinking.com/tools/search-grid/">'), 'extension page URL unchanged');
