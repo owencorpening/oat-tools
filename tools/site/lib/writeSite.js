@@ -2,6 +2,8 @@
 
 // Writes the site from the articles the gate returned, and nothing else.
 // Page types (design step 3): Home, Series, Article, Not found.
+// Site sections (2026-11-22): OAT home at /, Writing at /writing/ (series and
+// articles below it), Free tools at /tools/, Products at /products/.
 // Every page is complete HTML with no JavaScript and no outside requests.
 
 const fs = require('fs');
@@ -19,7 +21,14 @@ const SIGN_OFF = 'Owen Corpening · Austin, Texas';
 // Brand files (oat-standards sop-branding.md, owencorpening/images brand/),
 // resized and committed here so the build makes no outside request for them.
 const BRAND_SRC = path.join(__dirname, '..', 'brand');
-const BRAND_FILES = ['oat-mark.png', 'favicon-32.png', 'apple-touch-icon.png', 'cornerstone.jpg'];
+const BRAND_FILES = ['oat-mark.png', 'favicon-32.png', 'apple-touch-icon.png', 'cornerstone.jpg', 'search-grid-icon.png'];
+// Writing lives under this folder. Old /<series>/... addresses redirect here.
+const WRITING = 'writing';
+// Top-level folders a series id must not take, since old /<series>/ addresses
+// become redirect pages at the site root.
+const RESERVED_IDS = new Set([WRITING, 'tools', 'products', 'about', 'brand', 'assets']);
+// Header menu: [section id, label, path from the site root].
+const NAV = [['writing', 'Writing', 'writing/'], ['tools', 'Free tools', 'tools/'], ['products', 'Products', 'products/'], ['about', 'About', 'about/']];
 // About page wording: oat-standards templates/brand_block.md (intro, mission,
 // disclaimer) and sops/actions/sop-pre-publish-review.md (bio footer).
 // "35+ years" replaces brand_block's "five decades" (Owen, 2026-11-22).
@@ -28,6 +37,32 @@ const BRAND_FILES = ['oat-mark.png', 'favicon-32.png', 'apple-touch-icon.png', '
 // Never add new wording here; change oat-standards first.
 const SUBSTACK_URL = 'https://owencorpening.substack.com/';
 const LINKEDIN_URL = 'https://www.linkedin.com/in/owencorpening/';
+// Free tools: listed on /tools/, on About and counted on the home page.
+// Wording as on the About page before 2026-11-22 (see above).
+const FREE_TOOLS = [
+  { name: 'Search Grid &amp; Recency Filter for YouTube™', short: 'Search Grid', href: 'tools/search-grid/', local: true, icon: 'brand/search-grid-icon.png',
+    note: 'Free Chrome extension · Shows YouTube search results as a grid and hides videos older than a number of days you choose.' },
+  { name: 'riffkit', short: 'riffkit', href: 'https://github.com/owencorpening/riffkit',
+    note: 'Free, install from GitHub · Turn any song into a practice project: stems you can mute, lyrics on your TV, your phone as the remote. Also splits live concerts into songs.' },
+  { name: 'Image Attribution Logger', short: 'Image Attribution Logger', href: 'https://github.com/owencorpening/image-capture',
+    note: 'Free, install from GitHub · The Image Attribution Logger is a seamless, zero-friction tool that automates image compliance for content creation.' }
+];
+function toolsList(rootPrefix, thumbs) {
+  const items = FREE_TOOLS.map((t) => {
+    const href = t.local ? rootPrefix + t.href : t.href;
+    const link = `<a href="${href}">${t.name}</a><p>${t.note}</p>`;
+    if (!thumbs) return `<li>${link}</li>`;
+    const img = t.icon
+      ? `<img class="thumb" src="${rootPrefix}${t.icon}" alt="" width="72" height="72" loading="lazy">`
+      : '<span class="thumb none" aria-hidden="true">OAT</span>';
+    return `<li class="has-thumb">${img}<div>${link}</div></li>`;
+  });
+  return `<ul class="list">\n${items.join('\n')}\n</ul>`;
+}
+// "A, B and C"
+function andList(names) {
+  return names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
 const ABOUT_BODY = `<div class="about">
 <h1>About</h1>
 <p class="meta">It's not activism. It's not theory. It's engineering.</p>
@@ -43,11 +78,7 @@ const ABOUT_BODY = `<div class="about">
 <p>I held a Texas PE license and chose not to renew it after I left engineering practice, so this isn't professional engineering services. These are conceptual analyses and preliminary estimates intended for discussion — not stamped drawings you can build from.</p>
 <p>If you are actually building something, hire a licensed engineer in your jurisdiction.</p>
 <h2>Things I've built</h2>
-<ul class="list">
-<li><a href="https://github.com/owencorpening/riffkit">riffkit</a><p>Free, install from GitHub · Turn any song into a practice project: stems you can mute, lyrics on your TV, your phone as the remote. Also splits live concerts into songs.</p></li>
-<li><a href="https://github.com/owencorpening/image-capture">Image Attribution Logger</a><p>Free, install from GitHub · The Image Attribution Logger is a seamless, zero-friction tool that automates image compliance for content creation.</p></li>
-<li><a href="../tools/search-grid/">Search Grid &amp; Recency Filter for YouTube™</a><p>Free Chrome extension · Shows YouTube search results as a grid and hides videos older than a number of days you choose.</p></li>
-</ul>
+${toolsList('../', false)}
 <h2>Elsewhere</h2>
 <ul class="elsewhere"><li><a href="${SUBSTACK_URL}">Substack</a></li><li><a href="${LINKEDIN_URL}">LinkedIn</a></li></ul>
 </div>`;
@@ -187,6 +218,16 @@ footer .links{display:block;margin-top:.5rem}
 footer .links a{color:var(--quiet)}
 .visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .count{position:absolute;width:1px;height:1px;opacity:0}
+header nav{display:flex;gap:1.1rem;white-space:nowrap}
+@media (max-width:40rem){header{flex-wrap:wrap;row-gap:.35rem}header nav{width:100%;justify-content:space-between;gap:.25rem;border-top:1px solid var(--line);padding-top:.15rem}header nav a{font-size:.74rem;letter-spacing:.1em}}
+@media (max-width:22rem){header nav a{font-size:.68rem;letter-spacing:.05em}}
+.crumbs{max-width:42rem;margin:0 auto;padding:.2rem 1rem;background:var(--band);border-bottom:1px solid var(--line);font:600 .74rem/1.3 system-ui,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--quiet)}
+.crumbs a{display:inline-block;padding:.45rem 0;color:var(--granite);text-decoration:none}
+.crumbs a:hover{color:var(--brass)}
+.crumbs a:focus-visible{outline:3px solid var(--brass);outline-offset:2px}
+.crumbs .sep{color:var(--brass);margin:0 .45rem}
+.doors .list a{font-size:1.25rem}
+.doors .thumb{width:88px;height:88px}
 `;
 // Changes whenever the stylesheet does, so browsers and the Pages cache
 // fetch the new one instead of reusing a stale copy.
@@ -230,7 +271,14 @@ function pixelWithTitle(pixel, title) {
 }
 
 // pixel: GoatCounter count URL for this page, or null for no counter.
-function page({ title, description, canonical, rootPrefix, body, footerTagline = true, image = null, current = null, pixel = null }) {
+// current: the menu section this page belongs to; currentIsPage when the page
+// is that section's own index. crumbs: [[label, href or null], ...] for the
+// breadcrumb band under the header, starting at OAT.
+function page({ title, description, canonical, rootPrefix, body, footerTagline = true, image = null, current = null, currentIsPage = false, crumbs = null, pixel = null }) {
+  const nav = NAV.map(([id, label, href]) => `<a href="${rootPrefix}${href}"${current === id ? ` aria-current="${currentIsPage ? 'page' : 'true'}"` : ''}>${escapeHtml(label)}</a>`).join('');
+  const band = crumbs
+    ? `<nav class="crumbs" aria-label="Breadcrumb">${crumbs.map(([label, href]) => (href ? `<a href="${href}">${escapeHtml(label)}</a>` : `<span aria-current="page">${escapeHtml(label)}</span>`)).join('<span class="sep" aria-hidden="true">›</span>')}</nav>\n`
+    : '';
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -242,8 +290,8 @@ ${description ? `<meta name="description" content="${escapeHtml(description)}">\
 <link rel="apple-touch-icon" href="${rootPrefix}brand/apple-touch-icon.png">
 </head>
 <body>
-<header><a class="home" href="${rootPrefix || './'}"><span class="mark"><img src="${rootPrefix}brand/oat-mark.png" alt="OAT" width="100" height="40"></span><span class="name">${escapeHtml(SITE_NAME)}</span></a><nav aria-label="Site"><a href="${rootPrefix}about/"${current === 'about' ? ' aria-current="page"' : ''}>About</a></nav></header>
-<main>
+<header><a class="home" href="${rootPrefix || './'}"><span class="mark"><img src="${rootPrefix}brand/oat-mark.png" alt="OAT" width="100" height="40"></span><span class="name">${escapeHtml(SITE_NAME)}</span></a><nav aria-label="Site">${nav}</nav></header>
+${band}<main>
 ${body}
 </main>
 <footer>${footerTagline ? escapeHtml(TAGLINE) : ''}<span class="sig">${escapeHtml(SIGN_OFF)}</span><span class="links"><a href="${rootPrefix}about/">About</a> · <a href="${SUBSTACK_URL}">Substack</a> · <a href="${LINKEDIN_URL}">LinkedIn</a></span></footer>
@@ -294,6 +342,7 @@ async function writeSite(articles, outDir, options = {}) {
   const problems = [];
   for (const a of articles) {
     if (!series.has(a.series)) problems.push(`${a.tag}: series "${a.series}" is not in site/series.json`);
+    else if (RESERVED_IDS.has(a.series)) problems.push(`${a.tag}: series id "${a.series}" is taken by a site section; pick another`);
   }
   if (problems.length) throw new GateError(problems);
 
@@ -339,12 +388,14 @@ async function writeSite(articles, outDir, options = {}) {
   fs.mkdirSync(path.join(outDir, 'brand'), { recursive: true });
   for (const f of BRAND_FILES) fs.copyFileSync(path.join(BRAND_SRC, f), path.join(outDir, 'brand', f));
 
-  // Home.
-  const homeList = shownSeries.map((s) => {
-    const n = bySeries.get(s.id).length;
-    const first = bySeries.get(s.id).find((a) => a.cover);
-    return `<li class="has-thumb">${thumb(coverOf(first), '')}<div><a href="${s.id}/">${escapeHtml(s.name)}</a><p>${escapeHtml(s.description)} · ${n} article${n === 1 ? '' : 's'}</p></div></li>`;
-  }).join('\n');
+  // Home: the OAT front door, one card for each part of the site.
+  const total = articles.length;
+  const firstCover = shownSeries.map((x) => coverOf(bySeries.get(x.id).find((a) => a.cover))).find(Boolean);
+  const doors = [
+    `<li class="has-thumb">${thumb(firstCover, '')}<div><a href="${WRITING}/">Writing</a><p>${escapeHtml(andList(shownSeries.map((x) => x.name)))} · ${total} article${total === 1 ? '' : 's'}</p></div></li>`,
+    `<li class="has-thumb"><img class="thumb" src="brand/search-grid-icon.png" alt="" width="72" height="72" loading="lazy"><div><a href="tools/">Free tools</a><p>${andList(FREE_TOOLS.map((t) => t.short))} · ${FREE_TOOLS.length} tools</p></div></li>`,
+    '<li class="has-thumb"><span class="thumb none" aria-hidden="true">OAT</span><div><a href="products/">Products</a><p>Coming soon</p></div></li>'
+  ].join('\n');
   writeFile(outDir, 'index.html', page({
     title: SITE_NAME,
     description: TAGLINE,
@@ -352,7 +403,25 @@ async function writeSite(articles, outDir, options = {}) {
     canonical: canonical(''),
     pixel: pixel(''),
     rootPrefix: '',
-    body: `<h1 class="visually-hidden">${escapeHtml(SITE_NAME)}</h1>\n<figure class="hero"><img src="brand/cornerstone.jpg" alt="OAT carved in a granite cornerstone" width="1200" height="800"></figure>\n<p class="meta">${escapeHtml(TAGLINE)}</p>\n<ul class="list">\n${homeList}\n</ul>`
+    body: `<h1 class="visually-hidden">${escapeHtml(SITE_NAME)}</h1>\n<figure class="hero"><img src="brand/cornerstone.jpg" alt="OAT carved in a granite cornerstone" width="1200" height="800"></figure>\n<p class="meta">${escapeHtml(TAGLINE)}</p>\n<div class="doors"><ul class="list">\n${doors}\n</ul></div>`
+  }));
+
+  // Writing index: one card per series.
+  const seriesCards = shownSeries.map((x) => {
+    const n = bySeries.get(x.id).length;
+    const first = bySeries.get(x.id).find((a) => a.cover);
+    return `<li class="has-thumb">${thumb(coverOf(first), '../')}<div><a href="${x.id}/">${escapeHtml(x.name)}</a><p>${escapeHtml(x.description)} · ${n} article${n === 1 ? '' : 's'}</p></div></li>`;
+  }).join('\n');
+  writeFile(outDir, `${WRITING}/index.html`, page({
+    title: `Writing · ${SITE_NAME}`,
+    description: TAGLINE,
+    canonical: canonical(`${WRITING}/`),
+    pixel: pixel(`${WRITING}/`),
+    rootPrefix: '../',
+    current: 'writing',
+    currentIsPage: true,
+    crumbs: [['OAT', '../'], ['Writing', null]],
+    body: `<h1>Writing</h1>\n<ul class="list">\n${seriesCards}\n</ul>`
   }));
 
   // Series pages.
@@ -360,14 +429,16 @@ async function writeSite(articles, outDir, options = {}) {
     const items = bySeries.get(s.id).map((a) => {
       const label = partLabel(a.part);
       const desc = a.description || firstParagraph(a.body);
-      return `<li class="has-thumb">${thumb(coverOf(a), '../')}<div><a href="${a.slug}/">${escapeHtml(a.title)}</a><p>${label ? `${escapeHtml(label)} · ` : ''}${formatDate(a.published)}${desc ? ` · ${escapeHtml(desc)}` : ''}</p></div></li>`;
+      return `<li class="has-thumb">${thumb(coverOf(a), '../../')}<div><a href="${a.slug}/">${escapeHtml(a.title)}</a><p>${label ? `${escapeHtml(label)} · ` : ''}${formatDate(a.published)}${desc ? ` · ${escapeHtml(desc)}` : ''}</p></div></li>`;
     }).join('\n');
-    writeFile(outDir, `${s.id}/index.html`, page({
+    writeFile(outDir, `${WRITING}/${s.id}/index.html`, page({
       title: `${s.name} · ${SITE_NAME}`,
       description: s.description,
-      canonical: canonical(`${s.id}/`),
-      pixel: pixel(`${s.id}/`),
-      rootPrefix: '../',
+      canonical: canonical(`${WRITING}/${s.id}/`),
+      pixel: pixel(`${WRITING}/${s.id}/`),
+      rootPrefix: '../../',
+      current: 'writing',
+      crumbs: [['OAT', '../../'], ['Writing', '../'], [s.name, null]],
       body: `<h1>${escapeHtml(s.name)}</h1>\n<p class="meta">${escapeHtml(s.description)}</p>\n<ul class="list">\n${items}\n</ul>`
     }));
   }
@@ -388,7 +459,7 @@ async function writeSite(articles, outDir, options = {}) {
       const pager = (prev || next)
         ? `<nav class="pager">${prev ? `<a class="prev" href="../${prev.slug}/"><small>← Previous</small>${escapeHtml(prev.title)}</a>` : ''}${next ? `<a class="next" href="../${next.slug}/"><small>Next →</small>${escapeHtml(next.title)}</a>` : ''}</nav>`
         : '';
-      const html = pointAtCopies(rendered.get(a), imageMap, '../../');
+      const html = pointAtCopies(rendered.get(a), imageMap, '../../../');
       // Every article with a neighbour gets the compact pair under the date line,
       // so the buttons never seem to vanish while paging through a series.
       const topPager = (prev || next)
@@ -397,45 +468,49 @@ async function writeSite(articles, outDir, options = {}) {
       // A cover that the article already shows (same image file) is not
       // repeated above the title; it still appears on the cards.
       const cover = coverOf(a);
-      const coverOnTop = cover && !html.includes(`src="../../${cover}"`);
-      writeFile(outDir, `${s.id}/${a.slug}/index.html`, page({
+      const coverOnTop = cover && !html.includes(`src="../../../${cover}"`);
+      writeFile(outDir, `${WRITING}/${s.id}/${a.slug}/index.html`, page({
         title: `${a.title} · ${SITE_NAME}`,
         description: a.description || firstParagraph(a.body),
-        canonical: canonical(`${s.id}/${a.slug}/`),
-        pixel: pixel(`${s.id}/${a.slug}/`),
+        canonical: canonical(`${WRITING}/${s.id}/${a.slug}/`),
+        pixel: pixel(`${WRITING}/${s.id}/${a.slug}/`),
         image: cover && baseUrl ? baseUrl + cover : null,
-        rootPrefix: '../../',
-        body: `<article>\n${coverOnTop ? `<figure class="cover"><img src="../../${cover}" alt=""></figure>\n` : ''}<h1>${escapeHtml(a.title)}</h1>\n<p class="meta">${meta}</p>\n${topPager}${html}\n</article>\n${also.length ? `<p class="also">Also on ${also.join(' and ')}.</p>\n` : ''}${pager}`
+        rootPrefix: '../../../',
+        current: 'writing',
+        crumbs: [['OAT', '../../../'], ['Writing', '../../'], [s.name, '../']],
+        body: `<article>\n${coverOnTop ? `<figure class="cover"><img src="../../../${cover}" alt=""></figure>\n` : ''}<h1>${escapeHtml(a.title)}</h1>\n<p class="meta">${meta}</p>\n${topPager}${html}\n</article>\n${also.length ? `<p class="also">Also on ${also.join(' and ')}.</p>\n` : ''}${pager}`
       }));
     });
   }
 
-  // Redirects from old series ids (e.g. /standalone/ -> /vectors/), so links
-  // shared before a rename keep working. Plain HTML, no JavaScript.
+  // Old addresses: writing sat at the site root (/<series>/<slug>/) until
+  // 2026-11-22, and some series had older ids (LEGACY_SERIES, an article's
+  // formerSeries). Each old address gets a plain HTML redirect page, so links
+  // shared before a move keep working. No JavaScript.
+  const toWriting = (rel) => [`${WRITING}/${rel}`, canonical(`${WRITING}/${rel}`)];
+  const redirect = (from, rel, depth) => {
+    const [target, canon] = toWriting(rel);
+    writeFile(outDir, `${from}index.html`, redirectPage('../'.repeat(depth) + target, canon));
+  };
+  for (const s of shownSeries) {
+    redirect(`${s.id}/`, `${s.id}/`, 1);
+    for (const a of bySeries.get(s.id)) redirect(`${s.id}/${a.slug}/`, `${s.id}/${a.slug}/`, 2);
+  }
   for (const [oldId, newId] of LEGACY_SERIES) {
     if (!bySeries.has(newId) || series.has(oldId)) continue;
-    writeFile(outDir, `${oldId}/index.html`, redirectPage('../' + newId + '/', canonical(`${newId}/`)));
-    for (const a of bySeries.get(newId)) {
-      writeFile(outDir, `${oldId}/${a.slug}/index.html`,
-        redirectPage(`../../${newId}/${a.slug}/`, canonical(`${newId}/${a.slug}/`)));
-    }
+    redirect(`${oldId}/`, `${newId}/`, 1);
+    for (const a of bySeries.get(newId)) redirect(`${oldId}/${a.slug}/`, `${newId}/${a.slug}/`, 2);
   }
-
-  // Redirects for articles moved to another series (e.g. /family/x/ ->
-  // /science/x/), including the old id of a renamed series. A former series
-  // left with no articles redirects its index to the home page.
+  // Articles moved to another series (e.g. /family/x/ -> /writing/science/x/).
+  // A former series left with no articles redirects to the Writing index.
   const shown = new Set(shownSeries.map((s) => s.id));
   for (const a of articles) {
     const from = new Set(a.formerSeries || []);
     for (const [oldId, newId] of LEGACY_SERIES) if (from.has(newId)) from.add(oldId);
     for (const oldId of from) {
-      if (shown.has(oldId)) {
-        if (bySeries.get(oldId).some((b) => b.slug === a.slug)) continue;
-      } else if (!fs.existsSync(path.join(outDir, oldId, 'index.html'))) {
-        writeFile(outDir, `${oldId}/index.html`, redirectPage('../', canonical('')));
-      }
-      writeFile(outDir, `${oldId}/${a.slug}/index.html`,
-        redirectPage(`../../${a.series}/${a.slug}/`, canonical(`${a.series}/${a.slug}/`)));
+      if (shown.has(oldId) && bySeries.get(oldId).some((b) => b.slug === a.slug)) continue;
+      if (!fs.existsSync(path.join(outDir, oldId, 'index.html'))) redirect(`${oldId}/`, '', 1);
+      redirect(`${oldId}/${a.slug}/`, `${a.series}/${a.slug}/`, 2);
     }
   }
 
@@ -447,7 +522,34 @@ async function writeSite(articles, outDir, options = {}) {
     pixel: pixel('about/'),
     rootPrefix: '../',
     current: 'about',
+    currentIsPage: true,
     body: ABOUT_BODY
+  }));
+
+  // Free tools index.
+  writeFile(outDir, 'tools/index.html', page({
+    title: `Free tools · ${SITE_NAME}`,
+    description: 'Free software by Owen Corpening.',
+    canonical: canonical('tools/'),
+    pixel: pixel('tools/'),
+    rootPrefix: '../',
+    current: 'tools',
+    currentIsPage: true,
+    crumbs: [['OAT', '../'], ['Free tools', null]],
+    body: `<h1>Free tools</h1>\n${toolsList('../', true)}`
+  }));
+
+  // Products: nothing for sale yet.
+  writeFile(outDir, 'products/index.html', page({
+    title: `Products · ${SITE_NAME}`,
+    description: 'Products from Owen\'s Applied Thinking: coming soon.',
+    canonical: canonical('products/'),
+    pixel: pixel('products/'),
+    rootPrefix: '../',
+    current: 'products',
+    currentIsPage: true,
+    crumbs: [['OAT', '../'], ['Products', null]],
+    body: '<h1>Products</h1>\n<p class="meta">Coming soon.</p>'
   }));
 
   // Search Grid extension: support page and privacy policy (fixed URLs).
@@ -457,6 +559,8 @@ async function writeSite(articles, outDir, options = {}) {
     canonical: canonical('tools/search-grid/'),
     pixel: pixel('tools/search-grid/'),
     rootPrefix: '../../',
+    current: 'tools',
+    crumbs: [['OAT', '../../'], ['Free tools', '../'], ['Search Grid', null]],
     body: SEARCH_GRID_BODY
   }));
   writeFile(outDir, 'tools/search-grid/privacy/index.html', page({
@@ -465,6 +569,8 @@ async function writeSite(articles, outDir, options = {}) {
     canonical: canonical('tools/search-grid/privacy/'),
     pixel: pixel('tools/search-grid/privacy/'),
     rootPrefix: '../../../',
+    current: 'tools',
+    crumbs: [['OAT', '../../../'], ['Free tools', '../../'], ['Search Grid', '../'], ['Privacy', null]],
     body: SEARCH_GRID_PRIVACY_BODY
   }));
 

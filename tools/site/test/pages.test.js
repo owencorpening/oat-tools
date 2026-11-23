@@ -106,14 +106,16 @@ test('builds home, series, article and not-found pages with no JavaScript', asyn
     })(out);
     const htmlFiles = files.filter((f) => f.endsWith('.html')).sort();
     assert.deepStrictEqual(htmlFiles, [
-      '404.html', 'about/index.html', 'index.html', 'standalone/essay/index.html', 'standalone/index.html',
-      'tools/search-grid/index.html', 'tools/search-grid/privacy/index.html',
-      'vectors/essay/index.html', 'vectors/index.html', 'water/index.html', 'water/manifesto/index.html', 'water/part-01/index.html', 'water/part-02/index.html'
+      '404.html', 'about/index.html', 'index.html', 'products/index.html', 'standalone/essay/index.html', 'standalone/index.html',
+      'tools/index.html', 'tools/search-grid/index.html', 'tools/search-grid/privacy/index.html',
+      'vectors/essay/index.html', 'vectors/index.html', 'water/index.html', 'water/manifesto/index.html', 'water/part-01/index.html', 'water/part-02/index.html',
+      'writing/index.html', 'writing/vectors/essay/index.html', 'writing/vectors/index.html',
+      'writing/water/index.html', 'writing/water/manifesto/index.html', 'writing/water/part-01/index.html', 'writing/water/part-02/index.html'
     ]);
     assert.strictEqual(files.filter((f) => f.startsWith('assets/')).length, 1, 'one image, copied once');
     assert.strictEqual(img.hits.length, 1, 'image downloaded once');
     assert.deepStrictEqual(files.filter((f) => f.startsWith('brand/')).sort(),
-      ['brand/apple-touch-icon.png', 'brand/cornerstone.jpg', 'brand/favicon-32.png', 'brand/oat-mark.png'],
+      ['brand/apple-touch-icon.png', 'brand/cornerstone.jpg', 'brand/favicon-32.png', 'brand/oat-mark.png', 'brand/search-grid-icon.png'],
       'brand files copied from the repo, not downloaded');
 
     for (const f of files.filter((x) => x.endsWith('.html'))) {
@@ -133,48 +135,51 @@ test('builds home, series, article and not-found pages with no JavaScript', asyn
     assert.ok(privacy.includes('collects no personal information'));
     assert.ok(privacy.includes('<link rel="canonical" href="https://owencorpening.github.io/oat-web/tools/search-grid/privacy/">'));
     assert.ok(read(out, 'about/index.html').includes('href="../tools/search-grid/"'), 'About links the extension page');
-    assert.ok(home.indexOf('Water Resilience') < home.indexOf('Vectors'), 'series in order, vectors last');
-    assert.ok(home.includes('href="water/"') && home.includes('href="vectors/"'));
-    assert.ok(!home.includes('href="standalone/"'), 'old series id is not listed');
+    const writing = read(out, 'writing/index.html');
+    assert.ok(writing.indexOf('Water Resilience') < writing.indexOf('Vectors'), 'series in order, vectors last');
+    assert.ok(writing.includes('href="water/"') && writing.includes('href="vectors/"'));
+    assert.ok(!writing.includes('href="standalone/"'), 'old series id is not listed');
 
     const moved = read(out, 'standalone/essay/index.html');
-    assert.ok(moved.includes('<meta http-equiv="refresh" content="0; url=../../vectors/essay/">'), 'old article URL redirects');
-    assert.ok(moved.includes('<link rel="canonical" href="https://owencorpening.github.io/oat-web/vectors/essay/">'));
-    assert.ok(read(out, 'standalone/index.html').includes('url=../vectors/'), 'old series URL redirects');
-    assert.ok(!home.includes('CNG'), 'a series with no published article is hidden');
+    assert.ok(moved.includes('<meta http-equiv="refresh" content="0; url=../../writing/vectors/essay/">'), 'old article URL redirects');
+    assert.ok(moved.includes('<link rel="canonical" href="https://owencorpening.github.io/oat-web/writing/vectors/essay/">'));
+    assert.ok(read(out, 'standalone/index.html').includes('url=../writing/vectors/'), 'old series URL redirects');
+    assert.ok(read(out, 'water/part-01/index.html').includes('url=../../writing/water/part-01/'), 'pre-/writing/ article URL redirects');
+    assert.ok(read(out, 'water/index.html').includes('url=../writing/water/'), 'pre-/writing/ series URL redirects');
+    assert.ok(!writing.includes('CNG') && !home.includes('CNG'), 'a series with no published article is hidden');
     assert.ok(home.includes('<link rel="canonical" href="https://owencorpening.github.io/oat-web/">'));
     assert.ok(home.includes('<img src="brand/cornerstone.jpg"'), 'cornerstone hero on the home page');
     assert.ok(home.includes('<h1 class="visually-hidden">'), 'home keeps its h1 for screen readers');
     assert.strictEqual(home.split('<body>')[1].split("It's not activism.").length - 1, 1, 'tagline shown once on the home page');
 
-    const series = read(out, 'water/index.html');
+    const series = read(out, 'writing/water/index.html');
     const order = ['part-01/', 'part-02/', 'manifesto/'].map((s) => series.indexOf(`href="${s}"`));
     assert.ok(order[0] < order[1] && order[1] < order[2], 'numbered parts first, then the rest');
 
-    const p1 = read(out, 'water/part-01/index.html');
+    const p1 = read(out, 'writing/water/part-01/index.html');
     assert.ok(p1.includes('Opening paragraph of part one'), 'article text is in the HTML');
     assert.ok(!p1.includes('<h1>Part one</h1>'), 'leading title line is not repeated');
-    assert.ok(/<img [^>]*src="\.\.\/\.\.\/assets\/[0-9a-f]{16}\.png"/.test(p1), 'image points at the copy');
+    assert.ok(/<img [^>]*src="\.\.\/\.\.\/\.\.\/assets\/[0-9a-f]{16}\.png"/.test(p1), 'image points at the copy');
     assert.ok(p1.includes('href="../../water/part-02/"'), 'link to a published article goes to its site page');
     assert.ok(p1.includes('href="https://www.who.int/report?r=keep"'), 'non-Substack links untouched');
     assert.ok(p1.includes('<a href="../">Water Resilience</a>') && p1.includes('Part 1'));
     assert.ok(p1.includes('<a class="next" href="../part-02/"><small>Next →</small>'), 'next button');
     assert.ok(!p1.includes('class="prev"'), 'no previous button on the first part');
     assert.ok(/<p class="meta">.*<\/p>\n<nav class="pager-top"[^>]*><a class="next" href="\.\.\/part-02\/"/.test(p1), 'short first part still gets the top Next button');
-    const p2page = read(out, 'water/part-02/index.html');
+    const p2page = read(out, 'writing/water/part-02/index.html');
     assert.ok(p2page.includes('<a class="prev" href="../part-01/"><small>← Previous</small>'), 'previous button');
     assert.ok(/<p class="meta">.*<\/p>\n<nav class="pager-top"[^>]*><a class="prev" href="\.\.\/part-01\/" title="[^"]*">← Previous<\/a><a class="next" href="\.\.\/manifesto\/"/.test(p2page), 'compact buttons under the date line');
     assert.ok(p1.includes('<a href="../">guide</a>') && !p1.includes('series-guide'), 'series-guide link goes to the series page');
     assert.ok(p1.includes('Also on <a href="https://owencorpening.substack.com/p/part-one">Substack</a>'));
-    assert.ok(p1.includes('<link rel="canonical" href="https://owencorpening.github.io/oat-web/water/part-01/">'));
-    assert.ok(/<link rel="stylesheet" href="\.\.\/\.\.\/style\.css\?v=[0-9a-f]{10}">/.test(p1), 'stylesheet link carries a version');
-    assert.ok(p1.includes('<img src="../../brand/oat-mark.png" alt="OAT"'), 'header logo on article pages');
-    assert.ok(p1.includes('<link rel="icon" type="image/png" sizes="32x32" href="../../brand/favicon-32.png">'));
+    assert.ok(p1.includes('<link rel="canonical" href="https://owencorpening.github.io/oat-web/writing/water/part-01/">'));
+    assert.ok(/<link rel="stylesheet" href="\.\.\/\.\.\/\.\.\/style\.css\?v=[0-9a-f]{10}">/.test(p1), 'stylesheet link carries a version');
+    assert.ok(p1.includes('<img src="../../../brand/oat-mark.png" alt="OAT"'), 'header logo on article pages');
+    assert.ok(p1.includes('<link rel="icon" type="image/png" sizes="32x32" href="../../../brand/favicon-32.png">'));
     assert.ok(p1.includes('Owen Corpening · Austin, Texas') && !p1.includes('Corpening, PE'), 'sign-off in footer');
     assert.strictEqual(p1.split('<body>')[1].split("It's not activism.").length - 1, 1, 'tagline in the article footer');
     assert.ok(!p1.includes('cornerstone.jpg'), 'hero only on the home page');
 
-    const essay = read(out, 'vectors/essay/index.html');
+    const essay = read(out, 'writing/vectors/essay/index.html');
     assert.ok(essay.includes('<a href="../">Vectors</a>') && essay.includes('LinkedIn'));
     assert.strictEqual(essay.split('<h1>Title essay</h1>').length - 1, 1, 'title heading after a hero image is not repeated');
 
@@ -193,7 +198,7 @@ test('a custom domain writes CNAME and serves from the root', async () => {
   await writeSite([art('water', 'part-01', { part: '01' })], out, { series: SERIES, baseUrl: 'https://owensappliedthinking.com' });
   assert.strictEqual(read(out, 'CNAME'), 'owensappliedthinking.com\n');
   assert.ok(read(out, 'index.html').includes('<link rel="canonical" href="https://owensappliedthinking.com/">'));
-  assert.ok(read(out, 'water/part-01/index.html').includes('<link rel="canonical" href="https://owensappliedthinking.com/water/part-01/">'));
+  assert.ok(read(out, 'writing/water/part-01/index.html').includes('<link rel="canonical" href="https://owensappliedthinking.com/writing/water/part-01/">'));
   const nf = read(out, '404.html');
   assert.ok(nf.includes('href="/"') && nf.includes('src="/brand/oat-mark.png"'), '404 uses root paths');
 });
@@ -203,10 +208,10 @@ test('a GoatCounter code adds a no-JavaScript counter image to each page', async
   await writeSite([art('water', 'part-01', { part: '01' })], out, { series: SERIES, baseUrl: 'https://owensappliedthinking.com', goatcounter: 'oat' });
   assert.ok(read(out, 'index.html').includes(`<img class="count" src="https://oat.goatcounter.com/count?p=/&amp;t=Owen's%20Applied%20Thinking" alt="" width="1" height="1">`), read(out, 'index.html').match(/<img class="count"[^>]*>/));
   assert.ok(read(out, 'about/index.html').includes('&amp;t=About"'), 'title sent without the site name');
-  assert.ok(read(out, 'water/part-01/index.html').includes('src="https://oat.goatcounter.com/count?p=/water/part-01/&amp;t='));
+  assert.ok(read(out, 'writing/water/part-01/index.html').includes('src="https://oat.goatcounter.com/count?p=/writing/water/part-01/&amp;t='));
   assert.ok(read(out, 'about/index.html').includes('count?p=/about/'));
   assert.ok(!read(out, '404.html').includes('goatcounter'), 'not-found pages are not counted');
-  for (const f of ['index.html', 'water/part-01/index.html']) assert.ok(!/<script/i.test(read(out, f)), `${f} still has no JavaScript`);
+  for (const f of ['index.html', 'writing/water/part-01/index.html']) assert.ok(!/<script/i.test(read(out, f)), `${f} still has no JavaScript`);
   const plain = path.join(tmpDir('oat-pages-'), 'site');
   await writeSite([art('water', 'part-01', { part: '01' })], plain, { series: SERIES, baseUrl: 'https://owensappliedthinking.com' });
   assert.ok(!read(plain, 'index.html').includes('goatcounter'), 'no code, no counter');
@@ -236,8 +241,8 @@ test('an <img> tag written across lines renders as an image and is copied', asyn
     const out = path.join(tmpDir('oat-pages-'), 'site');
     const body = `Opening paragraph that is long enough to describe the piece.\n\n---\n\n<img \n  src="${img.base}/logo.png" \n  alt="Natural Gas Symbol" \n  style="width: 200px; float: right;"\n>\n\n## The Premise\n\nText.`;
     await writeSite([art('vectors', 'a', { body })], out, { series: SERIES });
-    const page = read(out, 'vectors/a/index.html');
-    assert.ok(/<img src="\.\.\/\.\.\/assets\/[0-9a-f]{16}\.png" alt="Natural Gas Symbol" style="width: 200px; float: right;">/.test(page), 'one-line tag pointing at the copy');
+    const page = read(out, 'writing/vectors/a/index.html');
+    assert.ok(/<img src="\.\.\/\.\.\/\.\.\/assets\/[0-9a-f]{16}\.png" alt="Natural Gas Symbol" style="width: 200px; float: right;">/.test(page), 'one-line tag pointing at the copy');
     assert.ok(!page.includes('&lt;img') && !/<blockquote>\s*<\/blockquote>/.test(page), 'no tag text, no empty quote');
   } finally {
     img.close();
@@ -336,24 +341,65 @@ test('covers show on cards and above the article title; no cover gets the OAT ti
     assert.strictEqual(assets.length, 1, 'cover copied into the site');
     const local = `assets/${assets[0]}`;
 
-    const one = read(out, 'water/part-01/index.html');
-    assert.ok(one.includes(`<figure class="cover"><img src="../../${local}" alt=""></figure>\n<h1>`), 'cover above the title');
+    const one = read(out, 'writing/water/part-01/index.html');
+    assert.ok(one.includes(`<figure class="cover"><img src="../../../${local}" alt=""></figure>\n<h1>`), 'cover above the title');
     assert.ok(one.includes(`<meta property="og:image" content="https://owencorpening.github.io/oat-web/${local}">`), 'social preview image');
     assert.ok(!one.includes('127.0.0.1'), 'cover served from the site, not the original host');
-    const two = read(out, 'water/part-02/index.html');
+    const two = read(out, 'writing/water/part-02/index.html');
     assert.ok(!two.includes('class="cover"') && !two.includes('og:image'), 'no cover, no figure');
 
-    const series = read(out, 'water/index.html');
-    assert.ok(series.includes(`<img class="thumb" src="../${local}"`), 'thumbnail on the card');
-    const three = read(out, 'water/part-03/index.html');
-    assert.ok(three.includes(`src="../../${local}"`) && !three.includes('class="cover"'), 'a cover already in the article is not repeated above the title');
+    const series = read(out, 'writing/water/index.html');
+    assert.ok(series.includes(`<img class="thumb" src="../../${local}"`), 'thumbnail on the card');
+    const three = read(out, 'writing/water/part-03/index.html');
+    assert.ok(three.includes(`src="../../../${local}"`) && !three.includes('class="cover"'), 'a cover already in the article is not repeated above the title');
     assert.strictEqual(series.split('<span class="thumb none"').length - 1, 1, 'OAT tile for the piece without a cover');
-    const home = read(out, 'index.html');
-    assert.ok(home.includes(`<img class="thumb" src="${local}"`), 'section card uses its first cover');
-    assert.ok(home.includes('<span class="thumb none"'), 'section with no cover gets the tile');
+    const writing = read(out, 'writing/index.html');
+    assert.ok(writing.includes(`<img class="thumb" src="../${local}"`), 'series card uses its first cover');
+    assert.ok(writing.includes('<span class="thumb none"'), 'series with no cover gets the tile');
+    assert.ok(read(out, 'index.html').includes(`<img class="thumb" src="${local}"`), 'Writing door uses the first cover');
   } finally {
     img.close();
   }
+});
+
+test('OAT home has three doors; every page has the menu; sections get breadcrumbs', async () => {
+  const out = path.join(tmpDir('oat-sections-'), 'site');
+  await writeSite([art('water', 'part-01', { part: '01' }), art('water', 'part-02', { part: '02' }), art('vectors', 'essay')], out, { series: SERIES, baseUrl: 'https://owensappliedthinking.com' });
+  const home = read(out, 'index.html');
+  const doors = home.split('<div class="doors">')[1];
+  assert.ok(doors, 'home has the doors list');
+  assert.ok(doors.includes('<a href="writing/">Writing</a><p>Water Resilience and Vectors · 3 articles</p>'), doors);
+  assert.ok(doors.includes('<a href="tools/">Free tools</a><p>Search Grid, riffkit and Image Attribution Logger · 3 tools</p>'));
+  assert.ok(doors.includes('<a href="products/">Products</a><p>Coming soon</p>'));
+  assert.ok(!home.includes('class="crumbs"'), 'no breadcrumbs on the OAT home');
+  assert.ok(home.includes('<a class="home" href="./">'), 'logo links to the OAT home');
+
+  const nav = (html) => html.match(/<nav aria-label="Site">(.*?)<\/nav>/)[1];
+  assert.strictEqual(nav(home), '<a href="writing/">Writing</a><a href="tools/">Free tools</a><a href="products/">Products</a><a href="about/">About</a>');
+  const art1 = read(out, 'writing/water/part-01/index.html');
+  assert.ok(art1.includes('<a class="home" href="../../../">'), 'article logo goes to the OAT home');
+  assert.ok(nav(art1).includes('<a href="../../../writing/" aria-current="true">Writing</a>'), 'Writing marked in the menu');
+  assert.ok(art1.includes('<nav class="crumbs" aria-label="Breadcrumb"><a href="../../../">OAT</a><span class="sep" aria-hidden="true">›</span><a href="../../">Writing</a><span class="sep" aria-hidden="true">›</span><a href="../">Water Resilience</a></nav>\n<main>'), 'breadcrumb band under the header');
+  assert.ok(read(out, 'writing/water/index.html').includes('<a href="../">Writing</a><span class="sep" aria-hidden="true">›</span><span aria-current="page">Water Resilience</span></nav>'));
+  assert.ok(nav(read(out, 'writing/index.html')).includes('aria-current="page">Writing'));
+
+  const tools = read(out, 'tools/index.html');
+  assert.ok(nav(tools).includes('<a href="../tools/" aria-current="page">Free tools</a>'));
+  assert.ok(tools.includes('<a href="../tools/search-grid/">Search Grid') && tools.includes('src="../brand/search-grid-icon.png"'));
+  assert.ok(tools.includes('href="https://github.com/owencorpening/riffkit"') && tools.includes('href="https://github.com/owencorpening/image-capture"'));
+  const grid = read(out, 'tools/search-grid/index.html');
+  assert.ok(grid.includes('<a href="../">Free tools</a><span class="sep" aria-hidden="true">›</span><span aria-current="page">Search Grid</span>'));
+  assert.ok(grid.includes('<link rel="canonical" href="https://owensappliedthinking.com/tools/search-grid/">'), 'extension page URL unchanged');
+  assert.ok(read(out, 'products/index.html').includes('<h1>Products</h1>\n<p class="meta">Coming soon.</p>'));
+  assert.ok(nav(read(out, 'about/index.html')).includes('aria-current="page">About'));
+  const nf = read(out, '404.html');
+  assert.ok(nav(nf).startsWith('<a href="/writing/">'), '404 menu uses root paths');
+});
+
+test('a series id that matches a site section fails the build', async () => {
+  const series = new Map([...SERIES, ['tools', { id: 'tools', name: 'Tools', description: 'd', order: 5 }]]);
+  await assert.rejects(() => writeSite([art('tools', 'a')], path.join(tmpDir('oat-pages-'), 'site'), { series }),
+    (err) => err instanceof GateError && /series id "tools" is taken/.test(err.message));
 });
 
 (async () => {
