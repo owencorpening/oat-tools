@@ -91,10 +91,12 @@ ${toolsList('../', false)}
 // change. Wording matches that repo's store/listing.md.
 const SEARCH_GRID_NAME = 'Search Grid &amp; Recency Filter for YouTube™';
 const SEARCH_GRID_REPO = 'https://github.com/owencorpening/yt-grid-extension';
+const SEARCH_GRID_STORE = 'https://chromewebstore.google.com/detail/search-grid-recency-filte/ljghjhddjnnnjmaakpimcbidjckddgdf';
 const SEARCH_GRID_BODY = `<div class="about">
 <h1>${SEARCH_GRID_NAME}</h1>
 <p class="meta">Free Chrome extension</p>
 <p class="lede">Search results on YouTube come as one long list. This extension lays them out as a grid instead, and can hide videos older than a number of days you choose.</p>
+<p><a class="cta" href="${SEARCH_GRID_STORE}">Add to Chrome</a></p>
 <h2>What it does</h2>
 <ul>
 <li><strong>Grid view for search results.</strong> Pick a card width; the number of columns follows your window size.</li>
@@ -102,7 +104,7 @@ const SEARCH_GRID_BODY = `<div class="about">
 </ul>
 <p>Click the toolbar icon, set the card width and the number of days, and press Save. Changes apply right away.</p>
 <h2>Install</h2>
-<p>The Chrome Web Store listing is coming soon. Until then you can install it from <a href="${SEARCH_GRID_REPO}">the source on GitHub</a> by following the README there.</p>
+<p>Get it free from the <a href="${SEARCH_GRID_STORE}">Chrome Web Store</a>. Developers can also <a href="${SEARCH_GRID_REPO}">build from source on GitHub</a> by following the README there.</p>
 <h2>Limits</h2>
 <p>The recency filter reads YouTube's English date text, so it works when YouTube is set to English. Videos with no date, such as live streams and Shorts shelves, are always shown.</p>
 <h2>Support</h2>
@@ -240,6 +242,9 @@ main>*:nth-child(3){animation-delay:.16s}
 .about .creed{font-style:italic;color:var(--granite)}
 .about .elsewhere{list-style:none;padding:0;display:flex;flex-wrap:wrap;gap:.75rem;font:600 .95rem/1 system-ui,sans-serif}
 .about .elsewhere a{display:inline-flex;align-items:center;min-height:44px;padding:0 1rem;border:1px solid var(--line);border-radius:6px;background:var(--band);color:var(--granite);text-decoration:none;box-shadow:0 3px 0 var(--edge)}
+.about .cta{display:inline-flex;align-items:center;min-height:44px;padding:0 1.25rem;border:2px solid var(--brass);border-radius:6px;background:var(--band);color:var(--granite);text-decoration:none;font:600 1rem/1 system-ui,sans-serif;box-shadow:0 3px 0 var(--edge)}
+.about .cta:hover{background:var(--press)}
+.about .cta:focus-visible{outline:3px solid var(--brass);outline-offset:3px}
 .about .elsewhere a:hover{border-color:var(--brass);box-shadow:0 3px 0 var(--edge),0 6px 16px var(--glow)}
 .about .elsewhere a:active{transform:translateY(3px);box-shadow:0 0 0 var(--edge);background:var(--press)}
 footer .links{display:block;margin-top:.5rem}

@@ -129,6 +129,8 @@ test('builds home, series, article and not-found pages with no JavaScript', asyn
 
     // Search Grid extension pages: the Chrome Web Store links to these fixed URLs.
     const grid = read(out, 'tools/search-grid/index.html');
+    assert.ok(grid.includes('<a class="cta" href="https://chromewebstore.google.com/detail/search-grid-recency-filte/ljghjhddjnnnjmaakpimcbidjckddgdf">Add to Chrome</a>'), 'support page has the Add to Chrome store button');
+    assert.ok(!grid.includes('coming soon'), 'no stale coming-soon wording');
     assert.ok(grid.includes('href="privacy/"'), 'support page links its privacy policy');
     assert.ok(grid.includes('<link rel="stylesheet" href="../../style.css'), 'support page finds the stylesheet');
     const privacy = read(out, 'tools/search-grid/privacy/index.html');
