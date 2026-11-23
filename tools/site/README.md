@@ -40,9 +40,25 @@ contain real drafts.
 
 ## Pages (`lib/writeSite.js`)
 
-Home (`/`), one page per series with a published article (`/<series>/`,
-plus `/vectors/`), one page per article (`/<series>/<slug>/`) and
-`404.html`. Plain HTML and one stylesheet: no JavaScript. The only outside
+The site is OAT with three parts under it (2026-11-22):
+
+- OAT home (`/`): cornerstone photo, tagline and three cards: Writing, Free
+  tools, Products. The OAT plaque in every header links here.
+- Writing (`/writing/`): one card per series with a published article, one
+  page per series (`/writing/<series>/`) and one per article
+  (`/writing/<series>/<slug>/`). Until 2026-11-22 these lived at the site
+  root; every old `/<series>/` and `/<series>/<slug>/` address (and older
+  series ids) gets a redirect page. A series id can't be `writing`, `tools`,
+  `products`, `about`, `brand` or `assets`.
+- Free tools (`/tools/`): the list in `FREE_TOOLS`, also shown on About.
+  `/tools/search-grid/` and its `privacy/` page keep their URLs (the Chrome Web
+  Store links to them).
+- Products (`/products/`): "Coming soon" until a product is ready.
+- About (`/about/`) and `404.html`.
+
+Every page has the menu Writing · Free tools · Products · About. Pages inside
+a section have a breadcrumb band under the header (OAT › Writing › Water).
+Plain HTML and one stylesheet: no JavaScript. The only outside
 request is the optional visitor counter below. Every image a published article uses is downloaded into
 `assets/` and the page points at the copy. Links between published
 articles become site links; Substack `?r=` referral codes are removed.
