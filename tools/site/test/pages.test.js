@@ -369,7 +369,7 @@ test('OAT home has three doors; every page has the menu; sections get breadcrumb
   const doors = home.split('<div class="doors">')[1];
   assert.ok(doors, 'home has the doors list');
   assert.ok(doors.includes('<a href="writing/">Writing</a><p>Water Resilience and Vectors · 3 articles</p>'), doors);
-  assert.ok(doors.includes('<a href="tools/">Free tools</a><p>Search Grid, riffkit and Image Attribution Logger · 3 tools</p>'));
+  assert.ok(doors.includes('<a href="tools/">Free tools</a><p>Search Grid, riffkit, Image Attribution Logger and Cheatsheets · 4 tools</p>'));
   assert.ok(doors.includes('<a href="products/">Products</a><p>Coming soon</p>'));
   assert.ok(!home.includes('class="crumbs"'), 'no breadcrumbs on the OAT home');
   assert.ok(home.includes('<a class="home" href="./">'), 'logo links to the OAT home');
@@ -386,7 +386,7 @@ test('OAT home has three doors; every page has the menu; sections get breadcrumb
   const tools = read(out, 'tools/index.html');
   assert.ok(nav(tools).includes('<a href="../tools/" aria-current="page">Free tools</a>'));
   assert.ok(tools.includes('<a href="../tools/search-grid/">Search Grid') && tools.includes('src="../brand/search-grid-icon.png"'));
-  assert.ok(tools.includes('href="https://github.com/owencorpening/riffkit"') && tools.includes('href="https://github.com/owencorpening/image-capture"'));
+  assert.ok(tools.includes('href="https://github.com/owencorpening/riffkit"') && tools.includes('href="https://github.com/owencorpening/image-capture"') && tools.includes('href="https://github.com/owencorpening/cheatsheets-vscode"'));
   const grid = read(out, 'tools/search-grid/index.html');
   assert.ok(grid.includes('<a href="../">Free tools</a><span class="sep" aria-hidden="true">›</span><span aria-current="page">Search Grid</span>'));
   assert.ok(grid.includes('<link rel="canonical" href="https://owensappliedthinking.com/tools/search-grid/">'), 'extension page URL unchanged');
