@@ -45,7 +45,10 @@ const FREE_TOOLS = [
   { name: 'riffkit', short: 'riffkit', href: 'https://github.com/owencorpening/riffkit',
     note: 'Free, install from GitHub · Turn any song into a practice project: stems you can mute, lyrics on your TV, your phone as the remote. Also splits live concerts into songs.' },
   { name: 'Image Attribution Logger', short: 'Image Attribution Logger', href: 'https://github.com/owencorpening/image-capture',
-    note: 'Free, install from GitHub · The Image Attribution Logger is a seamless, zero-friction tool that automates image compliance for content creation.' }
+    note: 'Free, install from GitHub · The Image Attribution Logger is a seamless, zero-friction tool that automates image compliance for content creation.' },
+  // Wording: oat-standards product-inventory.md (added 2026-11-22 at Owen's request).
+  { name: 'Cheatsheets', short: 'Cheatsheets', href: 'https://github.com/owencorpening/cheatsheets-vscode',
+    note: 'Free VS Code extension, install from GitHub · Shows your own Markdown and HTML cheatsheets in the secondary sidebar.' }
 ];
 function toolsList(rootPrefix, thumbs) {
   const items = FREE_TOOLS.map((t) => {
