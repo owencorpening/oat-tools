@@ -108,6 +108,27 @@ the prompt uses an absolute path to `config.local.json`. Nothing to fill in.
 
 Run it **weekly, not continuously.** Less exposure to markup drift breaking a
 run midway, and it avoids traffic patterns that look automated to LinkedIn.
+(See the Cadence section in `prompt-template.md` for the full reasoning — the
+binding limit is LinkedIn's automated-access detection against a logged-in
+account.)
+
+### Automated schedule (set up 2026-11-23)
+
+A cron job runs the pull unattended every **Sunday 03:00 America/Chicago**:
+
+```text
+0 3 * * 0 /home/owen/.local/bin/stats-weekly-pull.sh
+```
+
+`~/.local/bin/stats-weekly-pull.sh` (local to the machine, not in this repo —
+it hardcodes paths and runs `claude -p ... --dangerously-skip-permissions`
+headless) loads node via nvm, runs the prompt above against the
+`playwright-stats` server, and commits/pushes the data repo (step 6). The
+7-day guard means a manual pull earlier in the week makes the Sunday run a
+safe no-op. Logs: `~/.local/state/stats-scraper/logs/` (outside the data repo,
+so they're never committed); failures also append to `failures.log` there.
+If LinkedIn's login expires, an unattended run fails — re-log into the
+isolated profile and the next run recovers.
 
 **Close the browser when the run finishes.** The login persists in
 `Default/Cookies` on disk, so nothing is lost by closing it — and a window
