@@ -121,13 +121,23 @@ def load_site():
     return {"trend": trend, "top": top, "tiles": tiles, "empty": len(rows) == 0}
 
 DATA = {
-    "generated": datetime.now().strftime("%Y-%m-%d %H:%M"),
     "github": load_github(),
     "linkedin": None,
     "substack": None,
     "site": load_site(),
 }
 DATA["linkedin"], DATA["substack"] = load_stats()
+
+# "Data through" = the freshest date across all sources, NOT wall-clock time.
+# This makes generation deterministic: a rebuild with no new data produces a
+# byte-identical file (no spurious git commit when run nightly).
+_dates = [t["x"] for t in DATA["github"]["trend"]] + [t["x"] for t in DATA["site"]["trend"]]
+for _p in ("linkedin", "substack"):
+    _lt = DATA[_p].get("latest")
+    if _lt:
+        _dates.append(_lt)
+_dates = [d for d in _dates if d]
+DATA["generated"] = max(_dates) if _dates else datetime.now().strftime("%Y-%m-%d")
 
 HTML = r"""<!doctype html>
 <html lang="en">
@@ -322,7 +332,7 @@ const C={github:getComputedStyle(document.documentElement).getPropertyValue('--g
          substack:getComputedStyle(document.documentElement).getPropertyValue('--substack').trim(),
          site:getComputedStyle(document.documentElement).getPropertyValue('--site').trim()};
 
-document.getElementById('sub').textContent=`GitHub · LinkedIn · Substack · Site — generated ${DATA.generated}`;
+document.getElementById('sub').textContent=`GitHub · LinkedIn · Substack · Site — data through ${DATA.generated}`;
 const grid=document.getElementById('grid');
 
 const g=DATA.github;

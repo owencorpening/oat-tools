@@ -150,13 +150,22 @@ next run recovers.
 `github-traffic-*.csv`, and `oat-analytics`'s `pageviews.csv`) and writes one
 self-contained `~/oat-data/stats/dashboard.html` — GitHub, LinkedIn, Substack,
 and the OAT site on a single offline page, data baked in, light/dark aware. The
-weekly wrapper regenerates and commits it after each pull, so it stays current.
 Run it by hand anytime with `python3 -I bin/build-dashboard.py` (reads the local
 `oat-analytics` checkout for the site panel; set `OAT_PAGEVIEWS=/path/to/pageviews.csv`
-to point it elsewhere). The weekly wrapper fetches the latest pageviews from
-`oat-analytics`'s remote first (read-only — `git show origin/main:…` into a temp
-file, never touching that repo's working tree), so the site panel self-freshens
-without a manual pull.
+to point it elsewhere).
+
+**Rebuilt nightly, not just weekly.** GitHub traffic (`github-traffic.timer`,
+00:06) and the OAT site (GoatCounter export, 03:17) both refresh their data
+*nightly*; only LinkedIn + Substack are weekly (LinkedIn's account-safety
+limit). So the dashboard is rebuilt every night at **04:00** by
+`stats-dashboard.timer` → `~/.local/bin/stats-refresh-dashboard.sh`, which
+fetches the latest pageviews from `oat-analytics`'s remote (read-only `git show
+origin/main:…` into a temp file — never touches that repo's working tree),
+regenerates, and commits **only if the data changed**. Generation is
+deterministic — the header reads "data through `<latest date across sources>`",
+not wall-clock time, so a rebuild with no new data is byte-identical and makes
+no commit. The weekly LinkedIn/Substack pull calls the same script at the end,
+so a fresh scrape shows up immediately too.
 
 **Close the browser when the run finishes.** The login persists in
 `Default/Cookies` on disk, so nothing is lost by closing it — and a window
