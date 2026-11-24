@@ -28,11 +28,28 @@ The tradeoff is fragility — see [Limits](#limits).
 
 ## Setup (one-time)
 
-1. **Register the MCP server.** Add the contents of `mcp-config.json` to your
-   Claude Code MCP settings — user scope, so it's available from any
-   directory. (Currently registered in `~/.claude.json`.) It defines one server,
-   `playwright-stats`, pointed at a dedicated profile directory
-   (`~/.playwright-stats-profile`).
+1. **Register the MCP server** at user scope, so it's available from any
+   directory. The one-liner (equivalent to the server in `mcp-config.json`):
+
+   ```sh
+   claude mcp add --scope user playwright-stats -- \
+     /home/owen/dev/oat-tools/stats-scraper/bin/stats-mcp
+   ```
+
+   It defines one server, `playwright-stats`, pointed at a dedicated profile
+   directory (`~/.playwright-stats-profile`).
+
+   **This registration gets lost.** It is NOT committed to this repo (it lives
+   in your local Claude Code config, e.g. `~/.claude.json`), so a config reset,
+   a new machine, or a stray edit drops it — and then a stats pull fails with
+   "the `playwright-stats` MCP server isn't available in this session" even
+   though every file here is intact. Confirmed missing and re-added 2026-11-23.
+   To check it's there: `claude mcp list` should show `playwright-stats`.
+
+   After adding it: **restart Claude Code** (MCP servers load at startup, not
+   mid-session) and **approve** the server when prompted — a locally-launched
+   stdio server first appears as "⏸ Pending approval". The tool permissions
+   (`mcp__playwright-stats__browser_*`) are already in `~/.claude/settings*`.
 
    Note: `--user-data-dir` and `--isolated` are mutually exclusive. This config
    uses `--user-data-dir` on purpose — the persisted login session is the whole
