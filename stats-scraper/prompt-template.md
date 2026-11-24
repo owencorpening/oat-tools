@@ -372,8 +372,37 @@ of 25.
 
 ## Cadence
 
-Run weekly, not continuously. Reduces both fragility (markup drift breaking
-mid-run) and the appearance of automated traffic patterns on LinkedIn.
+Run weekly, not nightly. The 7-day guard is a deliberate account-safety
+choice, not just caution — here's the full reasoning, since "why not nightly?"
+keeps coming up:
+
+1. **LinkedIn account safety — the real constraint.** This scraper drives a
+   *logged-in* LinkedIn session and fetches ~25 `/analytics/post-summary/`
+   pages per run. Weekly, that's a low, human-plausible footprint. Nightly
+   turns it into ~365×25 ≈ 9,000 analytics fetches a year from one persistent
+   session — exactly the mechanical, every-24h pattern LinkedIn's automated-
+   access detection flags. The downside of tripping it is NOT a failed scrape
+   you can retry; it's a restriction or ban on Owen's real LinkedIn account.
+   That asymmetry (tiny data gain vs. losing the account) is why this stays
+   weekly. Substack has no equivalent risk, but the run pulls both platforms
+   together, so the LinkedIn limit sets the cadence for both.
+
+2. **The data barely moves, so nightly buys almost nothing.** Post
+   views/engagement drift slowly (observed: a post gained 1 comment in 16
+   days). Dedup is one snapshot per URL per day, so nightly would add ~7× the
+   rows for no real extra signal — CSV bloat, not resolution.
+
+3. **It's not posting-bound.** Posting is infrequent (nothing new for months
+   at a time), so nightly wouldn't surface new posts meaningfully faster;
+   weekly catches them within days regardless.
+
+Contrast — things that *are* safe nightly, and why this isn't: the GoatCounter
+export (`oat-analytics`) runs nightly because it's a first-party API with its
+own token (no bot-detection risk) and website traffic genuinely changes daily.
+`github_traffic.py` hits the GitHub API (no ban risk either) and GitHub keeps
+only 14 days of traffic — but weekly already stays inside that window, so
+nothing is lost at weekly. Neither of those involves a logged-in consumer
+account being watched for automation, which is the whole difference.
 
 Enforced via `lastRun` in `config.local.json`: step 0 of the prompt checks it
 and refuses to scrape if fewer than 7 days have passed, and step 5 updates it
