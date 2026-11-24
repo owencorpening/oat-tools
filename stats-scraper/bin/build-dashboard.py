@@ -20,7 +20,7 @@ from datetime import datetime, date
 HOME = os.path.expanduser("~")
 STATS = os.path.join(HOME, "oat-data/stats/stats-log.csv")
 GH = os.path.join(HOME, "oat-data/stats/github-traffic-daily.csv")
-PV = os.path.join(HOME, "dev/oat-analytics/data/pageviews.csv")
+PV = os.environ.get("OAT_PAGEVIEWS") or os.path.join(HOME, "dev/oat-analytics/data/pageviews.csv")
 OUT = os.path.join(HOME, "oat-data/stats/dashboard.html")
 
 def num(x):

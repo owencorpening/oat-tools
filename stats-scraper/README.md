@@ -151,9 +151,12 @@ next run recovers.
 self-contained `~/oat-data/stats/dashboard.html` — GitHub, LinkedIn, Substack,
 and the OAT site on a single offline page, data baked in, light/dark aware. The
 weekly wrapper regenerates and commits it after each pull, so it stays current.
-Run it by hand anytime with `python3 -I bin/build-dashboard.py`. The site panel
-reflects the local `oat-analytics` checkout — `git -C ~/dev/oat-analytics pull`
-first if you want the freshest pageviews.
+Run it by hand anytime with `python3 -I bin/build-dashboard.py` (reads the local
+`oat-analytics` checkout for the site panel; set `OAT_PAGEVIEWS=/path/to/pageviews.csv`
+to point it elsewhere). The weekly wrapper fetches the latest pageviews from
+`oat-analytics`'s remote first (read-only — `git show origin/main:…` into a temp
+file, never touching that repo's working tree), so the site panel self-freshens
+without a manual pull.
 
 **Close the browser when the run finishes.** The login persists in
 `Default/Cookies` on disk, so nothing is lost by closing it — and a window
