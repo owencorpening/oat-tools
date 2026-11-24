@@ -144,6 +144,17 @@ committed); failures also append to `failures.log` there. If LinkedIn's login
 expires, an unattended run fails — re-log into the isolated profile and the
 next run recovers.
 
+### Dashboard
+
+`bin/build-dashboard.py` reads all the data CSVs (`stats-log.csv`,
+`github-traffic-*.csv`, and `oat-analytics`'s `pageviews.csv`) and writes one
+self-contained `~/oat-data/stats/dashboard.html` — GitHub, LinkedIn, Substack,
+and the OAT site on a single offline page, data baked in, light/dark aware. The
+weekly wrapper regenerates and commits it after each pull, so it stays current.
+Run it by hand anytime with `python3 -I bin/build-dashboard.py`. The site panel
+reflects the local `oat-analytics` checkout — `git -C ~/dev/oat-analytics pull`
+first if you want the freshest pageviews.
+
 **Close the browser when the run finishes.** The login persists in
 `Default/Cookies` on disk, so nothing is lost by closing it — and a window
 left open is a logged-in session sitting there between runs for no reason.
