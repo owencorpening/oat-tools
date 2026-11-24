@@ -92,6 +92,18 @@ Using the playwright-stats browser:
 
 5. Update lastRun in config.local.json to today's date (YYYY-MM-DD), so the
    next pull knows when this one happened.
+
+6. Commit the updated stats log so it's backed up off-machine. The output
+   file ({outputPath}) lives in its own git repo (the directory it sits in).
+   After the rows are written and lastRun is updated, run in that directory:
+     git -C <dir of outputPath> add -A
+     git -C <dir of outputPath> commit -m "Stats pull <today> (LinkedIn + Substack)"
+     git -C <dir of outputPath> push
+   If that directory is not a git repo, or has no remote/upstream, do NOT fail
+   the run — report it and skip the push so the scrape still counts. Report the
+   commit hash and push result (or why it was skipped). config.local.json is in
+   a different repo (this one, public, gitignored) — it is not what gets
+   committed here; only the data repo is.
 ```
 
 ## Settings
@@ -374,6 +386,13 @@ Rows are appended to the CSV at `outputPath` (default
 public). Open it in VS Code with rainbow-csv, or import to Sheets for the
 Ghost Tracker ingestion path (GAS, zero-infra, consistent with the rest of
 the OAT stack).
+
+**Backup repo (set up 2026-11-23).** `~/oat-data/stats/` is its own private
+git repo (`owencorpening/oat-stats`), holding `stats-log.csv` and the
+`github-traffic-*.csv` files. Step 6 of the prompt commits and pushes it after
+each pull, so the append-only history is backed up off-machine automatically —
+no manual commit needed. If you ever move `outputPath`, point it at a
+directory that is (or becomes) a git repo so the auto-commit keeps working.
 
 Columns: Platform, Title, Date, Audience, Views, Comments, Engagement Rate,
 Free Subs, Paid Subs, Estimated Value, Open Rate, URL, Captured At.
