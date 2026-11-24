@@ -13,7 +13,7 @@ Design per the data-viz skill: one coherent system, categorical hue per
 platform, light/dark aware, charts drawn in inline SVG (offline-safe).
 Run with -I; no third-party deps.
 """
-import csv, json, os, re, html
+import csv, json, os, re, html, subprocess
 from collections import defaultdict, OrderedDict
 from datetime import datetime, date
 
@@ -120,11 +120,63 @@ def load_site():
     tiles = {"views": len(rows), "days": len(days)}
     return {"trend": trend, "top": top, "tiles": tiles, "empty": len(rows) == 0}
 
+# ---------- Work: open items from GitHub Project "OAT" (number 2) ----------
+# Pulled via local `gh` at generation time. A successful pull is cached to
+# PROJECT_CACHE so a headless run (e.g. the 04:00 systemd timer, where the gh
+# keyring may be locked) can still render the panel from the last good fetch.
+PROJECT_CACHE = os.path.join(HOME, "oat-data/stats/project-items.json")
+STATUS_ORDER = {"In progress": 0, "Next": 1}
+PRIO_ORDER = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
+
+def load_work():
+    items = None
+    try:
+        r = subprocess.run(
+            ["gh", "project", "item-list", "2", "--owner", "owencorpening",
+             "--format", "json", "--limit", "100"],
+            capture_output=True, text=True, timeout=30)
+        if r.returncode == 0:
+            items = json.loads(r.stdout).get("items", [])
+            try:
+                with open(PROJECT_CACHE, "w") as f:
+                    json.dump({"items": items, "fetched": datetime.now().isoformat()}, f)
+            except Exception:
+                pass
+    except Exception:
+        items = None
+    if items is None:  # gh unavailable/unauthed — fall back to the cache
+        try:
+            with open(PROJECT_CACHE) as f:
+                items = json.load(f).get("items", [])
+        except Exception:
+            items = []
+    work = [it for it in items if it.get("status") in STATUS_ORDER]
+    work.sort(key=lambda it: (
+        STATUS_ORDER.get(it.get("status"), 9),
+        PRIO_ORDER.get(it.get("priority"), 9),
+        it.get("target date") or "9999-12-31",
+        (it.get("content", {}).get("title") or it.get("title", "")).lower(),
+    ))
+    out = []
+    for it in work:
+        c = it.get("content", {})
+        repo = (it.get("repository") or c.get("repository") or "").rsplit("/", 1)[-1]
+        out.append({
+            "title": c.get("title") or it.get("title", ""),
+            "url": c.get("url", ""),
+            "repo": repo,
+            "status": it.get("status", ""),
+            "priority": it.get("priority") or "",
+            "target": it.get("target date") or "",
+        })
+    return out
+
 DATA = {
     "github": load_github(),
     "linkedin": None,
     "substack": None,
     "site": load_site(),
+    "work": load_work(),
 }
 DATA["linkedin"], DATA["substack"] = load_stats()
 
@@ -151,18 +203,24 @@ HTML = r"""<!doctype html>
     --text:#0b0b0b; --muted:#52514e; --faint:#8a8980;
     --github:#2a78d6; --linkedin:#eb6834; --substack:#1baf7a; --site:#eda100;
     --grid:#eceae4;
+    --brass:#b8860b; --granite:#4a4f54;
+    --p0:#d03b3b; --p1:#b8860b; --p2:#5c6166; --p3:#8a8980;
   }
   @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
     --bg:#121211; --surface:#1a1a19; --border:#33322e;
     --text:#f0efec; --muted:#c3c2b7; --faint:#8f8e85;
     --github:#3987e5; --linkedin:#d95926; --substack:#199e70; --site:#c98500;
     --grid:#262521;
+    --brass:#d4a017; --granite:#c9ccd0;
+    --p0:#e66767; --p1:#d4a017; --p2:#a3a8ad; --p3:#8f8e85;
   }}
   :root[data-theme="dark"]{
     --bg:#121211; --surface:#1a1a19; --border:#33322e;
     --text:#f0efec; --muted:#c3c2b7; --faint:#8f8e85;
     --github:#3987e5; --linkedin:#d95926; --substack:#199e70; --site:#c98500;
     --grid:#262521;
+    --brass:#d4a017; --granite:#c9ccd0;
+    --p0:#e66767; --p1:#d4a017; --p2:#a3a8ad; --p3:#8f8e85;
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--text);zoom:var(--zoom,1.3);
@@ -182,6 +240,22 @@ HTML = r"""<!doctype html>
   .card h2{font-size:15px;margin:0 0 2px;display:flex;align-items:center;gap:8px;font-weight:620}
   .dot{width:10px;height:10px;border-radius:3px;display:inline-block}
   .card .meta{color:var(--faint);font-size:12px;margin:0 0 14px}
+  .card.wide{grid-column:1 / -1;border-top:3px solid var(--brass)}
+  .work{display:flex;flex-direction:column}
+  .wi{display:grid;grid-template-columns:auto 1fr auto;align-items:baseline;gap:12px;
+    padding:10px 2px;border-top:1px solid var(--grid)}
+  .wi:first-child{border-top:0}
+  .wi .pri{font:800 11px/1.1 inherit;font-variant-numeric:tabular-nums;white-space:nowrap;
+    padding:3px 8px;border-radius:999px}
+  .wi .pri.P0{color:var(--p0);background:color-mix(in srgb,var(--p0) 15%,transparent)}
+  .wi .pri.P1{color:var(--p1);background:color-mix(in srgb,var(--p1) 16%,transparent)}
+  .wi .pri.P2{color:var(--p2);background:color-mix(in srgb,var(--p2) 16%,transparent)}
+  .wi .pri.P3{color:var(--p3);background:color-mix(in srgb,var(--p3) 16%,transparent)}
+  .wi a.t{color:var(--text);text-decoration:none;font-weight:600;overflow-wrap:anywhere}
+  .wi a.t:hover{color:var(--brass);text-decoration:underline}
+  .wi .m{color:var(--faint);font-size:12px;white-space:nowrap;text-align:right}
+  .wi .m .repo{color:var(--muted)} .wi .m .st{color:var(--brass);font-weight:600}
+  .wi .m .due.late{color:var(--p0);font-weight:700}
   .tiles{display:flex;flex-wrap:wrap;gap:18px;margin-bottom:14px}
   .tile .n{font-size:24px;font-weight:680;line-height:1.1;font-variant-numeric:tabular-nums}
   .tile .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
@@ -223,6 +297,29 @@ const DATA = JSON.parse(document.getElementById('data').textContent);
 const tip = document.getElementById('tip');
 const fmt = n => n.toLocaleString();
 const shortDate = s => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s); return m ? m[2]+'/'+m[3] : s; };
+const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const fmtDate = s => { const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(s); return m ? MON[+m[2]-1]+' '+(+m[3]) : s; };
+
+function workPanel(items){
+  const c=document.createElement('div'); c.className='card wide';
+  c.innerHTML=`<h2><span class="dot" style="background:var(--brass)"></span>Work</h2>`+
+    `<div class="meta">In progress &amp; Next · from GitHub Project “OAT” · ${items.length} item${items.length===1?'':'s'}</div>`;
+  if(!items.length){ const e=document.createElement('div'); e.className='empty'; e.textContent='Nothing in progress or queued.'; c.appendChild(e); return c; }
+  const wrap=document.createElement('div'); wrap.className='work';
+  const today=new Date().toISOString().slice(0,10);
+  items.forEach(it=>{
+    const row=document.createElement('div'); row.className='wi';
+    const pri=document.createElement('span'); pri.className='pri '+(it.priority||''); pri.textContent=it.priority||'—';
+    const a=document.createElement('a'); a.className='t'; a.href=it.url||'#'; a.target='_blank'; a.rel='noopener'; a.textContent=it.title;
+    const m=document.createElement('div'); m.className='m';
+    let h=`<span class="repo">${it.repo}</span> · <span class="st">${it.status}</span>`;
+    if(it.target){ const late=it.target<today; h+=` · <span class="due${late?' late':''}">${fmtDate(it.target)}</span>`; }
+    m.innerHTML=h;
+    row.appendChild(pri); row.appendChild(a); row.appendChild(m);
+    wrap.appendChild(row);
+  });
+  c.appendChild(wrap); return c;
+}
 
 function lineChart(series, color, {baseline='auto', area=false, labelFmt=fmt}={}){
   // Uniform-scaled SVG (no preserveAspectRatio=none, so text isn't stretched).
@@ -334,6 +431,8 @@ const C={github:getComputedStyle(document.documentElement).getPropertyValue('--g
 
 document.getElementById('sub').textContent=`GitHub · LinkedIn · Substack · Site — data through ${DATA.generated}`;
 const grid=document.getElementById('grid');
+
+grid.appendChild(workPanel(DATA.work||[]));
 
 const g=DATA.github;
 grid.appendChild(card({name:'GitHub traffic',color:C.github,meta:g.tiles.span||'',

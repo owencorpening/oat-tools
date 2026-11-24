@@ -149,7 +149,15 @@ next run recovers.
 `bin/build-dashboard.py` reads all the data CSVs (`stats-log.csv`,
 `github-traffic-*.csv`, and `oat-analytics`'s `pageviews.csv`) and writes one
 self-contained `~/oat-data/stats/dashboard.html` — GitHub, LinkedIn, Substack,
-and the OAT site on a single offline page, data baked in, light/dark aware. The
+and the OAT site on a single offline page, data baked in, light/dark aware.
+
+A **Work** panel (brass/granite, top of the page) lists the open items from the
+"OAT" GitHub Project (number 2) — Status *In progress* then *Next*, sorted by
+Priority, each title linking to its issue. It's pulled via local `gh` at
+generation time (no token in the page); a good pull is cached to
+`~/oat-data/stats/project-items.json` (gitignored) so the headless 04:00 run
+still renders the panel even if the `gh` keyring is locked.
+
 Run it by hand anytime with `python3 -I bin/build-dashboard.py` (reads the local
 `oat-analytics` checkout for the site panel; set `OAT_PAGEVIEWS=/path/to/pageviews.csv`
 to point it elsewhere).
