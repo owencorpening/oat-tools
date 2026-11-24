@@ -155,10 +155,15 @@ HTML = r"""<!doctype html>
     --grid:#262521;
   }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--text);
+  body{margin:0;background:var(--bg);color:var(--text);zoom:var(--zoom,1.3);
     font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
-  header{padding:24px 16px 8px;max-width:1200px;margin:0 auto}
+  header{padding:24px 16px 8px;max-width:1200px;margin:0 auto;
+    display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
   h1{font-size:22px;margin:0;font-weight:650}
+  .fontctl{display:flex;gap:6px;flex:none}
+  .fontctl button{font:650 15px/1 inherit;cursor:pointer;background:var(--surface);color:var(--text);
+    border:1px solid var(--border);border-radius:8px;padding:5px 11px;min-width:34px}
+  .fontctl button:hover{border-color:var(--faint)}
   .sub{color:var(--muted);font-size:13px;margin-top:2px}
   .grid{max-width:1200px;margin:0 auto;padding:16px;display:grid;gap:16px;
     grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -190,8 +195,14 @@ HTML = r"""<!doctype html>
 </head>
 <body>
 <header>
-  <h1>OAT Dashboard</h1>
-  <div class="sub" id="sub"></div>
+  <div>
+    <h1>OAT Dashboard</h1>
+    <div class="sub" id="sub"></div>
+  </div>
+  <div class="fontctl">
+    <button id="fdn" title="Smaller text" aria-label="Smaller text">A&minus;</button>
+    <button id="fup" title="Larger text" aria-label="Larger text">A+</button>
+  </div>
 </header>
 <div class="grid" id="grid"></div>
 <footer id="foot"></footer>
@@ -339,6 +350,19 @@ grid.appendChild(card({name:'OAT site (owensappliedthinking.com)',color:C.site,
 
 document.getElementById('foot').textContent=
   'Self-contained snapshot — regenerated automatically after each weekly stats pull. Data stays on this machine.';
+
+// Font-size control: scales the whole page via CSS zoom; remembered per viewer.
+(function(){
+  const root=document.documentElement;
+  let z=1.3;
+  try{ const s=localStorage.getItem('oat-dash-zoom'); if(s){ const p=parseFloat(s); if(p) z=p; } }catch(e){}
+  const clamp=v=>Math.min(2.2,Math.max(0.8,Math.round(v*20)/20));
+  const apply=()=>{ z=clamp(z); root.style.setProperty('--zoom',z);
+    try{ localStorage.setItem('oat-dash-zoom',z); }catch(e){} };
+  apply();
+  document.getElementById('fup').onclick=()=>{ z+=0.1; apply(); };
+  document.getElementById('fdn').onclick=()=>{ z-=0.1; apply(); };
+})();
 </script>
 </body>
 </html>
