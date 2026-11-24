@@ -15,7 +15,7 @@ const { GateError } = require('./gate');
 const { DEFAULT_SERIES, LEGACY_SERIES } = require('./series');
 
 const SITE_NAME = "Owen's Applied Thinking";
-const TAGLINE = "It's not activism. It's not theory. It's engineering.";
+const TAGLINE = "Where reasoning meets the real world.";
 // Sign-off from oat-standards templates/brand_block.md.
 const SIGN_OFF = 'Owen Corpening · Austin, Texas';
 // Brand files (oat-standards sop-branding.md, owencorpening/images brand/),
@@ -68,7 +68,7 @@ function andList(names) {
 }
 const ABOUT_BODY = `<div class="about">
 <h1>About</h1>
-<p class="meta">It's not activism. It's not theory. It's engineering.</p>
+<p class="meta">Where reasoning meets the real world.</p>
 <p class="lede">Exploring the hidden logic and overlooked systems of everyday life — from the perspective of a civil engineer (former Texas PE) with 35+ years of field experience across civil infrastructure and software.</p>
 <p class="creed">No charity. No mandates. No green ideology.</p>
 <h2>Mission</h2>

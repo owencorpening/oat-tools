@@ -95,6 +95,9 @@ function renderBody(article, { bySubstackSlug, linkTo }) {
 // articles. It is the same on every one, so it is never used as a caption.
 const BRAND_BLOCK_LINES = new Set([
   'Exploring the hidden logic and overlooked systems of everyday life, from the perspective of an engineer.',
+  // Current tagline plus the older one — existing articles still carry the old
+  // brand block, so both must be recognized and skipped in caption extraction.
+  "Where reasoning meets the real world.",
   "It's not activism. It's not theory. It's engineering."
 ]);
 
