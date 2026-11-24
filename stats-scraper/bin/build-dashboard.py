@@ -15,7 +15,7 @@ Run with -I; no third-party deps.
 """
 import csv, json, os, re, html, subprocess
 from collections import defaultdict, OrderedDict
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 
 HOME = os.path.expanduser("~")
 STATS = os.path.join(HOME, "oat-data/stats/stats-log.csv")
@@ -32,6 +32,104 @@ def pct(x):
     except: return None
 
 # ---------- LinkedIn + Substack ----------
+# ---------- Weekly-delta helpers (honest about sparse data) ----------
+def _weekly_from_snapshots(series):
+    """series: [(date_str, cumulative_int)] ascending. Weekly gains computed only
+    where captures are ~a week apart (4-10 days). Too sparse -> ok=False + reason,
+    never an interpolated guess."""
+    pts = sorted((date.fromisoformat(d), v) for d, v in series if d)
+    out = {"ok": False, "reason": "", "thisWeek": None, "lastWeek": None,
+           "pct": None, "down25": False, "bars": {"ok": False, "reason": "", "items": []}}
+    if len(pts) < 2:
+        out["reason"] = "only one snapshot so far — need at least two"
+        out["bars"]["reason"] = out["reason"]
+        return out
+    wk = lambda a, b: 4 <= (b[0] - a[0]).days <= 10
+    gaps = [(pts[i + 1][0] - pts[i][0]).days for i in range(len(pts) - 1)]
+    L = pts[-1]
+    prev = next((p for p in reversed(pts[:-1]) if wk(p, L)), None)
+    if prev is None:
+        out["reason"] = (f"captures are ~{'/'.join(str(g) for g in gaps[-3:])} days apart "
+                         f"(last gap {gaps[-1]}d) — too sparse to isolate a week")
+        out["bars"]["reason"] = "not enough ~weekly snapshots yet"
+        return out
+    out["ok"] = True
+    out["thisWeek"] = L[1] - prev[1]
+    prev2 = next((p for p in reversed(pts[:pts.index(prev)]) if wk(p, prev)), None)
+    if prev2 is not None:
+        out["lastWeek"] = prev[1] - prev2[1]
+        if out["lastWeek"]:
+            out["pct"] = round((out["thisWeek"] - out["lastWeek"]) / abs(out["lastWeek"]) * 100, 1)
+            out["down25"] = out["pct"] < -25
+    bars = [{"label": pts[i][0].isoformat()[5:], "value": pts[i][1] - pts[i - 1][1], "hasData": True}
+            for i in range(1, len(pts)) if wk(pts[i - 1], pts[i])]
+    out["bars"] = ({"ok": True, "reason": "", "items": bars[-8:]} if bars
+                   else {"ok": False, "reason": "no consecutive ~weekly snapshots yet", "items": []})
+    return out
+
+def _weekly_from_daily(byday, weeks=8):
+    """byday: {date_str: int} of a daily count (e.g. GitHub views). Rolling 7-day
+    windows ending at the latest day; a week counts only if fully covered by data."""
+    days = {date.fromisoformat(d): v for d, v in byday.items()}
+    out = {"ok": False, "reason": "", "thisWeek": None, "lastWeek": None,
+           "pct": None, "down25": False, "bars": {"ok": False, "reason": "", "items": []}}
+    if not days:
+        out["reason"] = "no daily data"; out["bars"]["reason"] = out["reason"]; return out
+    end, start = max(days), min(days)
+    wsum = lambda a, b: sum(days.get(a + timedelta(days=i), 0) for i in range((b - a).days + 1))
+    out["ok"] = True
+    out["thisWeek"] = wsum(end - timedelta(days=6), end)
+    lw_start, lw_end = end - timedelta(days=13), end - timedelta(days=7)
+    if lw_start >= start:
+        out["lastWeek"] = wsum(lw_start, lw_end)
+        if out["lastWeek"]:
+            out["pct"] = round((out["thisWeek"] - out["lastWeek"]) / abs(out["lastWeek"]) * 100, 1)
+            out["down25"] = out["pct"] < -25
+    items = []
+    for w in range(weeks - 1, -1, -1):
+        b_end = end - timedelta(days=7 * w)
+        b_start = b_end - timedelta(days=6)
+        full = b_start >= start
+        items.append({"label": b_end.isoformat()[5:], "value": wsum(b_start, b_end) if full else 0,
+                      "hasData": full})
+    nfull = sum(1 for i in items if i["hasData"])
+    out["bars"] = {"ok": True, "reason": "", "items": items,
+                   "note": (f"{nfull} of {weeks} weeks have full data — history builds up over time"
+                            if nfull < weeks else "")}
+    return out
+
+def _recent_first7(rows, caps, latest, window=30, n=7):
+    """LinkedIn posts published within `window` days; impressions at the snapshot
+    nearest publish+n days, so new posts compare fairly with older ones."""
+    today = date.today()
+    latest_rows = [r for r in rows if r["Captured At"] == latest]
+    pub_of = lambda r: date.fromisoformat((r["Date"] or "")[:10])
+    recent = []
+    for r in latest_rows:
+        try:
+            p = pub_of(r)
+        except Exception:
+            continue
+        if 0 <= (today - p).days <= window:
+            recent.append((p, r))
+    if not recent:
+        allpubs = [(r["Date"] or "")[:10] for r in latest_rows if r.get("Date")]
+        newest = max(allpubs) if allpubs else "—"
+        return {"ok": False, "reason": f"no posts published in the last {window} days (newest is {newest})", "posts": []}
+    cap_dates = [date.fromisoformat(c) for c in caps]
+    posts = []
+    for p, r in sorted(recent, reverse=True):
+        target = p + timedelta(days=n)
+        cand = [cd for cd in cap_dates if abs((cd - target).days) <= 5]
+        v = None
+        if cand:
+            best = min(cand, key=lambda cd: abs((cd - target).days)).isoformat()
+            v = next((num(x["Views"]) for x in rows if x["URL"] == r["URL"] and x["Captured At"] == best), None)
+        posts.append({"title": r["Title"], "published": p.isoformat(), "first7": v,
+                      "note": None if v is not None else "no snapshot near day 7"})
+    return {"ok": True, "reason": "", "posts": posts}
+
+
 def load_stats():
     rows = []
     if os.path.exists(STATS):
@@ -67,7 +165,11 @@ def load_stats():
             ers = [pct(r["Engagement Rate"]) for r in latest_rows if pct(r["Engagement Rate"]) is not None]
             tiles["open"] = round(sum(ors)/len(ors), 1) if ors else None
             tiles["eng"] = round(sum(ers)/len(ers), 1) if ers else None
-        return {"trend": trend, "top": top, "tiles": tiles, "latest": latest}
+        result = {"trend": trend, "top": top, "tiles": tiles, "latest": latest}
+        if plat == "LinkedIn":
+            result["weekly"] = _weekly_from_snapshots([(t["x"], t["y"]) for t in trend])
+            result["recent"] = _recent_first7(rs, captures, latest)
+        return result
 
     return platform("LinkedIn", "Views"), platform("Substack", "Views")
 
@@ -98,7 +200,8 @@ def load_github():
         "repos": len([k for k, v in by_repo.items() if v["clones"] or v["views"]]),
         "span": f"{days[0]} → {days[-1]}" if days else "",
     }
-    return {"trend": trend, "top": top, "tiles": tiles}
+    return {"trend": trend, "top": top, "tiles": tiles,
+            "viewsWeekly": _weekly_from_daily({d: by_day[d]["views"] for d in days})}
 
 # ---------- OAT site (GoatCounter) ----------
 def load_site():
@@ -270,6 +373,26 @@ HTML = r"""<!doctype html>
   .row .val{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;text-align:right;min-width:52px}
   .row .val small{color:var(--faint)}
   .empty{color:var(--faint);font-style:italic;padding:18px 0;font-size:13px}
+  .weekly{margin:2px 0 2px;padding-top:12px;border-top:1px solid var(--grid)}
+  .wlabel{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:4px}
+  .wmain{font-size:13px;color:var(--muted)}
+  .wnum{font-size:20px;font-weight:680;color:var(--text);font-variant-numeric:tabular-nums}
+  .wunit{font-size:12px;color:var(--muted)}
+  .wpct{font-weight:650;color:var(--text)} .wpct.down{color:var(--p0)}
+  .wmuted{color:var(--faint)}
+  .wnote{font-size:12px;color:var(--faint);font-style:italic;margin-top:6px;line-height:1.35}
+  .wbars{display:flex;align-items:flex-end;gap:4px;height:52px;margin-top:10px}
+  .wbar{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}
+  .wbar .wbfill{width:100%;border-radius:3px 3px 0 0;min-height:2px}
+  .wbar.nodata .wbfill{height:100%;border-radius:3px;
+    background:repeating-linear-gradient(45deg,var(--grid),var(--grid) 3px,transparent 3px,transparent 6px)}
+  .wblab{font-size:9px;color:var(--faint);margin-top:3px;white-space:nowrap}
+  .recent{margin-top:12px;padding-top:12px;border-top:1px solid var(--grid)}
+  .rlist{display:flex;flex-direction:column;gap:6px;margin-top:4px}
+  .rrow{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:baseline;font-size:12px}
+  .rrow .rt{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rrow .rsub{color:var(--faint);font-size:11px}
+  .rrow .rv{color:var(--text);font-variant-numeric:tabular-nums;font-weight:650;white-space:nowrap}
   .tip{position:fixed;pointer-events:none;background:var(--surface);border:1px solid var(--border);
     border-radius:8px;padding:6px 9px;font-size:12px;box-shadow:0 4px 14px rgba(0,0,0,.14);
     opacity:0;transition:opacity .08s;z-index:10;white-space:nowrap}
@@ -411,11 +534,63 @@ function tiles(defs){
   return w;
 }
 
-function card({name,color,meta,tileDefs,series,seriesLabelFmt,chartOpts,top,topValFmt,empty,emptyMsg}){
+function weekBars(items, color){
+  const wrap=document.createElement('div'); wrap.className='wbars';
+  const max=Math.max(1, ...items.map(i=>i.value||0));
+  items.forEach(it=>{
+    const col=document.createElement('div'); col.className='wbar'+(it.hasData===false?' nodata':'');
+    const bar=document.createElement('div'); bar.className='wbfill';
+    if(it.hasData!==false){ bar.style.height=Math.max(2,(it.value/max)*100)+'%'; bar.style.background=color; }
+    bar.title=(it.hasData===false?it.label+': no data':it.label+': '+fmt(it.value));
+    const lab=document.createElement('div'); lab.className='wblab'; lab.textContent=it.label;
+    col.appendChild(bar); col.appendChild(lab); wrap.appendChild(col);
+  });
+  return wrap;
+}
+function weeklyBlock(w, color, label, unit){
+  const box=document.createElement('div'); box.className='weekly';
+  box.innerHTML=`<div class="wlabel">This week · ${label}</div>`;
+  if(!w || !w.ok){
+    const n=document.createElement('div'); n.className='wnote'; n.textContent=(w&&w.reason)||'no data'; box.appendChild(n);
+    return box;
+  }
+  const tw=w.thisWeek, lw=w.lastWeek;
+  let delta;
+  if(w.pct!=null){ const s=w.pct>0?'+':''; delta=`<span class="wpct${w.down25?' down':''}">${s}${w.pct}%</span> vs last week (${fmt(lw)})`; }
+  else if(lw!=null){ delta=`<span class="wmuted">last week ${fmt(lw)}; no % change</span>`; }
+  else { delta=`<span class="wmuted">no prior full week to compare yet</span>`; }
+  const main=document.createElement('div'); main.className='wmain';
+  main.innerHTML=`<span class="wnum">${tw>0?'+':''}${fmt(tw)}</span> <span class="wunit">${unit}</span> · ${delta}`;
+  box.appendChild(main);
+  if(w.bars && w.bars.ok && w.bars.items.length){
+    box.appendChild(weekBars(w.bars.items, color));
+    if(w.bars.note){ const n=document.createElement('div'); n.className='wnote'; n.textContent=w.bars.note; box.appendChild(n); }
+  } else if(w.bars && w.bars.reason){
+    const n=document.createElement('div'); n.className='wnote'; n.textContent='8-week chart: '+w.bars.reason; box.appendChild(n);
+  }
+  return box;
+}
+function recentBlock(r){
+  const box=document.createElement('div'); box.className='recent';
+  box.innerHTML=`<div class="wlabel">New posts (30d) · first 7 days</div>`;
+  if(!r || !r.ok){ const n=document.createElement('div'); n.className='wnote'; n.textContent=(r&&r.reason)||'no data'; box.appendChild(n); return box; }
+  const list=document.createElement('div'); list.className='rlist';
+  r.posts.forEach(p=>{
+    const row=document.createElement('div'); row.className='rrow';
+    const t=document.createElement('span'); t.className='rt'; t.textContent=p.title; t.title=p.title+' ('+p.published+')';
+    const v=document.createElement('span'); v.className='rv';
+    if(p.first7!=null){ v.textContent=fmt(p.first7); } else { v.innerHTML=`<span class="rsub">${p.note||'—'}</span>`; }
+    row.appendChild(t); row.appendChild(v); list.appendChild(row);
+  });
+  box.appendChild(list); return box;
+}
+
+function card({name,color,meta,tileDefs,series,seriesLabelFmt,chartOpts,top,topValFmt,empty,emptyMsg,extra}){
   const c=document.createElement('div'); c.className='card';
   c.innerHTML=`<h2><span class="dot" style="background:${color}"></span>${name}</h2>`+
               (meta?`<div class="meta">${meta}</div>`:'');
   c.appendChild(tiles(tileDefs));
+  if(extra) c.appendChild(extra);
   if(empty){ const e=document.createElement('div'); e.className='empty'; e.textContent=emptyMsg; c.appendChild(e); }
   else{
     if(series && series.length) c.appendChild(lineChart(series,color,Object.assign({labelFmt:seriesLabelFmt},chartOpts||{})));
@@ -437,12 +612,16 @@ grid.appendChild(workPanel(DATA.work||[]));
 const g=DATA.github;
 grid.appendChild(card({name:'GitHub traffic',color:C.github,meta:g.tiles.span||'',
   tileDefs:[{l:'Clones',v:fmt(g.tiles.clones||0)},{l:'Views',v:fmt(g.tiles.views||0)},{l:'Repos active',v:g.tiles.repos||0}],
-  series:g.trend,seriesLabelFmt:fmt,chartOpts:{baseline:'zero',area:true},top:g.top}));
+  series:g.trend,seriesLabelFmt:fmt,chartOpts:{baseline:'zero',area:true},top:g.top,
+  extra:weeklyBlock(g.viewsWeekly, C.github, 'views (not clones)', 'views')}));
 
 const li=DATA.linkedin;
+const liExtra=document.createElement('div');
+liExtra.appendChild(weeklyBlock(li.weekly, C.linkedin, 'impressions gained', 'impressions'));
+liExtra.appendChild(recentBlock(li.recent));
 grid.appendChild(card({name:'LinkedIn',color:C.linkedin,meta:li.latest?`25-post cohort · latest ${li.latest}`:'',
   tileDefs:[{l:'Impressions',v:fmt(li.tiles.total||0)},{l:'Comments',v:fmt(li.tiles.comments||0)},{l:'Posts',v:li.tiles.posts||0}],
-  series:li.trend,seriesLabelFmt:fmt,chartOpts:{baseline:'auto',area:false},top:li.top}));
+  series:li.trend,seriesLabelFmt:fmt,chartOpts:{baseline:'auto',area:false},top:li.top,extra:liExtra}));
 
 const sb=DATA.substack;
 grid.appendChild(card({name:'Substack',color:C.substack,meta:sb.latest?`25-post cohort · latest ${sb.latest}`:'',
