@@ -114,21 +114,35 @@ account.)
 
 ### Automated schedule (set up 2026-11-23)
 
-A cron job runs the pull unattended every **Sunday 03:00 America/Chicago**:
+A **systemd user timer** runs the pull unattended every **Sunday 03:00
+America/Chicago** (`~/.config/systemd/user/stats-weekly-pull.{timer,service}`):
 
-```text
-0 3 * * 0 /home/owen/.local/bin/stats-weekly-pull.sh
+```ini
+# stats-weekly-pull.timer
+OnCalendar=Sun *-*-* 03:00:00
+Persistent=true          # a run missed while asleep/off fires on next wake/boot
+RandomizedDelaySec=300   # small jitter so the time isn't mechanically identical
 ```
 
-`~/.local/bin/stats-weekly-pull.sh` (local to the machine, not in this repo —
-it hardcodes paths and runs `claude -p ... --dangerously-skip-permissions`
-headless) loads node via nvm, runs the prompt above against the
-`playwright-stats` server, and commits/pushes the data repo (step 6). The
-7-day guard means a manual pull earlier in the week makes the Sunday run a
-safe no-op. Logs: `~/.local/state/stats-scraper/logs/` (outside the data repo,
-so they're never committed); failures also append to `failures.log` there.
-If LinkedIn's login expires, an unattended run fails — re-log into the
-isolated profile and the next run recovers.
+A systemd timer was chosen over cron specifically so a **missed run is caught
+up**: plain cron silently skips a job if the machine is suspended or off at the
+scheduled time and never backfills it. With `Persistent=true` the run fires
+when the machine next wakes or boots. Lingering is enabled
+(`loginctl enable-linger owen`) so the timer runs even with no active login,
+just as cron did.
+
+Manage it with `systemctl --user {status,start,list-timers} stats-weekly-pull.timer`.
+
+The timer runs `~/.local/bin/stats-weekly-pull.sh` (local to the machine, not
+in this repo — it hardcodes paths and runs
+`claude -p ... --dangerously-skip-permissions` headless): it loads node via
+nvm, runs the prompt above against the `playwright-stats` server, and
+commits/pushes the data repo (step 6). The 7-day guard means a manual pull
+earlier in the week makes the scheduled run a safe no-op. Logs:
+`~/.local/state/stats-scraper/logs/` (outside the data repo, so they're never
+committed); failures also append to `failures.log` there. If LinkedIn's login
+expires, an unattended run fails — re-log into the isolated profile and the
+next run recovers.
 
 **Close the browser when the run finishes.** The login persists in
 `Default/Cookies` on disk, so nothing is lost by closing it — and a window
