@@ -112,6 +112,34 @@ run midway, and it avoids traffic patterns that look automated to LinkedIn.
 binding limit is LinkedIn's automated-access detection against a logged-in
 account.)
 
+### Install the schedule (new or rebuilt machine)
+
+The three jobs' systemd user units live in [`systemd/`](systemd/):
+
+| Timer | When | Runs |
+|---|---|---|
+| `github-traffic.timer` | daily ~00:00–00:30 | `github_traffic.py` (GitHub traffic + my own Actions clones) |
+| `stats-dashboard.timer` | daily 04:00 | `bin/stats-refresh-dashboard.sh` (rebuild + back up the dashboard) |
+| `stats-weekly-pull.timer` | Sun 03:00 | `bin/stats-weekly-pull.sh` (LinkedIn + Substack) |
+
+The units use `%h` (your home directory), so this repo must be at
+`~/dev/oat-tools`. Install and start them:
+
+```sh
+cp ~/dev/oat-tools/stats-scraper/systemd/*.{service,timer} ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now github-traffic.timer stats-dashboard.timer stats-weekly-pull.timer
+loginctl enable-linger "$USER"     # run even when you're not logged in
+systemctl --user list-timers       # check the next run times
+```
+
+The scripts also expect, from the rest of this README: `gh` logged in; the
+`oat-stats` repo cloned at `~/oat-data/stats` and `oat-analytics` at
+`~/dev/oat-analytics`; `config.local.json` (Setup above); and, for the weekly
+pull only, the `claude` CLI with the `playwright-stats` MCP server and a
+LinkedIn + Substack login in its browser profile. Edit a unit here, then
+repeat the `cp` and `daemon-reload` lines.
+
 ### Automated schedule (set up 2026-11-23)
 
 A **systemd user timer** runs the pull unattended every **Sunday 03:00

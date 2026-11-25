@@ -1,0 +1,10 @@
+[Unit]
+Description=Nightly OAT dashboard rebuild — 04:00 America/Chicago (after GitHub 00:06 & site 03:17)
+
+[Timer]
+OnCalendar=*-*-* 04:00:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

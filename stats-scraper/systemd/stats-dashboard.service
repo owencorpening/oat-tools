@@ -1,0 +1,8 @@
+[Unit]
+Description=Rebuild the OAT dashboard from latest data (no scraping)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/dev/oat-tools/stats-scraper/bin/stats-refresh-dashboard.sh

@@ -1,0 +1,8 @@
+[Unit]
+Description=Capture GitHub traffic for owencorpening repos
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 -I %h/dev/oat-tools/stats-scraper/github_traffic.py

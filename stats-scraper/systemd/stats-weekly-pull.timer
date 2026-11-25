@@ -1,0 +1,11 @@
+[Unit]
+Description=Weekly stats pull — Sun 03:00 America/Chicago, catches up a missed run
+
+[Timer]
+OnCalendar=Sun *-*-* 03:00:00
+Persistent=true
+# small jitter so the run time isn't mechanically identical each week
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

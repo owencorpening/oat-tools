@@ -1,0 +1,9 @@
+[Unit]
+Description=Weekly LinkedIn + Substack stats pull (stats-scraper)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/dev/oat-tools/stats-scraper/bin/stats-weekly-pull.sh
+# the wrapper handles its own logging to ~/.local/state/stats-scraper/logs/
