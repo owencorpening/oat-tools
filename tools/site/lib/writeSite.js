@@ -4,9 +4,10 @@
 // Page types (design step 3): Home, Series, Article, Not found.
 // Site sections (2026-11-22): OAT home at /, Writing at /writing/ (series and
 // articles below it), Free tools at /tools/, Products at /products/.
-// Every page is complete HTML with no JavaScript of its own. The one outside
-// request is the optional GoatCounter counter (count.js, with a no-JavaScript
-// image fallback); article bodies still may not carry scripts (render.js).
+// Every page is complete HTML. The site runs one pinned, integrity-checked
+// analytics script (GoatCounter's count.js, when a GoatCounter code is set)
+// and no other JavaScript; that counter is also the only outside request.
+// Article bodies may not carry scripts (render.js).
 
 const fs = require('fs');
 const path = require('path');
@@ -129,6 +130,8 @@ const SEARCH_GRID_PRIVACY_BODY = `<div class="about">
 <li>No reading of your browsing history, account, or anything outside youtube.com.</li>
 <li>Nothing is sold or shared with anyone.</li>
 </ul>
+<h2>This website</h2>
+<p>The extension itself has no analytics. This website, owensappliedthinking.com, runs one pinned, integrity-checked analytics script (GoatCounter) and no other JavaScript. It counts page views with the page address, the referring site, screen size, browser and country, and sets no cookies.</p>
 <h2>Permissions</h2>
 <p><strong>Storage</strong>, to save the two settings. <strong>Access to youtube.com</strong>, to change how YouTube lists videos.</p>
 <h2>Changes</h2>

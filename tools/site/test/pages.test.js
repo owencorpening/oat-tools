@@ -81,7 +81,7 @@ function read(out, rel) {
 const tests = [];
 function test(name, fn) { tests.push({ name, fn }); }
 
-test('builds home, series, article and not-found pages with no JavaScript', async () => {
+test('builds home, series, article and not-found pages with no JavaScript when no counter is set', async () => {
   const img = await startImageServer();
   try {
     const articles = [
@@ -120,7 +120,7 @@ test('builds home, series, article and not-found pages with no JavaScript', asyn
 
     for (const f of files.filter((x) => x.endsWith('.html'))) {
       const html = read(out, f);
-      assert.ok(!/<script|<iframe|\son[a-z]+=/i.test(html), `${f} has no JavaScript`);
+      assert.ok(!/<script|<iframe|\son[a-z]+=/i.test(html), `${f} has no JavaScript (no GoatCounter code in this build)`);
       assert.ok(!html.includes('127.0.0.1'), `${f} loads nothing from outside`);
       assert.ok(!html.includes('CANARY_'), `${f} shows nothing from an empty series`);
     }
@@ -246,7 +246,7 @@ test('fails on an article that carries a script', async () => {
   const out = path.join(tmpDir('oat-pages-'), 'site');
   await assert.rejects(
     () => writeSite([art('vectors', 'a', { body: 'Text <script>alert(1)</script>' })], out, { series: SERIES }),
-    /no JavaScript/
+    /no JavaScript besides its one analytics script/
   );
 });
 

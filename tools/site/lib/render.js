@@ -1,8 +1,10 @@
 'use strict';
 
 // Turns an article's Markdown into the HTML for its page body.
-// No scripts: an article that carries <script>, <iframe>, <object>, <embed>
-// or an inline event handler fails the build (the site has no JavaScript).
+// No scripts in articles: an article that carries <script>, <iframe>,
+// <object>, <embed> or an inline event handler fails the build. The site runs
+// one pinned, integrity-checked analytics script (GoatCounter, added by
+// writeSite.js) and no other JavaScript.
 
 const { marked } = require('marked');
 const { DEFAULT_SERIES } = require('./series');
@@ -74,7 +76,7 @@ function stripReferral(url) {
 function renderBody(article, { bySubstackSlug, linkTo }) {
   const problems = [];
   if (ACTIVE_CONTENT.test(article.body)) {
-    problems.push(`${article.tag}: contains a script, iframe, embed or inline event handler; the site has no JavaScript`);
+    problems.push(`${article.tag}: contains a script, iframe, embed or inline event handler; the site runs no JavaScript besides its one analytics script (GoatCounter)`);
   }
   let html = marked.parse(joinMultilineImgTags(dropLeadingTitle(article.body, article.title)), { async: false });
   html = html.replace(/<img\b[^>]*>/gi, (tag) => tag.replace(/src="([^"]*)"/, (all, url) => `src="${rawGithubUrl(url)}"`));

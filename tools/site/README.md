@@ -58,8 +58,9 @@ The site is OAT with three parts under it (2026-11-22):
 
 Every page has the menu Writing · Free tools · Products · About. Pages inside
 a section have a breadcrumb band under the header (OAT › Writing › Water).
-Plain HTML and one stylesheet; the only JavaScript is the optional visitor
-counter below, and the only outside requests are that counter's. Every image a published article uses is downloaded into
+Plain HTML and one stylesheet. The site runs one pinned, integrity-checked
+analytics script (GoatCounter, the visitor counter below) and no other
+JavaScript; the counter's requests are the only outside ones. Every image a published article uses is downloaded into
 `assets/` and the page points at the copy. Links between published
 articles become site links; Substack `?r=` referral codes are removed.
 
@@ -84,7 +85,13 @@ visitor's referrer and screen size; the image can't (before 2026-11-25 the site
 used only the image, so earlier visits show both as "unknown"). The script is
 told the same path and short title as the image, so pages aren't split or
 renamed in GoatCounter. No cookies either way. Unset means no counter and no
-JavaScript at all. Articles still may not contain scripts (the build fails).
+JavaScript at all.
+
+The rule: **one pinned, integrity-checked analytics script (GoatCounter) and no
+other JavaScript.** An article that contains a script, iframe, embed or inline
+event handler fails the build (`lib/render.js`), and the tests check that the
+counter is the only script on a page. Adding any other script means changing
+this rule here first.
 
 Series names, descriptions and order come from `site/series.json` in
 oat-content (read from `main`):
