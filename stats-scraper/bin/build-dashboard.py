@@ -285,6 +285,8 @@ def load_site():
     for r in rows:
         if not r.get("Date") or r.get("Bot", "0") != "0":
             continue  # GoatCounter leaves bots out of its own counts too
+        if (r.get("Referrer") or "").startswith("example.com/oat-counter-test"):
+            continue  # 2026-11-25 count.js check visit (oat-analytics README)
         by_day[local(r["Date"]).date().isoformat()] += 1
         by_path[r.get("Path", "")] += 1
         visitors += r.get("FirstVisit") == "1"
