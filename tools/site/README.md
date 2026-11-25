@@ -58,8 +58,8 @@ The site is OAT with three parts under it (2026-11-22):
 
 Every page has the menu Writing · Free tools · Products · About. Pages inside
 a section have a breadcrumb band under the header (OAT › Writing › Water).
-Plain HTML and one stylesheet: no JavaScript. The only outside
-request is the optional visitor counter below. Every image a published article uses is downloaded into
+Plain HTML and one stylesheet; the only JavaScript is the optional visitor
+counter below, and the only outside requests are that counter's. Every image a published article uses is downloaded into
 `assets/` and the page points at the copy. Links between published
 articles become site links; Substack `?r=` referral codes are removed.
 
@@ -76,9 +76,15 @@ Custom domain: the base URL (`DEFAULT_BASE_URL` in `build-site.js`, or
 the custom domain after every publish.
 
 Visitor counter: when `GOATCOUNTER_CODE` (or `--goatcounter`) is set, each
-page except 404 and redirects ends with a 1×1 GoatCounter image
-(`https://CODE.goatcounter.com/count?p=/path/`). It counts page views with no
-JavaScript and no cookies; it can't see referrers. Unset means no counter.
+page except 404 and redirects ends with GoatCounter's `count.js`
+(`https://gc.zgo.at/count.v4.js`, pinned with Subresource Integrity) plus a
+`<noscript>` 1×1 image (`https://CODE.goatcounter.com/count?p=/path/&t=Title`)
+for browsers without JavaScript. The script is what lets GoatCounter see the
+visitor's referrer and screen size; the image can't (before 2026-11-25 the site
+used only the image, so earlier visits show both as "unknown"). The script is
+told the same path and short title as the image, so pages aren't split or
+renamed in GoatCounter. No cookies either way. Unset means no counter and no
+JavaScript at all. Articles still may not contain scripts (the build fails).
 
 Series names, descriptions and order come from `site/series.json` in
 oat-content (read from `main`):

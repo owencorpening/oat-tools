@@ -4,7 +4,9 @@
 // Page types (design step 3): Home, Series, Article, Not found.
 // Site sections (2026-11-22): OAT home at /, Writing at /writing/ (series and
 // articles below it), Free tools at /tools/, Products at /products/.
-// Every page is complete HTML with no JavaScript and no outside requests.
+// Every page is complete HTML with no JavaScript of its own. The one outside
+// request is the optional GoatCounter counter (count.js, with a no-JavaScript
+// image fallback); article bodies still may not carry scripts (render.js).
 
 const fs = require('fs');
 const path = require('path');
@@ -303,6 +305,27 @@ function pixelWithTitle(pixel, title) {
   return `${pixel}&t=${encodeURIComponent(short)}`;
 }
 
+// GoatCounter's counter script, pinned to a version whose content GoatCounter
+// keeps fixed, and checked with Subresource Integrity so a changed file is
+// refused rather than run. Re-hash if the version changes:
+//   curl -s https://gc.zgo.at/count.v4.js | openssl dgst -sha384 -binary | base64
+const COUNT_JS = 'https://gc.zgo.at/count.v4.js';
+const COUNT_JS_SRI = 'sha384-nRw6qfbWyJha9LhsOtSb2YJDyZdKvvCFh0fJYlkquSFjUxp9FVNugbfy8q1jdxI+';
+
+// The counter for one page. count.js runs in the browser so GoatCounter gets
+// the visitor's referrer and screen size, which an image can't send. It is
+// given the same path and short title the image uses, so GoatCounter's page
+// list doesn't split or rename pages. Browsers without JavaScript load the
+// <noscript> image instead (never both).
+function counter(pixel, title) {
+  const img = pixelWithTitle(pixel, title);
+  const u = new URL(img);
+  const settings = JSON.stringify({ path: u.searchParams.get('p'), title: u.searchParams.get('t') });
+  return `<script data-goatcounter="${escapeHtml(u.origin + u.pathname)}" data-goatcounter-settings="${escapeHtml(settings)}" async src="${COUNT_JS}" integrity="${COUNT_JS_SRI}" crossorigin="anonymous"></script>
+<noscript><img class="count" src="${escapeHtml(img)}" alt="" width="1" height="1"></noscript>
+`;
+}
+
 // pixel: GoatCounter count URL for this page, or null for no counter.
 // current: the menu section this page belongs to; currentIsPage when the page
 // is that section's own index. crumbs: [[label, href or null], ...] for the
@@ -328,7 +351,7 @@ ${band}<main>
 ${body}
 </main>
 <footer>${footerTagline ? escapeHtml(TAGLINE) : ''}<span class="sig">${escapeHtml(SIGN_OFF)}</span><span class="links"><a href="${rootPrefix}about/">About</a> · <a href="${SUBSTACK_URL}">Substack</a> · <a href="${LINKEDIN_URL}">LinkedIn</a></span></footer>
-${pixel ? `<img class="count" src="${escapeHtml(pixelWithTitle(pixel, title))}" alt="" width="1" height="1">\n` : ''}</body>
+${pixel ? counter(pixel, title) : ''}</body>
 </html>
 `;
 }
@@ -367,7 +390,7 @@ async function writeSite(articles, outDir, options = {}) {
   const baseUrl = options.baseUrl ? options.baseUrl.replace(/\/?$/, '/') : null;
   const basePath = baseUrl ? new URL(baseUrl).pathname : '/';
   const canonical = (rel) => (baseUrl ? baseUrl + rel : null);
-  // Visitor counter: a GoatCounter image, no JavaScript and no cookies.
+  // Visitor counter: GoatCounter's count.js plus a no-JavaScript image fallback; no cookies.
   const code = options.goatcounter || null;
   if (code && !/^[a-z0-9-]+$/.test(code)) throw new Error(`bad GoatCounter code: ${code}`);
   const pixel = (rel) => (code ? `https://${code}.goatcounter.com/count?p=${encodeURI('/' + rel)}` : null);

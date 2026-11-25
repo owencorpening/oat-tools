@@ -205,18 +205,31 @@ test('a custom domain writes CNAME and serves from the root', async () => {
   assert.ok(nf.includes('href="/"') && nf.includes('src="/brand/oat-mark.png"'), '404 uses root paths');
 });
 
-test('a GoatCounter code adds a no-JavaScript counter image to each page', async () => {
+test('a GoatCounter code adds count.js, with a no-JavaScript image fallback, to each page', async () => {
   const out = path.join(tmpDir('oat-pages-'), 'site');
   await writeSite([art('water', 'part-01', { part: '01' })], out, { series: SERIES, baseUrl: 'https://owensappliedthinking.com', goatcounter: 'oat' });
-  assert.ok(read(out, 'index.html').includes(`<img class="count" src="https://oat.goatcounter.com/count?p=/&amp;t=Owen's%20Applied%20Thinking" alt="" width="1" height="1">`), read(out, 'index.html').match(/<img class="count"[^>]*>/));
-  assert.ok(read(out, 'about/index.html').includes('&amp;t=About"'), 'title sent without the site name');
-  assert.ok(read(out, 'writing/water/part-01/index.html').includes('src="https://oat.goatcounter.com/count?p=/writing/water/part-01/&amp;t='));
-  assert.ok(read(out, 'about/index.html').includes('count?p=/about/'));
+  const home = read(out, 'index.html');
+  assert.ok(home.includes(`<noscript><img class="count" src="https://oat.goatcounter.com/count?p=/&amp;t=Owen's%20Applied%20Thinking" alt="" width="1" height="1"></noscript>`), home.match(/<noscript>.*<\/noscript>/));
+  const script = home.match(/<script [^>]*><\/script>/);
+  assert.ok(script, 'home page has the counter script');
+  assert.ok(script[0].includes('data-goatcounter="https://oat.goatcounter.com/count"'), script[0]);
+  assert.ok(script[0].includes('src="https://gc.zgo.at/count.v4.js"') && /integrity="sha384-[A-Za-z0-9+/=]+"/.test(script[0]) && script[0].includes('crossorigin="anonymous"'), 'pinned script with SRI');
+  // Same path and short title as the image, so GoatCounter's page list stays the same.
+  const settings = (html) => JSON.parse(html.match(/data-goatcounter-settings="([^"]*)"/)[1].replace(/&quot;/g, '"').replace(/&amp;/g, '&'));
+  assert.deepStrictEqual(settings(home), { path: '/', title: "Owen's Applied Thinking" });
+  assert.deepStrictEqual(settings(read(out, 'about/index.html')), { path: '/about/', title: 'About' });
+  assert.strictEqual(settings(read(out, 'writing/water/part-01/index.html')).path, '/writing/water/part-01/');
+  assert.ok(read(out, 'about/index.html').includes('&amp;t=About"'), 'fallback image title sent without the site name');
   assert.ok(!read(out, '404.html').includes('goatcounter'), 'not-found pages are not counted');
-  for (const f of ['index.html', 'writing/water/part-01/index.html']) assert.ok(!/<script/i.test(read(out, f)), `${f} still has no JavaScript`);
+  for (const f of ['index.html', 'writing/water/part-01/index.html']) {
+    const html = read(out, f);
+    assert.strictEqual((html.match(/<script/gi) || []).length, 1, `${f}: the counter is the only script`);
+    assert.ok(!/<img class="count"/.test(html.replace(/<noscript>[\s\S]*?<\/noscript>/g, '')), `${f}: image only inside <noscript>, so no double count`);
+  }
   const plain = path.join(tmpDir('oat-pages-'), 'site');
   await writeSite([art('water', 'part-01', { part: '01' })], plain, { series: SERIES, baseUrl: 'https://owensappliedthinking.com' });
   assert.ok(!read(plain, 'index.html').includes('goatcounter'), 'no code, no counter');
+  assert.ok(!/<script/i.test(read(plain, 'index.html')), 'no code, no JavaScript at all');
   await assert.rejects(() => writeSite([], path.join(tmpDir('oat-pages-'), 'site'), { series: SERIES, goatcounter: 'evil.com/x?' }), /bad GoatCounter code/);
 });
 
