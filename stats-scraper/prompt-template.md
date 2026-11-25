@@ -37,9 +37,9 @@ Read /home/owen/dev/oat-tools/stats-scraper/config.local.json first — it holds
 linkedinHandle, substackSubdomain, outputPath, postsPerPull, and lastRun. Use
 linkedinHandle/substackSubdomain/outputPath/postsPerPull below.
 
-0. Check lastRun against today's date. If fewer than 7 days have passed, stop
+0. Check lastRun against today's date. If fewer than 6 days have passed, stop
    and tell me how many days remain instead of scraping — don't ask, just
-   report it and end. If lastRun is null/missing or 7+ days old, continue.
+   report it and end. If lastRun is null/missing or 6+ days old, continue.
 
 Using the playwright-stats browser:
 
@@ -372,7 +372,7 @@ of 25.
 
 ## Cadence
 
-Run weekly, not nightly. The 7-day guard is a deliberate account-safety
+Run weekly, not nightly. The 6-day guard is a deliberate account-safety
 choice, not just caution — here's the full reasoning, since "why not nightly?"
 keeps coming up:
 
@@ -405,8 +405,16 @@ nothing is lost at weekly. Neither of those involves a logged-in consumer
 account being watched for automation, which is the whole difference.
 
 Enforced via `lastRun` in `config.local.json`: step 0 of the prompt checks it
-and refuses to scrape if fewer than 7 days have passed, and step 5 updates it
+and refuses to scrape if fewer than 6 days have passed, and step 5 updates it
 to today's date after a successful pull.
+
+Why 6 days, not 7 (changed 2026-11-25): the timer fires every Sunday, but a
+manual pull can land on any day. With a 7-day guard, a Monday manual pull
+made the next Sunday (6 days later) a no-op, so the next real capture came 13
+days after it, and the dashboard's weekly LinkedIn figure (which needs two
+captures 4-10 days apart) never appeared. 6 days still blocks any second pull
+in the same week, and the Sunday timer still fires only once a week, so the
+account-safety footprint is unchanged: at most one pull per ~week.
 
 ## Output handling
 

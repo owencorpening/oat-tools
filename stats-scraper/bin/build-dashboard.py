@@ -5,6 +5,9 @@ Reads (all local, all optional — a missing source renders as an empty panel):
   ~/oat-data/stats/stats-log.csv          LinkedIn + Substack post snapshots
   ~/oat-data/stats/github-traffic-daily.csv   GitHub repo traffic per day
   ~/dev/oat-analytics/data/pageviews.csv  GoatCounter site pageviews
+  ~/dev/oat-analytics/data/state.json     when that export last ran
+  ~/oat-data/stats/github-actions-clones.csv  clones made by my own workflows
+  ~/.local/state/stats-scraper/logs/failures.log  failed weekly pulls
 
 Writes:
   ~/oat-data/stats/dashboard.html         standalone, data baked in, no server
@@ -14,6 +17,7 @@ platform, light/dark aware, charts drawn in inline SVG (offline-safe).
 Run with -I; no third-party deps.
 """
 import csv, json, os, re, html, subprocess
+from zoneinfo import ZoneInfo
 from collections import defaultdict, OrderedDict
 from datetime import datetime, date, timedelta
 
@@ -21,7 +25,18 @@ HOME = os.path.expanduser("~")
 STATS = os.path.join(HOME, "oat-data/stats/stats-log.csv")
 GH = os.path.join(HOME, "oat-data/stats/github-traffic-daily.csv")
 PV = os.environ.get("OAT_PAGEVIEWS") or os.path.join(HOME, "dev/oat-analytics/data/pageviews.csv")
-OUT = os.path.join(HOME, "oat-data/stats/dashboard.html")
+PV_STATE = os.environ.get("OAT_PAGEVIEWS_STATE") or os.path.join(HOME, "dev/oat-analytics/data/state.json")
+# Set by stats-refresh-dashboard.sh when it read the export from origin/main.
+# Unset means the builder fell back to the local clone, which may be stale.
+PV_FROM_REMOTE = os.environ.get("OAT_PAGEVIEWS_SOURCE") == "remote"
+ACTIONS = os.path.join(HOME, "oat-data/stats/github-actions-clones.csv")
+FAILURES = os.path.join(HOME, ".local/state/stats-scraper/logs/failures.log")
+OUT = os.environ.get("OAT_DASHBOARD_OUT") or os.path.join(HOME, "oat-data/stats/dashboard.html")
+# GoatCounter reports days in the site's time zone; bucket the same way.
+SITE_TZ = ZoneInfo("America/Chicago")
+# Clean-slate reset of pageviews.csv (oat-analytics README, 2026-11-23 20:43
+# CST). Nov 23 is only partly covered, so full days start the day after.
+SITE_FULL_DAYS_FROM = "2026-11-24"
 
 def num(x):
     try: return int(str(x).replace(",", ""))
@@ -67,18 +82,29 @@ def _weekly_from_snapshots(series):
                    else {"ok": False, "reason": "no consecutive ~weekly snapshots yet", "items": []})
     return out
 
-def _weekly_from_daily(byday, weeks=8):
+def _weekly_from_daily(byday, weeks=8, start=None, end=None):
     """byday: {date_str: int} of a daily count (e.g. GitHub views). Rolling 7-day
-    windows ending at the latest day; a week counts only if fully covered by data."""
+    windows ending at the latest day; a week counts only if fully covered by data.
+    start/end (date) set the covered range when it isn't just the days present
+    (days with no rows inside it are real zeros)."""
     days = {date.fromisoformat(d): v for d, v in byday.items()}
     out = {"ok": False, "reason": "", "thisWeek": None, "lastWeek": None,
-           "pct": None, "down25": False, "bars": {"ok": False, "reason": "", "items": []}}
-    if not days:
+           "pct": None, "down25": False, "partial": None,
+           "bars": {"ok": False, "reason": "", "items": []}}
+    if not days and not (start and end):
         out["reason"] = "no daily data"; out["bars"]["reason"] = out["reason"]; return out
-    end, start = max(days), min(days)
+    end = end or max(days)
+    start = start or min(days)
     wsum = lambda a, b: sum(days.get(a + timedelta(days=i), 0) for i in range((b - a).days + 1))
     out["ok"] = True
-    out["thisWeek"] = wsum(end - timedelta(days=6), end)
+    if end - timedelta(days=6) < start:
+        # Less than a week of coverage: report what we have, never a padded week.
+        n = (end - start).days + 1
+        out["thisWeek"] = wsum(start, end)
+        out["partial"] = {"days": n, "since": start.isoformat(),
+                          "fullWeek": (start + timedelta(days=6)).isoformat()}
+    else:
+        out["thisWeek"] = wsum(end - timedelta(days=6), end)
     lw_start, lw_end = end - timedelta(days=13), end - timedelta(days=7)
     if lw_start >= start:
         out["lastWeek"] = wsum(lw_start, lw_end)
@@ -130,6 +156,19 @@ def _recent_first7(rows, caps, latest, window=30, n=7):
     return {"ok": True, "reason": "", "posts": posts}
 
 
+def _failed_pulls_since(latest):
+    """Timestamps of failed weekly pulls logged after the latest capture date."""
+    out = []
+    try:
+        with open(FAILURES) as f:
+            for line in f:
+                m = re.match(r"\[(\d{4}-\d{2}-\d{2})T[^\]]*\]", line)
+                if m and m.group(1) > latest:
+                    out.append(m.group(1))
+    except OSError:
+        pass
+    return sorted(set(out))
+
 def load_stats():
     rows = []
     if os.path.exists(STATS):
@@ -165,7 +204,8 @@ def load_stats():
             ers = [pct(r["Engagement Rate"]) for r in latest_rows if pct(r["Engagement Rate"]) is not None]
             tiles["open"] = round(sum(ors)/len(ors), 1) if ors else None
             tiles["eng"] = round(sum(ers)/len(ers), 1) if ers else None
-        result = {"trend": trend, "top": top, "tiles": tiles, "latest": latest}
+        result = {"trend": trend, "top": top, "tiles": tiles, "latest": latest,
+                  "failedSince": _failed_pulls_since(latest)}
         if plat == "LinkedIn":
             result["weekly"] = _weekly_from_snapshots([(t["x"], t["y"]) for t in trend])
             result["recent"] = _recent_first7(rs, captures, latest)
@@ -179,6 +219,15 @@ def load_github():
         return {"trend": [], "top": [], "tiles": {}}
     with open(GH, newline="") as f:
         rows = list(csv.DictReader(f))
+    own_day, own_repo = defaultdict(int), defaultdict(int)
+    have_own = os.path.exists(ACTIONS)
+    if have_own:
+        span = {r["date"] for r in rows}
+        with open(ACTIONS, newline="") as f:
+            for a in csv.DictReader(f):
+                if a["date"] in span:
+                    own_day[a["date"]] += num(a["clones"])
+                    own_repo[a["target_repo"]] += num(a["clones"])
     by_day = defaultdict(lambda: {"views": 0, "clones": 0, "uv": 0})
     by_repo = defaultdict(lambda: {"views": 0, "clones": 0})
     for r in rows:
@@ -189,16 +238,26 @@ def load_github():
         by_repo[r["repo"]]["views"] += num(r["views"])
         by_repo[r["repo"]]["clones"] += num(r["clones"])
     days = sorted(by_day)
-    trend = [{"x": d, "y": by_day[d]["clones"], "y2": by_day[d]["views"]} for d in days]
-    top = sorted(by_repo.items(), key=lambda kv: kv[1]["clones"], reverse=True)[:8]
-    top = [{"label": k, "value": v["clones"],
-            "sub": (f'{v["views"]} view' + ("" if v["views"] == 1 else "s")) if v["views"] else ""}
-           for k, v in top if v["clones"] or v["views"]]
+    trend = [{"x": d, "y": by_day[d]["views"]} for d in days]
+    # Views lead; clones are listed beside them, with my own workflows split out.
+    top = sorted(by_repo.items(), key=lambda kv: (kv[1]["views"], kv[1]["clones"]), reverse=True)[:8]
+    def sub(k, v):
+        if not v["clones"]:
+            return ""
+        mine = f', {own_repo[k]} mine' if own_repo.get(k) else ""
+        return f'{v["clones"]:,} clones{mine}'
+    top = [{"label": k, "value": v["views"], "sub": sub(k, v)} for k, v in top if v["clones"] or v["views"]]
+    clones = sum(by_day[d]["clones"] for d in days)
+    own = sum(own_day.values())
     tiles = {
-        "clones": sum(by_day[d]["clones"] for d in days),
+        "clones": clones,
+        "ownClones": own if have_own else None,
+        "otherClones": clones - own if have_own else None,
         "views": sum(by_day[d]["views"] for d in days),
+        "uv": sum(by_day[d]["uv"] for d in days),
         "repos": len([k for k, v in by_repo.items() if v["clones"] or v["views"]]),
         "span": f"{days[0]} → {days[-1]}" if days else "",
+        "latest": days[-1] if days else "",
     }
     return {"trend": trend, "top": top, "tiles": tiles,
             "viewsWeekly": _weekly_from_daily({d: by_day[d]["views"] for d in days})}
@@ -209,19 +268,46 @@ def load_site():
     if os.path.exists(PV):
         with open(PV, newline="") as f:
             rows = list(csv.DictReader(f))
+    state = {}
+    try:
+        with open(PV_STATE) as f:
+            state = json.load(f)
+    except Exception:
+        pass
+    last_run = state.get("last_run")  # export coverage ends here (UTC ISO)
+
+    def local(ts):
+        return datetime.fromisoformat(ts.replace("Z", "+00:00")).astimezone(SITE_TZ)
+
     by_day = defaultdict(int)
     by_path = defaultdict(int)
+    visitors = 0
     for r in rows:
-        d = (r.get("Date") or "")[:10]
-        if d:
-            by_day[d] += 1
-            by_path[r.get("Path", "")] += 1
-    days = sorted(by_day)
-    trend = [{"x": d, "y": by_day[d]} for d in days]
+        if not r.get("Date") or r.get("Bot", "0") != "0":
+            continue  # GoatCounter leaves bots out of its own counts too
+        by_day[local(r["Date"]).date().isoformat()] += 1
+        by_path[r.get("Path", "")] += 1
+        visitors += r.get("FirstVisit") == "1"
+    views = sum(by_day.values())
+    covered_to = local(last_run) if last_run else None
+    start = date.fromisoformat(SITE_FULL_DAYS_FROM)
+    weekly = (_weekly_from_daily({d: v for d, v in by_day.items() if d >= SITE_FULL_DAYS_FROM},
+                                 start=start, end=covered_to.date())
+              if covered_to and covered_to.date() >= start else
+              {"ok": False, "reason": "no export since the reset yet"})
+    trend = []
+    if covered_to:
+        d = start
+        while d <= covered_to.date():
+            trend.append({"x": d.isoformat(), "y": by_day.get(d.isoformat(), 0)})
+            d += timedelta(days=1)
     top = sorted(by_path.items(), key=lambda kv: kv[1], reverse=True)[:8]
     top = [{"label": k or "/", "value": v} for k, v in top]
-    tiles = {"views": len(rows), "days": len(days)}
-    return {"trend": trend, "top": top, "tiles": tiles, "empty": len(rows) == 0}
+    tiles = {"views": views, "visitors": visitors}
+    return {"trend": trend, "top": top, "tiles": tiles, "empty": views == 0,
+            "weekly": weekly,
+            "coveredTo": covered_to.strftime("%Y-%m-%d %H:%M") if covered_to else None,
+            "fromLocalClone": not PV_FROM_REMOTE}
 
 # ---------- Work: open items from GitHub Project "OAT" (number 2) ----------
 # Pulled via local `gh` at generation time. A successful pull is cached to
@@ -232,7 +318,7 @@ STATUS_ORDER = {"In progress": 0, "Next": 1}
 PRIO_ORDER = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
 
 def load_work():
-    items = None
+    items, cached_at = None, None
     try:
         r = subprocess.run(
             ["gh", "project", "item-list", "2", "--owner", "owencorpening",
@@ -250,9 +336,12 @@ def load_work():
     if items is None:  # gh unavailable/unauthed — fall back to the cache
         try:
             with open(PROJECT_CACHE) as f:
-                items = json.load(f).get("items", [])
+                cache = json.load(f)
+            items = cache.get("items", [])
+            cached_at = (cache.get("fetched") or "")[:10] or "unknown date"
         except Exception:
             items = []
+            cached_at = "none — no cache either"
     work = [it for it in items if it.get("status") in STATUS_ORDER]
     work.sort(key=lambda it: (
         STATUS_ORDER.get(it.get("status"), 9),
@@ -272,7 +361,7 @@ def load_work():
             "priority": it.get("priority") or "",
             "target": it.get("target date") or "",
         })
-    return out
+    return {"items": out, "cachedAt": cached_at}
 
 DATA = {
     "github": load_github(),
@@ -286,7 +375,7 @@ DATA["linkedin"], DATA["substack"] = load_stats()
 # "Data through" = the freshest date across all sources, NOT wall-clock time.
 # This makes generation deterministic: a rebuild with no new data produces a
 # byte-identical file (no spurious git commit when run nightly).
-_dates = [t["x"] for t in DATA["github"]["trend"]] + [t["x"] for t in DATA["site"]["trend"]]
+_dates = [t["x"] for t in DATA["github"]["trend"]] + [t["x"] for t in DATA["site"]["trend"] if t["y"]]
 for _p in ("linkedin", "substack"):
     _lt = DATA[_p].get("latest")
     if _lt:
@@ -373,6 +462,11 @@ HTML = r"""<!doctype html>
   .row .val{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;text-align:right;min-width:52px}
   .row .val small{color:var(--faint)}
   .empty{color:var(--faint);font-style:italic;padding:18px 0;font-size:13px}
+  .fresh{font-size:12px;color:var(--muted);margin:-8px 0 12px}
+  .fresh .age.old{color:var(--p0);font-weight:650}
+  .warn{font-size:12px;color:var(--p0);font-weight:600;margin:-6px 0 12px;
+    padding:6px 9px;border-radius:8px;background:color-mix(in srgb,var(--p0) 10%,transparent)}
+  .tnote{font-size:12px;color:var(--muted);margin:-6px 0 12px;line-height:1.4}
   .weekly{margin:2px 0 2px;padding-top:12px;border-top:1px solid var(--grid)}
   .wlabel{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:4px}
   .wmain{font-size:13px;color:var(--muted)}
@@ -423,10 +517,27 @@ const shortDate = s => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s); return m 
 const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const fmtDate = s => { const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(s); return m ? MON[+m[2]-1]+' '+(+m[3]) : s; };
 
-function workPanel(items){
+// Ages are computed when the page is viewed (the file itself stays deterministic).
+function daysAgo(s){ // calendar days between that date and today, local time
+  const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(s); if(!m) return null;
+  const then=new Date(+m[1],+m[2]-1,+m[3]), now=new Date();
+  const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  return Math.max(0,Math.round((today-then)/86400000)); }
+function ageText(n){ return n===0?'today':n===1?'1 day ago':n+' days ago'; }
+function freshLine(html, days, oldAfter){
+  const d=document.createElement('div'); d.className='fresh';
+  d.innerHTML=html+(days==null?'':` · <span class="age${days>oldAfter?' old':''}">${ageText(days)}</span>`);
+  return d; }
+function warnLine(text){ const d=document.createElement('div'); d.className='warn'; d.textContent='⚠ '+text; return d; }
+function noteLine(html){ const d=document.createElement('div'); d.className='tnote'; d.innerHTML=html; return d; }
+function nextSunday(){ const d=new Date(); d.setDate(d.getDate()+((7-d.getDay())%7||7)); return fmtDate(d.toISOString().slice(0,10)); }
+
+function workPanel(work){
+  const items=work.items||[];
   const c=document.createElement('div'); c.className='card wide';
   c.innerHTML=`<h2><span class="dot" style="background:var(--brass)"></span>Work</h2>`+
     `<div class="meta">In progress &amp; Next · from GitHub Project “OAT” · ${items.length} item${items.length===1?'':'s'}</div>`;
+  if(work.cachedAt) c.appendChild(warnLine(`gh couldn't reach the Project at build time — showing the cached list from ${work.cachedAt}`));
   if(!items.length){ const e=document.createElement('div'); e.className='empty'; e.textContent='Nothing in progress or queued.'; c.appendChild(e); return c; }
   const wrap=document.createElement('div'); wrap.className='work';
   const today=new Date().toISOString().slice(0,10);
@@ -555,6 +666,14 @@ function weeklyBlock(w, color, label, unit){
     return box;
   }
   const tw=w.thisWeek, lw=w.lastWeek;
+  if(w.partial){
+    const main=document.createElement('div'); main.className='wmain';
+    main.innerHTML=`<span class="wnum">${fmt(tw)}</span> <span class="wunit">${unit} in ${w.partial.days} day${w.partial.days===1?'':'s'} (${fmtDate(w.partial.since)} – latest export)</span> · <span class="wmuted">not a full week yet — first full week ends ${fmtDate(w.partial.fullWeek)}</span>`;
+    box.appendChild(main);
+    if(w.bars && w.bars.items && w.bars.items.length){ box.appendChild(weekBars(w.bars.items, color));
+      if(w.bars.note){ const n=document.createElement('div'); n.className='wnote'; n.textContent=w.bars.note; box.appendChild(n); } }
+    return box;
+  }
   let delta;
   if(w.pct!=null){ const s=w.pct>0?'+':''; delta=`<span class="wpct${w.down25?' down':''}">${s}${w.pct}%</span> vs last week (${fmt(lw)})`; }
   else if(lw!=null){ delta=`<span class="wmuted">last week ${fmt(lw)}; no % change</span>`; }
@@ -585,11 +704,13 @@ function recentBlock(r){
   box.appendChild(list); return box;
 }
 
-function card({name,color,meta,tileDefs,series,seriesLabelFmt,chartOpts,top,topValFmt,empty,emptyMsg,extra}){
+function card({name,color,meta,pre,tileDefs,post,series,seriesLabelFmt,chartOpts,top,topValFmt,empty,emptyMsg,extra}){
   const c=document.createElement('div'); c.className='card';
   c.innerHTML=`<h2><span class="dot" style="background:${color}"></span>${name}</h2>`+
               (meta?`<div class="meta">${meta}</div>`:'');
+  (pre||[]).forEach(n=>c.appendChild(n));
   c.appendChild(tiles(tileDefs));
+  (post||[]).forEach(n=>c.appendChild(n));
   if(extra) c.appendChild(extra);
   if(empty){ const e=document.createElement('div'); e.className='empty'; e.textContent=emptyMsg; c.appendChild(e); }
   else{
@@ -607,37 +728,55 @@ const C={github:getComputedStyle(document.documentElement).getPropertyValue('--g
 document.getElementById('sub').textContent=`GitHub · LinkedIn · Substack · Site — data through ${DATA.generated}`;
 const grid=document.getElementById('grid');
 
-grid.appendChild(workPanel(DATA.work||[]));
+grid.appendChild(workPanel(DATA.work||{items:[]}));
 
-const g=DATA.github;
-grid.appendChild(card({name:'GitHub traffic',color:C.github,meta:g.tiles.span||'',
-  tileDefs:[{l:'Clones',v:fmt(g.tiles.clones||0)},{l:'Views',v:fmt(g.tiles.views||0)},{l:'Repos active',v:g.tiles.repos||0}],
+const g=DATA.github, gt=g.tiles||{};
+const gPost=[];
+if(gt.ownClones!=null) gPost.push(noteLine(`Clones are mostly automated: <b>${fmt(gt.ownClones)}</b> from my own GitHub Actions (identified per run), <b>${fmt(gt.otherClones)}</b> from elsewhere — bots, mirrors and other people's CI. Views are people loading the repo pages.`));
+else gPost.push(noteLine('Clones are mostly automated (bots, CI, my own workflows); views are people loading the repo pages.'));
+grid.appendChild(card({name:'GitHub traffic',color:C.github,meta:(gt.span||'')+' · daily views',
+  pre:gt.latest?[freshLine(`latest day ${fmtDate(gt.latest)}`, daysAgo(gt.latest), 2)]:[],
+  tileDefs:[{l:'Views',v:fmt(gt.views||0)},{l:'Unique visitors',v:fmt(gt.uv||0)},{l:'Clones · mostly automated',v:fmt(gt.clones||0)}],
+  post:gPost,
   series:g.trend,seriesLabelFmt:fmt,chartOpts:{baseline:'zero',area:true},top:g.top,
   extra:weeklyBlock(g.viewsWeekly, C.github, 'views (not clones)', 'views')}));
 
+function capturePre(p){
+  const out=[];
+  if(!p.latest) return out;
+  out.push(freshLine(`latest capture ${fmtDate(p.latest)} · next scheduled pull Sun ${nextSunday()}`, daysAgo(p.latest), 8));
+  if(p.failedSince && p.failedSince.length) out.push(warnLine(`weekly pull failed on ${p.failedSince.map(fmtDate).join(', ')} — numbers are from ${fmtDate(p.latest)}; see ~/.local/state/stats-scraper/logs/failures.log`));
+  return out;
+}
 const li=DATA.linkedin;
 const liExtra=document.createElement('div');
 liExtra.appendChild(weeklyBlock(li.weekly, C.linkedin, 'impressions gained', 'impressions'));
 liExtra.appendChild(recentBlock(li.recent));
-grid.appendChild(card({name:'LinkedIn',color:C.linkedin,meta:li.latest?`25-post cohort · latest ${li.latest}`:'',
+grid.appendChild(card({name:'LinkedIn',color:C.linkedin,meta:'25-post cohort',pre:capturePre(li),
   tileDefs:[{l:'Impressions',v:fmt(li.tiles.total||0)},{l:'Comments',v:fmt(li.tiles.comments||0)},{l:'Posts',v:li.tiles.posts||0}],
   series:li.trend,seriesLabelFmt:fmt,chartOpts:{baseline:'auto',area:false},top:li.top,extra:liExtra}));
 
 const sb=DATA.substack;
-grid.appendChild(card({name:'Substack',color:C.substack,meta:sb.latest?`25-post cohort · latest ${sb.latest}`:'',
+grid.appendChild(card({name:'Substack',color:C.substack,meta:'25-post cohort',pre:capturePre(sb),
   tileDefs:[{l:'Views',v:fmt(sb.tiles.total||0)},{l:'Avg open',v:sb.tiles.open!=null?sb.tiles.open+'%':null},
             {l:'Avg engage',v:sb.tiles.eng!=null?sb.tiles.eng+'%':null},{l:'Posts',v:sb.tiles.posts||0}],
   series:sb.trend,seriesLabelFmt:fmt,chartOpts:{baseline:'auto',area:false},top:sb.top}));
 
 const st=DATA.site;
+const sPre=[];
+if(st.coveredTo) sPre.push(freshLine(`exported through ${fmtDate(st.coveredTo.slice(0,10))} ${st.coveredTo.slice(11)} Central`, daysAgo(st.coveredTo), 1));
+if(st.fromLocalClone) sPre.push(warnLine("couldn't fetch oat-analytics at build time — using the local clone, which may be behind"));
 grid.appendChild(card({name:'OAT site (owensappliedthinking.com)',color:C.site,
-  meta:'GoatCounter pageviews',
-  tileDefs:[{l:'Pageviews',v:fmt(st.tiles.views||0)},{l:'Days',v:st.tiles.days||0}],
+  meta:'GoatCounter · counted from the clean-slate reset, Nov 23 8:43pm Central',
+  pre:sPre,
+  tileDefs:[{l:'Pageviews since reset',v:fmt(st.tiles.views||0)},{l:'First visits',v:fmt(st.tiles.visitors||0)}],
+  post:[noteLine("GoatCounter's own totals run higher: they still include the 24 self-test pageviews from Nov 22–23 that the reset dropped from this log. Days are Central time, like GoatCounter.")],
+  extra:weeklyBlock(st.weekly, C.site, 'pageviews', 'pageviews'),
   series:st.trend,seriesLabelFmt:fmt,chartOpts:{baseline:'zero',area:true},top:st.top,
-  empty:st.empty,emptyMsg:'No visits yet — the log was reset to a clean slate on 2026-11-23. This fills in as real visitors arrive (your own devices are ignored).'}));
+  empty:st.empty,emptyMsg:'No visits since the reset yet (your own devices are ignored).'}));
 
 document.getElementById('foot').textContent=
-  'Self-contained snapshot — regenerated automatically after each weekly stats pull. Data stays on this machine.';
+  'Self-contained snapshot — rebuilt nightly at 4am and after each weekly LinkedIn/Substack pull. Ages are measured from when you open the page. Data stays on this machine.';
 
 // Font-size control: scales the whole page via CSS zoom; remembered per viewer.
 (function(){

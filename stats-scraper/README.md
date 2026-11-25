@@ -133,12 +133,14 @@ just as cron did.
 
 Manage it with `systemctl --user {status,start,list-timers} stats-weekly-pull.timer`.
 
-The timer runs `~/.local/bin/stats-weekly-pull.sh` (local to the machine, not
-in this repo — it hardcodes paths and runs
-`claude -p ... --dangerously-skip-permissions` headless): it loads node via
+The timer runs [`bin/stats-weekly-pull.sh`](bin/stats-weekly-pull.sh) from
+this repo (moved here from `~/.local/bin` on 2026-11-25; the systemd unit's
+`ExecStart` points at the repo path). It hardcodes this machine's paths and runs
+`claude -p ... --dangerously-skip-permissions` headless: it loads node via
 nvm, runs the prompt above against the `playwright-stats` server, and
-commits/pushes the data repo (step 6). The 7-day guard means a manual pull
-earlier in the week makes the scheduled run a safe no-op. Logs:
+commits/pushes the data repo (step 6). The 6-day guard means a manual pull
+earlier in the same week makes the scheduled run a safe no-op, while a pull
+6+ days back (e.g. a manual Monday pull) still lets Sunday's run go ahead. Logs:
 `~/.local/state/stats-scraper/logs/` (outside the data repo, so they're never
 committed); failures also append to `failures.log` there. If LinkedIn's login
 expires, an unattended run fails — re-log into the isolated profile and the
@@ -166,10 +168,11 @@ to point it elsewhere).
 00:06) and the OAT site (GoatCounter export, 03:17) both refresh their data
 *nightly*; only LinkedIn + Substack are weekly (LinkedIn's account-safety
 limit). So the dashboard is rebuilt every night at **04:00** by
-`stats-dashboard.timer` → `~/.local/bin/stats-refresh-dashboard.sh`, which
+`stats-dashboard.timer` → [`bin/stats-refresh-dashboard.sh`](bin/stats-refresh-dashboard.sh), which
 fetches the latest pageviews from `oat-analytics`'s remote (read-only `git show
 origin/main:…` into a temp file — never touches that repo's working tree),
-regenerates, and commits **only if the data changed**. Generation is
+regenerates, and commits **only if the data changed** (the dashboard plus the
+GitHub traffic CSVs and `github-actions-clones.csv`, which nothing else backs up). Generation is
 deterministic — the header reads "data through `<latest date across sources>`",
 not wall-clock time, so a rebuild with no new data is byte-identical and makes
 no commit. The weekly LinkedIn/Substack pull calls the same script at the end,
