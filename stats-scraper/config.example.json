@@ -3,5 +3,11 @@
   "substackSubdomain": "your-substack-subdomain",
   "outputPath": "/absolute/path/to/stats-log.csv",
   "postsPerPull": 25,
-  "lastRun": null
+  "lastRun": null,
+  "cws": {
+    "clientId": "your-oauth-desktop-client-id.apps.googleusercontent.com",
+    "publisherId": "your-cws-publisher-id",
+    "itemId": "your-extension-item-id",
+    "lastRun": null
+  }
 }

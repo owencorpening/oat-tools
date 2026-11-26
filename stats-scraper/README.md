@@ -253,6 +253,42 @@ It writes to `~/oat-data/stats/` (`--out` to change), outside this repo:
 Repos with no traffic in the window are skipped, except `riffkit`, which
 always gets daily rows.
 
+## Chrome Web Store
+
+`cws_stats.py` pulls stats for my extension, Search Grid & Recency Filter for
+YouTube, through the official Chrome Web Store API v2
+([`publishers.items.queryMetrics`](https://developer.chrome.com/docs/webstore/api/reference/rest/v2/publishers.items/queryMetrics)),
+with the read-only scope `chromewebstore.readonly`. No browser, no scraping:
+the API has installs, uninstalls, daily and 7-day users, impressions and
+listing page views, sliced by one dimension at a time (country, or a UTM tag).
+
+**Setup (one-time).** The Google Cloud project "OAT stats" has the Chrome Web
+Store API enabled and a Desktop OAuth client, also named "OAT stats".
+`config.local.json` holds `cws.clientId`, `cws.publisherId` and `cws.itemId`
+(identifiers, not secrets). The client secret and the refresh token live only
+in the keyring:
+
+```sh
+secret-tool store --label="OAT stats CWS client secret" service oat-stats account cws-client-secret
+python3 cws_stats.py sign-in    # once: opens the browser, saves the refresh token
+```
+
+**Schedule.** `bin/stats-weekly-pull.sh` runs it on Sunday after the
+LinkedIn/Substack pull, with the same 6-day guard (`cws.lastRun`;
+`--force` overrides). A failure goes to `failures.log` as `cws pull FAILED`,
+and the dashboard flags it on the Chrome Web Store panel. The script retries
+network errors and 429/5xx answers twice before giving up. The keyring must be
+unlocked, as it is for `gh`, which holds while the desktop session is logged in.
+
+**Output**, in `~/oat-data/stats/cws/` (backed up by the dashboard refresh):
+`cws-<pull date>-daily.csv`, `-country.csv`, `-utm-source.csv` and
+`-utm-medium.csv`, each holding the full history the API returns.
+
+**Romania is my own VPN testing.** The dashboard takes it out of every figure
+the API can split by country, day by day. The source/medium breakdown can't be
+split by country (one dimension per query), so those lists still include it,
+and the panel says so.
+
 ## Limits
 
 **LinkedIn's feed actively resists straightforward scraping.** Post cards live
@@ -284,5 +320,6 @@ after 0.0.40. Since this runs a globally installed binary rather than
 | `prompt-template.md` | The extraction prompt, setup notes, and scrape gotchas |
 | `CLAUDE.md` | Working notes and project status for Claude Code |
 | `github_traffic.py` | Daily GitHub traffic capture (see [GitHub traffic](#github-traffic)) |
+| `cws_stats.py` | Weekly Chrome Web Store stats through the official API (see [Chrome Web Store](#chrome-web-store)) |
 
 Results live outside the repo at the configured `outputPath`.

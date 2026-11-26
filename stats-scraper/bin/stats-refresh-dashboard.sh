@@ -30,8 +30,9 @@ LOG="$LOG_DIR/dashboard-$(date +%Y-%m-%d).log"
   fi
   if python3 -I "$HOME/dev/oat-tools/stats-scraper/bin/build-dashboard.py"; then
     # Also back up the GitHub traffic CSVs (written by the nightly
-    # github_traffic.py) — nothing else commits them.
-    git -C "$HOME/oat-data/stats" add dashboard.html github-traffic-*.csv github-actions-clones.csv 2>/dev/null
+    # github_traffic.py) and the Chrome Web Store pulls (cws/, written by
+    # cws_stats.py) — nothing else commits them.
+    git -C "$HOME/oat-data/stats" add dashboard.html github-traffic-*.csv github-actions-clones.csv cws/ 2>/dev/null
     if ! git -C "$HOME/oat-data/stats" diff --cached --quiet 2>/dev/null; then
       git -C "$HOME/oat-data/stats" commit -m "Dashboard refresh $(date +%F)" \
         && git -C "$HOME/oat-data/stats" push || true

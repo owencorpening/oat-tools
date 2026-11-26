@@ -32,6 +32,21 @@ PROMPT='Read /home/owen/dev/oat-tools/stats-scraper/prompt-template.md in full a
 rc=$?
 echo "=== exit rc=$rc $(date -Is) ===" >>"$LOG"
 
+# Chrome Web Store stats for Search Grid: official API (no browser, no
+# scraping), same 6-day guard via cws.lastRun in config.local.json. Its own
+# failure line, so the dashboard flags the right panel. Credentials come from
+# the keyring; this needs the session's keyring unlocked, as `gh` does.
+{
+  echo "=== cws pull $(date -Is) ==="
+  python3 -I "$HOME/dev/oat-tools/stats-scraper/cws_stats.py"
+} >>"$LOG" 2>&1
+cws_rc=$?
+echo "=== cws exit rc=$cws_rc $(date -Is) ===" >>"$LOG"
+if [ $cws_rc -ne 0 ]; then
+  echo "[$(date -Is)] cws pull FAILED rc=$cws_rc — $LOG" >>"$LOG_DIR/failures.log"
+  command -v notify-send >/dev/null 2>&1 && notify-send -u critical "Chrome Web Store stats pull failed" "rc=$cws_rc — see $LOG" 2>/dev/null || true
+fi
+
 # Rebuild the dashboard from the fresh data. Shared with the nightly dashboard
 # timer — it logs separately and only commits when the data actually changed.
 "$(dirname "$(readlink -f "$0")")/stats-refresh-dashboard.sh" || true

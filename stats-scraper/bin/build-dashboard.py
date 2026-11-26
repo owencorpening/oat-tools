@@ -30,6 +30,7 @@ PV_STATE = os.environ.get("OAT_PAGEVIEWS_STATE") or os.path.join(HOME, "dev/oat-
 # Unset means the builder fell back to the local clone, which may be stale.
 PV_FROM_REMOTE = os.environ.get("OAT_PAGEVIEWS_SOURCE") == "remote"
 ACTIONS = os.path.join(HOME, "oat-data/stats/github-actions-clones.csv")
+CWS_DIR = os.environ.get("OAT_CWS_DIR") or os.path.join(HOME, "oat-data/stats/cws")
 FAILURES = os.path.join(HOME, ".local/state/stats-scraper/logs/failures.log")
 OUT = os.environ.get("OAT_DASHBOARD_OUT") or os.path.join(HOME, "oat-data/stats/dashboard.html")
 # GoatCounter reports days in the site's time zone; bucket the same way.
@@ -156,14 +157,14 @@ def _recent_first7(rows, caps, latest, window=30, n=7):
     return {"ok": True, "reason": "", "posts": posts}
 
 
-def _failed_pulls_since(latest):
-    """Timestamps of failed weekly pulls logged after the latest capture date."""
+def _failed_pulls_since(latest, marker="stats pull FAILED"):
+    """Timestamps of failed weekly pulls (lines containing `marker`) logged after the latest capture date."""
     out = []
     try:
         with open(FAILURES) as f:
             for line in f:
                 m = re.match(r"\[(\d{4}-\d{2}-\d{2})T[^\]]*\]", line)
-                if m and m.group(1) > latest:
+                if m and marker in line and m.group(1) > latest:
                     out.append(m.group(1))
     except OSError:
         pass
@@ -311,6 +312,92 @@ def load_site():
             "coveredTo": covered_to.strftime("%Y-%m-%d %H:%M") if covered_to else None,
             "fromLocalClone": not PV_FROM_REMOTE}
 
+# ---------- Chrome Web Store (cws_stats.py, official API) ----------
+# Romania is my own VPN testing, not real users: it comes out of every figure
+# that can be split by country. The API slices by one dimension at a time, so
+# the source/medium breakdown can't be split by country and still includes it.
+CWS_EXCLUDE = {"ro", "romania"}
+
+def _cws_latest_set():
+    """{suffix: path} of the newest pull's files, and that pull's date."""
+    try:
+        names = os.listdir(CWS_DIR)
+    except OSError:
+        return None, {}
+    sets = defaultdict(dict)
+    for n in names:
+        m = re.match(r"cws-(\d{4}-\d{2}-\d{2})-(daily|country|utm-source|utm-medium)\.csv$", n)
+        if m:
+            sets[m.group(1)][m.group(2)] = os.path.join(CWS_DIR, n)
+    full = [d for d, files in sets.items() if "daily" in files]
+    if not full:
+        return None, {}
+    d = max(full)
+    return d, sets[d]
+
+def _read(path):
+    if not path or not os.path.exists(path):
+        return []
+    with open(path, newline="") as f:
+        return list(csv.DictReader(f))
+
+def load_cws():
+    pulled, files = _cws_latest_set()
+    if not pulled:
+        return {"empty": True}
+    metrics = ["installs", "uninstalls", "users", "users_7d", "impressions", "page_views"]
+    daily = {r["date"]: {m: num(r.get(m)) for m in metrics} for r in _read(files["daily"])}
+    country = _read(files.get("country"))
+    # Only the metrics the store splits by country can lose Romania; page views
+    # and impressions never can (the API has no country split for them).
+    cleanable = [m for m in metrics if country and m in country[0]]
+    ro_rows = [r for r in country if (r.get("country") or "").strip().lower() in CWS_EXCLUDE]
+    ro_dates = {r["date"] for r in ro_rows}
+    # Daily split when the country rows are per day; otherwise one period total.
+    per_day = bool(country) and len({r["date"] for r in country}) > 1
+    removed = {m: sum(num(r.get(m)) for r in ro_rows) if m in cleanable else 0 for m in metrics}
+    clean = {}
+    for d, v in daily.items():
+        ro = {m: (sum(num(r.get(m)) for r in ro_rows if r["date"] == d) if m in cleanable else 0) for m in metrics} if per_day else {m: 0 for m in metrics}
+        clean[d] = {m: max(0, v[m] - ro[m]) for m in metrics}
+    days = sorted(clean)
+    total = lambda m: sum(clean[d][m] for d in days) - (0 if per_day else removed[m])
+    latest_day = days[-1] if days else None
+    # Daily active users on the latest day, Romania out (per day when available).
+    users_latest = clean[latest_day]["users"] if latest_day else 0
+    users7_latest = clean[latest_day]["users_7d"] if latest_day else 0
+    if not per_day and latest_day:
+        users_latest = max(0, users_latest - sum(num(r.get("users")) for r in ro_rows if r["date"] == latest_day))
+        users7_latest = max(0, users7_latest - sum(num(r.get("users_7d")) for r in ro_rows if r["date"] == latest_day))
+    def by_dim(suffix, field):
+        acc = defaultdict(int)
+        for r in _read(files.get(suffix)):
+            acc[(r.get(field) or "").strip() or "(none)"] += num(r.get("page_views"))
+        top = sorted(acc.items(), key=lambda kv: kv[1], reverse=True)[:8]
+        return [{"label": k, "value": v} for k, v in top if v]
+    trend = [{"x": d, "y": clean[d]["page_views"]} for d in days[-90:]]
+    return {
+        "empty": False,
+        "pulled": pulled,
+        "through": latest_day,
+        "span": f"{days[0]} → {days[-1]}" if days else "",
+        "perDay": per_day,
+        "hasCountry": bool(country),
+        "cleaned": cleanable,
+        "removed": {"installs": removed["installs"], "pageViews": removed["page_views"],
+                    "users": sum(num(r.get("users")) for r in ro_rows if r["date"] == latest_day) if latest_day else 0},
+        "tiles": {"installs": total("installs"), "uninstalls": total("uninstalls"),
+                  "users": users_latest, "users7": users7_latest,
+                  "pageViews": total("page_views"), "impressions": total("impressions")},
+        "trend": trend,
+        "weekly": _weekly_from_daily({d: clean[d]["page_views"] for d in days}) if days else
+                  {"ok": False, "reason": "no daily data"},
+        "installsTrend": [{"x": d, "y": clean[d]["installs"]} for d in days[-90:]],
+        "sources": by_dim("utm-source", "utm_source"),
+        "mediums": by_dim("utm-medium", "utm_medium"),
+        "failedSince": _failed_pulls_since(pulled, "cws pull FAILED"),
+    }
+
 # ---------- Work: open items from GitHub Project "OAT" (number 2) ----------
 # Pulled via local `gh` at generation time. A successful pull is cached to
 # PROJECT_CACHE so a headless run (e.g. the 04:00 systemd timer, where the gh
@@ -371,6 +458,7 @@ DATA = {
     "substack": None,
     "site": load_site(),
     "work": load_work(),
+    "cws": load_cws(),
 }
 DATA["linkedin"], DATA["substack"] = load_stats()
 
@@ -382,6 +470,8 @@ for _p in ("linkedin", "substack"):
     _lt = DATA[_p].get("latest")
     if _lt:
         _dates.append(_lt)
+if DATA["cws"].get("through"):
+    _dates.append(DATA["cws"]["through"])
 _dates = [d for d in _dates if d]
 DATA["generated"] = max(_dates) if _dates else datetime.now().strftime("%Y-%m-%d")
 
@@ -395,7 +485,7 @@ HTML = r"""<!doctype html>
   :root{
     --bg:#f4f3f0; --surface:#fcfcfb; --border:#e3e1db;
     --text:#0b0b0b; --muted:#52514e; --faint:#8a8980;
-    --github:#2a78d6; --linkedin:#eb6834; --substack:#1baf7a; --site:#eda100;
+    --github:#2a78d6; --linkedin:#eb6834; --substack:#1baf7a; --site:#eda100; --cws:#8257e6;
     --grid:#eceae4;
     --brass:#b8860b; --granite:#4a4f54;
     --p0:#d03b3b; --p1:#b8860b; --p2:#5c6166; --p3:#8a8980;
@@ -403,7 +493,7 @@ HTML = r"""<!doctype html>
   @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
     --bg:#121211; --surface:#1a1a19; --border:#33322e;
     --text:#f0efec; --muted:#c3c2b7; --faint:#8f8e85;
-    --github:#3987e5; --linkedin:#d95926; --substack:#199e70; --site:#c98500;
+    --github:#3987e5; --linkedin:#d95926; --substack:#199e70; --site:#c98500; --cws:#9473ef;
     --grid:#262521;
     --brass:#d4a017; --granite:#c9ccd0;
     --p0:#e66767; --p1:#d4a017; --p2:#a3a8ad; --p3:#8f8e85;
@@ -411,7 +501,7 @@ HTML = r"""<!doctype html>
   :root[data-theme="dark"]{
     --bg:#121211; --surface:#1a1a19; --border:#33322e;
     --text:#f0efec; --muted:#c3c2b7; --faint:#8f8e85;
-    --github:#3987e5; --linkedin:#d95926; --substack:#199e70; --site:#c98500;
+    --github:#3987e5; --linkedin:#d95926; --substack:#199e70; --site:#c98500; --cws:#9473ef;
     --grid:#262521;
     --brass:#d4a017; --granite:#c9ccd0;
     --p0:#e66767; --p1:#d4a017; --p2:#a3a8ad; --p3:#8f8e85;
@@ -706,7 +796,7 @@ function recentBlock(r){
   box.appendChild(list); return box;
 }
 
-function card({name,color,meta,pre,tileDefs,post,series,seriesLabelFmt,chartOpts,top,topValFmt,empty,emptyMsg,extra}){
+function card({name,color,meta,pre,tileDefs,post,series,seriesLabelFmt,chartOpts,top,topValFmt,empty,emptyMsg,extra,after}){
   const c=document.createElement('div'); c.className='card';
   c.innerHTML=`<h2><span class="dot" style="background:${color}"></span>${name}</h2>`+
               (meta?`<div class="meta">${meta}</div>`:'');
@@ -717,7 +807,8 @@ function card({name,color,meta,pre,tileDefs,post,series,seriesLabelFmt,chartOpts
   if(empty){ const e=document.createElement('div'); e.className='empty'; e.textContent=emptyMsg; c.appendChild(e); }
   else{
     if(series && series.length) c.appendChild(lineChart(series,color,Object.assign({labelFmt:seriesLabelFmt},chartOpts||{})));
-    c.appendChild(topList(top||[],color,topValFmt));
+    if(top!==null) c.appendChild(topList(top||[],color,topValFmt));
+    if(after) c.appendChild(after);
   }
   return c;
 }
@@ -725,9 +816,10 @@ function card({name,color,meta,pre,tileDefs,post,series,seriesLabelFmt,chartOpts
 const C={github:getComputedStyle(document.documentElement).getPropertyValue('--github').trim(),
          linkedin:getComputedStyle(document.documentElement).getPropertyValue('--linkedin').trim(),
          substack:getComputedStyle(document.documentElement).getPropertyValue('--substack').trim(),
-         site:getComputedStyle(document.documentElement).getPropertyValue('--site').trim()};
+         site:getComputedStyle(document.documentElement).getPropertyValue('--site').trim(),
+         cws:getComputedStyle(document.documentElement).getPropertyValue('--cws').trim()};
 
-document.getElementById('sub').textContent=`GitHub · LinkedIn · Substack · Site — data through ${DATA.generated}`;
+document.getElementById('sub').textContent=`GitHub · LinkedIn · Substack · Site · Chrome Web Store — data through ${DATA.generated}`;
 const grid=document.getElementById('grid');
 
 grid.appendChild(workPanel(DATA.work||{items:[]}));
@@ -777,8 +869,38 @@ grid.appendChild(card({name:'OAT site (owensappliedthinking.com)',color:C.site,
   series:st.trend,seriesLabelFmt:fmt,chartOpts:{baseline:'zero',area:true},top:st.top,
   empty:st.empty,emptyMsg:'No visits since the reset yet (your own devices are ignored).'}));
 
+const cw=DATA.cws||{empty:true};
+if(cw.empty){
+  grid.appendChild(card({name:'Search Grid (Chrome Web Store)',color:C.cws,meta:'official Chrome Web Store API · weekly',
+    tileDefs:[],empty:true,emptyMsg:'No pull yet — run cws_stats.py (see the stats-scraper README).'}));
+} else {
+  const ct=cw.tiles, cPre=[];
+  cPre.push(freshLine(`pulled ${fmtDate(cw.pulled)} · data through ${fmtDate(cw.through)} · next scheduled pull Sun ${nextSunday()}`, daysAgo(cw.pulled), 8));
+  if(cw.failedSince && cw.failedSince.length) cPre.push(warnLine(`weekly pull failed on ${cw.failedSince.map(fmtDate).join(', ')} — numbers are from ${fmtDate(cw.pulled)}; see ~/.local/state/stats-scraper/logs/failures.log`));
+  const cPost=[];
+  const rm=cw.removed||{}, cl=cw.cleaned||[];
+  if(!cw.hasCountry) cPost.push(warnLine("no country split in this pull, so Romania (my VPN testing) couldn't be removed — every figure includes it"));
+  else if(cw.perDay) cPost.push(noteLine(`Romania (my own VPN testing) is taken out of installs and active users, day by day: <b>${fmt(rm.installs||0)}</b> installs removed. The store never splits <b>listing page views</b> by country, so those, the page-view line and the source/medium lists <b>include my testing</b>.`));
+  else cPost.push(noteLine(`Romania (my own VPN testing) is subtracted from total installs (<b>${fmt(rm.installs||0)}</b> removed), but the store gave it only as a period total, so daily lines <b>include my testing</b>. Listing page views can't be split by country at all, so they include it too.`));
+  const lists=document.createElement('div');
+  const h=(t)=>{const d=document.createElement('div'); d.className='wlabel'; d.style.marginTop='14px'; d.textContent=t; return d;};
+  if(cw.installsTrend && cw.installsTrend.length){ lists.appendChild(h('Daily installs · Romania removed')); lists.appendChild(lineChart(cw.installsTrend, C.cws, {baseline:'zero', area:false, labelFmt:fmt})); }
+  lists.appendChild(weeklyBlock(cw.weekly, C.cws, 'listing page views · incl. my testing', 'page views'));
+  lists.appendChild(h('Page views by source (utm_source) · incl. my testing'));
+  lists.appendChild(topList(cw.sources||[], C.cws));
+  lists.appendChild(h('Page views by medium (utm_medium) · incl. my testing'));
+  lists.appendChild(topList(cw.mediums||[], C.cws));
+  grid.appendChild(card({name:'Search Grid (Chrome Web Store)',color:C.cws,
+    meta:`official Chrome Web Store API · ${cw.span} · daily listing page views (incl. my testing)`,
+    pre:cPre,
+    tileDefs:[{l:'Installs',v:fmt(ct.installs||0)},{l:'Active users (latest day)',v:fmt(ct.users||0)},
+              {l:'7-day users',v:fmt(ct.users7||0)},{l:'Listing page views · incl. my testing',v:fmt(ct.pageViews||0)}],
+    post:cPost, after:lists,
+    series:cw.trend,seriesLabelFmt:fmt,chartOpts:{baseline:'zero',area:true},top:null}));
+}
+
 document.getElementById('foot').textContent=
-  'Self-contained snapshot — rebuilt nightly at 4am and after each weekly LinkedIn/Substack pull. Ages are measured from when you open the page. Data stays on this machine.';
+  'Self-contained snapshot — rebuilt nightly at 4am and after each weekly LinkedIn/Substack/Chrome Web Store pull. Ages are measured from when you open the page. Data stays on this machine.';
 
 // Font-size control: scales the whole page via CSS zoom; remembered per viewer.
 (function(){
