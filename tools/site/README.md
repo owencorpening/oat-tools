@@ -52,7 +52,10 @@ The site is OAT with three parts under it (2026-11-22):
   `products`, `about`, `brand` or `assets`.
 - Free tools (`/tools/`): the list in `FREE_TOOLS`, also shown on About.
   `/tools/search-grid/` and its `privacy/` page keep their URLs (the Chrome Web
-  Store links to them).
+  Store links to them). `/tools/oat-stats/` and its `privacy/` page are the
+  home page and privacy policy of the "OAT stats" Google OAuth app (used by
+  `stats-scraper/cws_stats.py`); Google's consent-screen Branding links to
+  them, so they keep their URLs too. They aren't in the Free tools list.
 - Products (`/products/`): "Coming soon" until a product is ready.
 - About (`/about/`) and `404.html`.
 

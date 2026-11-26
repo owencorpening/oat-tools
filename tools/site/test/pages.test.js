@@ -107,7 +107,7 @@ test('builds home, series, article and not-found pages with no JavaScript when n
     const htmlFiles = files.filter((f) => f.endsWith('.html')).sort();
     assert.deepStrictEqual(htmlFiles, [
       '404.html', 'about/index.html', 'index.html', 'products/index.html', 'standalone/essay/index.html', 'standalone/index.html',
-      'tools/cheatsheets/index.html', 'tools/index.html', 'tools/search-grid/index.html', 'tools/search-grid/privacy/index.html',
+      'tools/cheatsheets/index.html', 'tools/index.html', 'tools/oat-stats/index.html', 'tools/oat-stats/privacy/index.html', 'tools/search-grid/index.html', 'tools/search-grid/privacy/index.html',
       'vectors/essay/index.html', 'vectors/index.html', 'water/index.html', 'water/manifesto/index.html', 'water/part-01/index.html', 'water/part-02/index.html',
       'writing/index.html', 'writing/vectors/essay/index.html', 'writing/vectors/index.html',
       'writing/water/index.html', 'writing/water/manifesto/index.html', 'writing/water/part-01/index.html', 'writing/water/part-02/index.html'
@@ -137,6 +137,14 @@ test('builds home, series, article and not-found pages with no JavaScript when n
     assert.ok(privacy.includes('collects no personal information'));
     assert.ok(privacy.includes('<link rel="canonical" href="https://owencorpening.github.io/oat-web/tools/search-grid/privacy/">'));
     assert.ok(read(out, 'about/index.html').includes('href="../tools/search-grid/"'), 'About links the extension page');
+
+    // OAT stats OAuth app pages: Google's consent-screen Branding links to these fixed URLs.
+    const stats = read(out, 'tools/oat-stats/index.html');
+    assert.ok(stats.includes('<h1>OAT stats</h1>') && stats.includes('href="privacy/"'), 'app home page links its privacy policy');
+    assert.ok(stats.includes('<link rel="canonical" href="https://owencorpening.github.io/oat-web/tools/oat-stats/">'));
+    const statsPrivacy = read(out, 'tools/oat-stats/privacy/index.html');
+    assert.ok(statsPrivacy.includes('chromewebstore.readonly') && statsPrivacy.includes('Limited Use requirements'), 'names the scope and the Limited Use statement');
+    assert.ok(!read(out, 'tools/index.html').includes('oat-stats'), 'not listed as a free tool');
     const writing = read(out, 'writing/index.html');
     assert.ok(writing.indexOf('Water Resilience') < writing.indexOf('Vectors'), 'series in order, vectors last');
     assert.ok(writing.includes('href="water/"') && writing.includes('href="vectors/"'));

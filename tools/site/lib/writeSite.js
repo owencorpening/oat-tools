@@ -88,6 +88,52 @@ ${toolsList('../', false)}
 <h2>Elsewhere</h2>
 <ul class="elsewhere"><li><a href="${SUBSTACK_URL}">Substack</a></li><li><a href="${LINKEDIN_URL}">LinkedIn</a></li></ul>
 </div>`;
+// Home page and privacy policy for "OAT stats", the Google OAuth app that
+// oat-tools/stats-scraper/cws_stats.py signs in as (read-only Chrome Web Store
+// metrics for Owen's own extension). Google's consent-screen Branding links to
+// both, so their URLs must not change. Not listed in FREE_TOOLS: it's a
+// personal tool, not offered to anyone else.
+const OAT_STATS_SRC = 'https://github.com/owencorpening/oat-tools/tree/main/stats-scraper';
+const OAT_STATS_ISSUES = 'https://github.com/owencorpening/oat-tools/issues';
+const OAT_STATS_SCOPE = 'https://www.googleapis.com/auth/chromewebstore.readonly';
+const OAT_STATS_BODY = `<div class="about">
+<h1>OAT stats</h1>
+<p class="meta">A personal reporting tool by Owen Corpening</p>
+<p class="lede">OAT stats reads the Chrome Web Store statistics for <a href="../search-grid/">Search Grid</a>, my free Chrome extension, and charts them on a private dashboard next to my other publishing numbers.</p>
+<h2>What it does</h2>
+<ul>
+<li>Once a week it signs in to Google with read-only access to the Chrome Web Store and downloads the extension's daily totals: installs, uninstalls, active users, store-listing page views and impressions, broken down by country and by link source.</li>
+<li>It saves those totals as spreadsheet files and rebuilds the dashboard from them.</li>
+</ul>
+<p>It can't change anything in the Chrome Web Store, and it reads nothing else from the Google account.</p>
+<h2>Who it's for</h2>
+<p>Only me. It runs on my own computer, signed in to my own Chrome Web Store developer account. It isn't offered to anyone else, and nobody else signs in to it.</p>
+<p><a href="privacy/">Privacy policy</a> · <a href="${OAT_STATS_SRC}">Source code</a> · <a href="${OAT_STATS_ISSUES}">Contact</a></p>
+</div>`;
+const OAT_STATS_PRIVACY_BODY = `<div class="about">
+<h1>Privacy policy</h1>
+<p class="meta">OAT stats · Effective November 26, 2026</p>
+<p class="lede">OAT stats reads aggregate statistics about my own Chrome extension. It keeps them to itself and shares them with no one.</p>
+<h2>What it accesses</h2>
+<p>One permission, which Google shows as "See your Chrome Web Store items and their statistics" (<code>${OAT_STATS_SCOPE}</code>). It is read-only. OAT stats uses it to download daily totals for one extension: installs, uninstalls, active users, store-listing page views and impressions, by country and by link source (UTM source and medium).</p>
+<p>These are totals that Google has already aggregated. They contain no names, email addresses or other information about any individual who installed or viewed the extension. OAT stats doesn't ask for or read the account's name, email address, contacts, files or anything else.</p>
+<h2>How it's used</h2>
+<p>Only to chart the extension's adoption on my private dashboard. It isn't used for advertising, isn't sold, and isn't used to train AI models.</p>
+<h2>Where it's stored</h2>
+<ul>
+<li>The sign-in token is kept in the operating system's encrypted keyring on my computer. It is never written to a file or sent anywhere except to Google.</li>
+<li>The downloaded totals are saved as CSV files on my computer and backed up to a private GitHub repository.</li>
+</ul>
+<h2>Sharing</h2>
+<p>None. Nothing from Google's APIs is shared with or transferred to anyone.</p>
+<p>OAT stats' use and transfer of information received from Google APIs adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
+<h2>Revoking access and deleting data</h2>
+<p>Access can be removed at any time at <a href="https://myaccount.google.com/connections">myaccount.google.com/connections</a>. After that, OAT stats can read nothing more. To ask that saved data be deleted, use the contact link below.</p>
+<h2>Changes</h2>
+<p>If this ever changes, this page will be updated first, with a new effective date.</p>
+<h2>Contact</h2>
+<p><a href="${OAT_STATS_ISSUES}">Open an issue on GitHub</a>.</p>
+</div>`;
 // Product pages for the Search Grid Chrome extension
 // (owencorpening/yt-grid-extension). The Chrome Web Store links to these as
 // the extension's support page and privacy policy, so their URLs must not
@@ -631,6 +677,29 @@ async function writeSite(articles, outDir, options = {}) {
     current: 'tools',
     crumbs: [['OAT', '../../../'], ['Free tools', '../../'], ['Search Grid', '../'], ['Privacy', null]],
     body: SEARCH_GRID_PRIVACY_BODY
+  }));
+
+  // OAT stats OAuth app: home page and privacy policy (fixed URLs, linked from
+  // Google's consent-screen Branding). Not in the Free tools list.
+  writeFile(outDir, 'tools/oat-stats/index.html', page({
+    title: `OAT stats · ${SITE_NAME}`,
+    description: 'OAT stats: a personal tool that reads Chrome Web Store statistics for the Search Grid extension.',
+    canonical: canonical('tools/oat-stats/'),
+    pixel: pixel('tools/oat-stats/'),
+    rootPrefix: '../../',
+    current: 'tools',
+    crumbs: [['OAT', '../../'], ['Free tools', '../'], ['OAT stats', null]],
+    body: OAT_STATS_BODY
+  }));
+  writeFile(outDir, 'tools/oat-stats/privacy/index.html', page({
+    title: `Privacy policy · OAT stats · ${SITE_NAME}`,
+    description: 'Privacy policy for OAT stats.',
+    canonical: canonical('tools/oat-stats/privacy/'),
+    pixel: pixel('tools/oat-stats/privacy/'),
+    rootPrefix: '../../../',
+    current: 'tools',
+    crumbs: [['OAT', '../../../'], ['Free tools', '../../'], ['OAT stats', '../'], ['Privacy', null]],
+    body: OAT_STATS_PRIVACY_BODY
   }));
 
   // Cheatsheets extension page (fixed URL: the extension's homepage).
