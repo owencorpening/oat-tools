@@ -2,9 +2,10 @@
 # Weekly LinkedIn + Substack stats pull, run unattended by a systemd user timer
 # (~/.config/systemd/user/stats-weekly-pull.{service,timer}, ExecStart points here).
 #
-# Launches Claude Code headless against the stats-scraper prompt. The 6-day
-# guard in config.local.json makes this no-op safely if a manual pull already
-# ran earlier in the week, so a fixed weekly schedule can't double-pull.
+# Launches Claude Code headless against the stats-scraper prompt. The guard
+# (pull_guard.py: 3 days on lastRun in config.local.json) makes this a safe
+# no-op only after an unforced pull on Friday or Saturday; forced manual pulls
+# don't move its clock, so they never skip this run.
 #
 # Scheduled: Sunday 03:00 America/Chicago (systemd user timer stats-weekly-pull.timer).
 # Logs (outside the ~/oat-data/stats git repo, so they're never committed):
@@ -33,7 +34,7 @@ rc=$?
 echo "=== exit rc=$rc $(date -Is) ===" >>"$LOG"
 
 # Chrome Web Store stats for Search Grid: official API (no browser, no
-# scraping), same 6-day guard via cws.lastRun in config.local.json. Its own
+# scraping), same guard via cws.lastRun in config.local.json. Its own
 # failure line, so the dashboard flags the right panel. Credentials come from
 # the keyring; this needs the session's keyring unlocked, as `gh` does.
 {

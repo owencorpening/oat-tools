@@ -37,9 +37,11 @@ Read /home/owen/dev/oat-tools/stats-scraper/config.local.json first — it holds
 linkedinHandle, substackSubdomain, outputPath, postsPerPull, and lastRun. Use
 linkedinHandle/substackSubdomain/outputPath/postsPerPull below.
 
-0. Check lastRun against today's date. If fewer than 6 days have passed, stop
-   and tell me how many days remain instead of scraping — don't ask, just
-   report it and end. If lastRun is null/missing or 6+ days old, continue.
+0. Run `python3 /home/owen/dev/oat-tools/stats-scraper/pull_guard.py check linkedin`
+   (don't do the date arithmetic yourself). Exit 0: continue. Exit 3: stop
+   and repeat the line it printed instead of scraping — don't ask, just report
+   it and end. Exception: if I said to force this pull, skip this check and
+   pass --force in step 5.
 
 Using the playwright-stats browser:
 
@@ -90,12 +92,14 @@ Using the playwright-stats browser:
 
 4. Do not summarize or analyze — just extract structured data.
 
-5. Update lastRun in config.local.json to today's date (YYYY-MM-DD), so the
-   next pull knows when this one happened.
+5. Run `python3 /home/owen/dev/oat-tools/stats-scraper/pull_guard.py record linkedin`
+   (add `--force` if this was a forced pull), so the next pull knows when this
+   one happened. Don't edit lastRun by hand: a forced pull is recorded as
+   lastForcedRun and must not move lastRun.
 
 6. Commit the updated stats log so it's backed up off-machine. The output
    file ({outputPath}) lives in its own git repo (the directory it sits in).
-   After the rows are written and lastRun is updated, run in that directory:
+   After the rows are written and step 5 has run, run in that directory:
      git -C <dir of outputPath> add -A
      git -C <dir of outputPath> commit -m "Stats pull <today> (LinkedIn + Substack)"
      git -C <dir of outputPath> push
@@ -372,7 +376,7 @@ of 25.
 
 ## Cadence
 
-Run weekly, not nightly. The 6-day guard is a deliberate account-safety
+Run weekly, not nightly. The guard is a deliberate account-safety
 choice, not just caution — here's the full reasoning, since "why not nightly?"
 keeps coming up:
 
@@ -404,17 +408,26 @@ only 14 days of traffic — but weekly already stays inside that window, so
 nothing is lost at weekly. Neither of those involves a logged-in consumer
 account being watched for automation, which is the whole difference.
 
-Enforced via `lastRun` in `config.local.json`: step 0 of the prompt checks it
-and refuses to scrape if fewer than 6 days have passed, and step 5 updates it
-to today's date after a successful pull.
+Enforced by `pull_guard.py` (shared with `cws_stats.py`): step 0 runs
+`pull_guard.py check linkedin`, which refuses if `lastRun` in
+`config.local.json` is fewer than 3 days old, and step 5 runs
+`pull_guard.py record linkedin` after a successful pull.
 
-Why 6 days, not 7 (changed 2026-11-25): the timer fires every Sunday, but a
-manual pull can land on any day. With a 7-day guard, a Monday manual pull
-made the next Sunday (6 days later) a no-op, so the next real capture came 13
-days after it, and the dashboard's weekly LinkedIn figure (which needs two
-captures 4-10 days apart) never appeared. 6 days still blocks any second pull
-in the same week, and the Sunday timer still fires only once a week, so the
-account-safety footprint is unchanged: at most one pull per ~week.
+Guard history:
+- 7 days, then 6 (2026-11-25): with 7, a Monday manual pull made the next
+  Sunday (6 days later) a no-op, so the next real capture came 13 days after
+  it, and the dashboard's weekly LinkedIn figure (which needs two captures
+  4-10 days apart) never appeared.
+- 3 days, and forced pulls don't move the clock (2026-11-26): with 6, any
+  manual pull Monday to Saturday still skipped that Sunday. Now only a pull
+  on Friday or Saturday does, and a forced pull (recorded as
+  `lastForcedRun`, which the guard ignores) never does. "Once per ISO week"
+  was rejected: ISO weeks end on Sunday, so any earlier pull that week would
+  block the scheduled run, the same bug.
+- Account-safety footprint: the Sunday timer still fires once a week. The
+  shorter guard only lets an occasional manual pull sit 3+ days from a
+  scheduled one, so at most two LinkedIn pulls in a week, and only when Owen
+  runs one by hand.
 
 ## Output handling
 

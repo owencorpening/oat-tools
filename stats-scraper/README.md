@@ -166,9 +166,10 @@ this repo (moved here from `~/.local/bin` on 2026-11-25; the systemd unit's
 `ExecStart` points at the repo path). It hardcodes this machine's paths and runs
 `claude -p ... --dangerously-skip-permissions` headless: it loads node via
 nvm, runs the prompt above against the `playwright-stats` server, and
-commits/pushes the data repo (step 6). The 6-day guard means a manual pull
-earlier in the same week makes the scheduled run a safe no-op, while a pull
-6+ days back (e.g. a manual Monday pull) still lets Sunday's run go ahead. Logs:
+commits/pushes the data repo (step 6). The guard (`pull_guard.py`, 3 days)
+lets Sunday's run go ahead unless an unforced pull happened Friday or
+Saturday; a forced manual pull never moves the guard's clock (it's recorded
+as `lastForcedRun`). Logs:
 `~/.local/state/stats-scraper/logs/` (outside the data repo, so they're never
 committed); failures also append to `failures.log` there. If LinkedIn's login
 expires, an unattended run fails — re-log into the isolated profile and the
@@ -274,8 +275,10 @@ python3 cws_stats.py sign-in    # once: opens the browser, saves the refresh tok
 ```
 
 **Schedule.** `bin/stats-weekly-pull.sh` runs it on Sunday after the
-LinkedIn/Substack pull, with the same 6-day guard (`cws.lastRun`;
-`--force` overrides). A failure goes to `failures.log` as `cws pull FAILED`,
+LinkedIn/Substack pull, with the same guard (`pull_guard.py`, 3 days on
+`cws.lastRun`). `--force` ignores it and is recorded as `cws.lastForcedRun`,
+so it doesn't move the clock. `--dry-run [--today YYYY-MM-DD]` shows what a
+run would do without signing in or writing anything. A failure goes to `failures.log` as `cws pull FAILED`,
 and the dashboard flags it on the Chrome Web Store panel. The script retries
 network errors and 429/5xx answers twice before giving up. The keyring must be
 unlocked, as it is for `gh`, which holds while the desktop session is logged in.

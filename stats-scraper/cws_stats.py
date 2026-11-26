@@ -24,8 +24,12 @@ YYYY-MM-DD is the day of the pull; each file holds the full history the API
 returns. Credentials never touch a file: the client secret and refresh token
 are read from the keyring, and nothing here prints or logs them.
 
-Guard: like the LinkedIn/Substack pull, a run within 6 days of cws.lastRun
-in config.local.json does nothing (--force overrides).
+Guard (pull_guard.py, shared with the LinkedIn/Substack pull): a run less
+than 3 days after cws.lastRun does nothing. --force ignores the guard and
+records cws.lastForcedRun instead, so a manual forced pull never makes the
+scheduled Sunday run a no-op. --dry-run shows what a run would do (guard
+decision, queries, files) without signing in, calling the API or writing;
+--today pretends it's another date.
 """
 
 import argparse
@@ -48,6 +52,10 @@ import webbrowser
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+# Run as `python3 -I` (see bin/stats-weekly-pull.sh), which leaves the
+# script's own directory off sys.path; add it back for pull_guard only.
+sys.path.insert(0, str(HERE))
+import pull_guard  # noqa: E402
 CONFIG = HERE / "config.local.json"
 DEFAULT_OUT = Path.home() / "oat-data" / "stats" / "cws"
 
@@ -66,7 +74,6 @@ METRICS = ["installs", "uninstalls", "users", "users-7d", "impressions", "page-v
 # impressions and page views split by UTM tag only, never by country.
 COUNTRY_METRICS = ["installs", "uninstalls", "users", "users-7d"]
 UTM_METRICS = ["page-views", "impressions"]
-GUARD_DAYS = 6
 
 
 class CwsError(Exception):
@@ -85,13 +92,6 @@ def load_config():
     return cfg
 
 
-def save_last_run(day):
-    with CONFIG.open() as f:
-        cfg = json.load(f)
-    cfg.setdefault("cws", {})["lastRun"] = day
-    tmp = CONFIG.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(cfg, indent=2) + "\n")
-    os.replace(tmp, CONFIG)
 
 
 def keyring_get(account):
@@ -293,16 +293,18 @@ def write_csv(path, fields, records):
     os.replace(tmp, path)
 
 
+QUERY_SETS = [
+    ("daily", METRICS, None, None),
+    ("country", COUNTRY_METRICS, "country", "country"),
+    ("utm-source", UTM_METRICS, "utm-source", "utm_source"),
+    ("utm-medium", UTM_METRICS, "utm-medium", "utm_medium"),
+]
+
+
 def pull(cfg, out, today):
     token = access_token(cfg)
     written = []
-    sets = [
-        ("daily", METRICS, None, None),
-        ("country", COUNTRY_METRICS, "country", "country"),
-        ("utm-source", UTM_METRICS, "utm-source", "utm_source"),
-        ("utm-medium", UTM_METRICS, "utm-medium", "utm_medium"),
-    ]
-    for suffix, metrics, dimension, field in sets:
+    for suffix, metrics, dimension, field in QUERY_SETS:
         rows = query_metrics(cfg, token, metrics, dimension)
         records = to_records(rows, metrics, field)
         fields = ["date"] + ([field] if field else []) + [col(m) for m in metrics]
@@ -316,23 +318,35 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("command", nargs="?", default="pull", choices=["pull", "sign-in"])
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
-    ap.add_argument("--force", action="store_true", help="ignore the 6-day guard")
+    ap.add_argument("--force", action="store_true",
+                    help="ignore the guard; recorded as cws.lastForcedRun, so the guard's clock doesn't move")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="show the guard decision and what would be fetched and written; no network, no writes")
+    ap.add_argument("--today", type=dt.date.fromisoformat, default=None, help="pretend today is this date")
     args = ap.parse_args()
     try:
         cfg = load_config()
         if args.command == "sign-in":
             sign_in(cfg)
             return 0
-        today = dt.date.today()
-        last = (cfg.get("cws") or {}).get("lastRun")
-        if last and not args.force:
-            gap = (today - dt.date.fromisoformat(last)).days
-            if gap < GUARD_DAYS:
-                print(f"cws: last pull {last}, {gap} day(s) ago; next allowed in {GUARD_DAYS - gap} day(s). Nothing to do.")
+        today = args.today or dt.date.today()
+        if args.force:
+            print("cws: --force, guard ignored; the guard's clock won't move.")
+        else:
+            ok, msg = pull_guard.check(cfg, "cws", today)
+            print(msg)
+            if not ok:
                 return 0
+        if args.dry_run:
+            for suffix, metrics, dimension, _ in QUERY_SETS:
+                by = f" by {dimension}" if dimension else ""
+                print(f"would query {', '.join(metrics)}{by} -> {args.out / f'cws-{today}-{suffix}.csv'}")
+            field = "cws.lastForcedRun" if args.force else "cws.lastRun"
+            print(f"would set {field} = {today}")
+            return 0
         for path, n in pull(cfg, args.out, today.isoformat()):
             print(f"wrote {path} ({n} rows)")
-        save_last_run(today.isoformat())
+        pull_guard.record("cws", today, args.force, CONFIG)
         return 0
     except CwsError as e:
         print(f"cws: {e}", file=sys.stderr)
