@@ -1,100 +1,28 @@
-# CI fixer (reusable). When a watched workflow fails, each repo's own
-# .github/workflows/fix-failed-build.yml calls this. It:
-#   1. triage.sh   decides, with plain git, whether it's a regression: did the
-#                  code change since the workflow last passed?
-#   2. Claude Code fixes it (regression) or diagnoses it (not a regression),
-#                  with no push access.
-#   3. apply.sh    pushes the fix straight to the branch, or reverts the
-#                  offending commits if there's no verified fix, re-runs the
-#                  workflow, and opens an issue saying what it did.
-# Docs: tools/ci-fixer/README.md. Callers are written by
-# tools/ci-fixer/install-callers.sh.
-
-name: CI fixer
+# CI fixer: when a workflow below fails, check whether a commit broke it. If
+# so, fix it (or revert the commit) straight on the branch and open an issue;
+# if not, open an issue with a diagnosis. The logic lives in
+# owencorpening/oat-tools (.github/workflows/fix-failed-build.yml and
+# tools/ci-fixer/). Written by tools/ci-fixer/install-callers.sh; rerun that
+# after adding or renaming a workflow here.
+name: Fix failed build
 
 on:
-  workflow_call:
-    inputs:
-      run_id:
-        description: The failed workflow run's id
-        required: true
-        type: string
-      head_branch:
-        description: The branch the failed run was on
-        required: true
-        type: string
-    secrets:
-      CLAUDE_CODE_OAUTH_TOKEN:
-        required: true
+  workflow_run:
+    workflows: ["pages-build-deployment", "pages build and deployment"]
+    types: [completed]
+
+permissions:
+  contents: write   # push the fix or the revert
+  issues: write     # report what it did
+  actions: write    # read the failed logs; re-run the workflow
+  pages: write      # request a Pages build after a fix
 
 jobs:
   fix:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    # One fixer at a time per repo, queued, never cancelled mid-push.
-    concurrency:
-      group: ci-fixer-${{ github.repository }}
-      cancel-in-progress: false
-    env:
-      REPO: ${{ github.repository }}
-      RUN_ID: ${{ inputs.run_id }}
-      GH_TOKEN: ${{ github.token }}
-      CTX: ${{ github.workspace }}/../ci-fixer-ctx
-      TOOLS: ${{ github.workspace }}/../ci-fixer-tools
-    steps:
-      - name: Check out the failed branch (full history, no push credentials)
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ inputs.head_branch }}
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Get the fixer's scripts
-        run: |
-          git clone -q --depth 1 https://github.com/owencorpening/oat-tools.git "$TOOLS"
-          echo "TIP=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
-
-      - name: Triage
-        id: triage
-        run: bash "$TOOLS/tools/ci-fixer/triage.sh"
-
-      - name: Show triage
-        if: always()
-        run: cat "$CTX/triage.md" >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
-
-      - uses: actions/setup-node@v5
-        if: steps.triage.outputs.mode != 'skip'
-        with:
-          node-version: 22
-
-      - name: Claude Code
-        if: steps.triage.outputs.mode == 'fix' || steps.triage.outputs.mode == 'diagnose'
-        timeout-minutes: 20
-        continue-on-error: true
-        env:
-          # Only the Claude token reaches this step: no GitHub token, and the
-          # checkout has no push credentials, so Claude can't push.
-          GH_TOKEN: ''
-          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          MODE: ${{ steps.triage.outputs.mode }}
-        run: |
-          npm install -g --silent @anthropic-ai/claude-code
-          prompt="$TOOLS/tools/ci-fixer/prompt-$MODE.md"
-          turns=$([ "$MODE" = fix ] && echo 80 || echo 25)
-          sed "s|\$CTX|$CTX|g" "$prompt" | claude -p --max-turns "$turns" \
-            --dangerously-skip-permissions --output-format text \
-            | tee "$CTX/claude.txt"
-          echo "### Claude" >> "$GITHUB_STEP_SUMMARY"
-          cat "$CTX/result.json" >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "(no result.json)" >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Apply (push fix or revert, re-run, open an issue)
-        if: steps.triage.outputs.mode != 'skip'
-        env:
-          MODE: ${{ steps.triage.outputs.mode }}
-          BRANCH: ${{ inputs.head_branch }}
-          KIND: ${{ steps.triage.outputs.kind }}
-          WF_ID: ${{ steps.triage.outputs.workflow_id }}
-          WF_NAME: ${{ steps.triage.outputs.workflow_name }}
-          RUN_URL: ${{ steps.triage.outputs.run_url }}
-          SHA: ${{ steps.triage.outputs.sha }}
-        run: bash "$TOOLS/tools/ci-fixer/apply.sh"
+    if: github.event.workflow_run.conclusion == 'failure'
+    uses: owencorpening/oat-tools/.github/workflows/fix-failed-build.yml@main
+    with:
+      run_id: ${{ github.event.workflow_run.id }}
+      head_branch: ${{ github.event.workflow_run.head_branch }}
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
