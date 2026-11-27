@@ -40,6 +40,15 @@ verified fix. Either way, open an issue saying what happened.
    If the re-run of a fix fails, the next fixer run reverts the fix and the
    commits it fixed. It never acts on its own revert, so it can't loop.
 
+## Limits
+
+- Pushes use the workflow's own token, which GitHub doesn't allow to change
+  files under `.github/workflows/`. So a regression in a workflow file can't
+  be fixed or reverted by the fixer: it opens a "couldn't fix or revert"
+  issue instead.
+- A Pages (Jekyll) build can't be run on the runner. Claude fixes it from the
+  log's error, file and line, and the Pages re-run is the check.
+
 ## Adding a repo
 
     tools/ci-fixer/set-claude-token.sh <repo>
@@ -49,8 +58,18 @@ Rerun `install-callers.sh` after adding or renaming a workflow in a repo.
 Workflows should have a `workflow_dispatch:` trigger, so the fixer can re-run
 them to confirm a fix.
 
-## Testing triage against an old run
+## Testing
+
+Triage against an old run:
 
     cd <clone of the repo>
     TRIAGE_IGNORE_LATER=1 REPO=owencorpening/<repo> RUN_ID=<id> CTX=/tmp/ctx \
       bash ~/dev/oat-tools/tools/ci-fixer/triage.sh
+
+Apply locally, with your own git credentials and a hand-written
+`$CTX/result.json`: set the env vars apply.sh lists, plus
+`PUSH_URL=https://github.com/owencorpening/<repo>.git` and `GH_TOKEN=`.
+
+Tested 2026-11-27 in a throwaway repo (ci-fixer-sandbox): a code regression
+fixed and pushed, with CI re-run green; a broken Pages build fixed and
+rebuilt; and the revert path, with a forced "cannot fix" verdict.

@@ -62,7 +62,9 @@ EOF
   if [ $DRY = 1 ]; then echo "== $repo"; echo "$content"; continue; fi
 
   branch=$(gh api "repos/$OWNER/$repo" -q .default_branch)
-  old=$(gh api "repos/$OWNER/$repo/contents/$FILE?ref=$branch" -q '.sha + " " + .content' 2>/dev/null || true)
+  # gh prints a 404's error body on stdout, so test its exit status, not its output.
+  old=""
+  if resp=$(gh api "repos/$OWNER/$repo/contents/$FILE?ref=$branch" -q '.sha + " " + .content' 2>/dev/null); then old=$resp; fi
   sha=${old%% *}
   if [ -n "$old" ] && [ "$(printf '%s' "${old#* }" | tr -d '\n' | base64 -d)" = "$content" ]; then
     echo "$repo: up to date"; continue

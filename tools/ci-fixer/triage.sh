@@ -43,12 +43,16 @@ if [ "$BRANCH" != "$WATCHED" ]; then
   out mode skip; exit 0
 fi
 
-# A later run of the same workflow on this branch already passed: nothing to do.
-LATEST=$(gh api "repos/$REPO/actions/workflows/$WF_ID/runs?branch=$BRANCH&status=completed&per_page=1" \
-  -q '.workflow_runs[0] | "\(.id) \(.conclusion)"')
+# A later run of the same workflow on this branch already passed: nothing to
+# do. "Later" by run id, which only grows: right after a run completes, the
+# API's newest-first list can still show an older run on top (seen
+# 2026-11-27), so "the newest run isn't this one" proves nothing.
 # (TRIAGE_IGNORE_LATER=1 turns this off, for testing against old runs.)
-if [ -z "${TRIAGE_IGNORE_LATER:-}" ] && [ "${LATEST%% *}" != "$RUN_ID" ] && [ "${LATEST#* }" = success ]; then
-  note "Skipped: a later run (${LATEST%% *}) already passed."
+CREATED=$(j .created_at)
+LATER=$(gh api -X GET "repos/$REPO/actions/workflows/$WF_ID/runs" -f branch="$BRANCH" -f status=success \
+  -f created=">=$CREATED" -F per_page=20 -q "[.workflow_runs[] | select(.id > $RUN_ID) | .id][0] // empty")
+if [ -z "${TRIAGE_IGNORE_LATER:-}" ] && [ -n "$LATER" ]; then
+  note "Skipped: a later run ($LATER) already passed."
   out mode skip; exit 0
 fi
 
@@ -58,7 +62,15 @@ gh api "repos/$REPO/actions/runs/$RUN_ID/jobs" \
   -q '.jobs[] | select(.conclusion=="failure") | "\(.id)\t\(.name)"' |
 while IFS=$'\t' read -r jid jname; do
   { echo "===== job: $jname ($jid), last 300 lines ====="
-    gh api "repos/$REPO/actions/jobs/$jid/logs" 2>/dev/null | tail -n 300 || echo "(log unavailable)"
+    # The log can lag the run's completion by a few seconds: retry, and say why
+    # if it still can't be read.
+    got=0
+    for wait in 0 10 20 30; do
+      sleep "$wait"
+      if gh api "repos/$REPO/actions/jobs/$jid/logs" >"$CTX/job.log" 2>"$CTX/job.err"; then got=1; break; fi
+    done
+    if [ $got = 1 ]; then tail -n 300 "$CTX/job.log"; else echo "(log unavailable: $(head -c 300 "$CTX/job.err"))"; fi
+    rm -f "$CTX/job.log" "$CTX/job.err"
     echo; } >>"$CTX/log.txt"
 done
 [ -f "$WF_PATH" ] && cp "$WF_PATH" "$CTX/workflow.yml" || true
@@ -78,7 +90,6 @@ if [ -n "$FIXER" ]; then
 fi
 
 # Last pass before this run (not after it: a later manual re-run may have passed).
-CREATED=$(j .created_at)
 GOOD=$(gh api -X GET "repos/$REPO/actions/workflows/$WF_ID/runs" -f branch="$BRANCH" -f status=success \
   -f created="<$CREATED" -F per_page=1 -q '.workflow_runs[0].head_sha // empty')
 out last_good "$GOOD"

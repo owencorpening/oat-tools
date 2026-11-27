@@ -24,7 +24,11 @@ Rules:
    Never delete, skip or weaken a test, a check or a lint rule to get green.
    Never touch secrets, credentials or .github/workflows/fix-failed-build.yml.
 3. Re-run the failing commands until they pass. A fix you could not verify
-   counts as not fixed.
+   counts as not fixed. One exception: a Pages (Jekyll) build you can't run
+   here. If the log names the error, file and line unambiguously and your
+   fix removes exactly that cause, report "fixed" and say in verified_by that
+   it's unverified on the runner; the workflow re-runs the Pages build, and a
+   failure there reverts your fix and the suspects automatically.
 4. Don't commit, push, tag or open anything; the workflow does that after you.
    Leave your fix as uncommitted changes in the working tree, and nothing else
    (remove any scratch files you created).

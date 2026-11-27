@@ -15,7 +15,9 @@ SELF_URL="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-$REPO}/a
 
 git config user.name "ci-fixer"
 git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"
+# PUSH_URL overrides where to push (for a local test run with your own git
+# credentials); in Actions it's the repo with the workflow's token.
+git remote set-url origin "${PUSH_URL:-https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git}"
 
 issue() { # title, body
   gh label create ci-fixer --color B60205 --description "Opened by the CI fixer" -R "$REPO" >/dev/null 2>&1 || true
