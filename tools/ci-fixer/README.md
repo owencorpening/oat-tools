@@ -4,7 +4,7 @@ When a workflow fails on a watched branch, find out whether a commit broke it.
 If so, fix it straight on the branch, or revert the commit if there's no
 verified fix. Either way, open an issue saying what happened.
 
-- `.github/workflows/fix-failed-build.yml` (in this repo): the reusable workflow.
+- `.github/workflows/ci-fixer.yml` (in this repo): the reusable workflow.
 - Each watched repo has its own small `.github/workflows/fix-failed-build.yml`
   that calls it when one of the repo's workflows fails. `install-callers.sh`
   writes those files.
@@ -55,6 +55,8 @@ verified fix. Either way, open an issue saying what happened.
     tools/ci-fixer/install-callers.sh <repo>
 
 Rerun `install-callers.sh` after adding or renaming a workflow in a repo.
+oat-web is skipped: oat-content's publish job replaces its whole contents, so
+a caller there would be wiped; oat-content has its own.
 Workflows should have a `workflow_dispatch:` trigger, so the fixer can re-run
 them to confirm a fix.
 

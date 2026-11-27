@@ -13,13 +13,20 @@ OWNER=owencorpening
 DRY=0; [ "${1:-}" = --dry-run ] && { DRY=1; shift; }
 [ $# -gt 0 ] || { echo "usage: $0 [--dry-run] repo [repo ...]" >&2; exit 2; }
 FILE=.github/workflows/fix-failed-build.yml
+# The reusable fixer lives at a different path (ci-fixer.yml), so writing
+# oat-tools' own caller can't overwrite it (it did once, 2026-11-27).
+# oat-web is skipped: oat-content's publish job replaces its whole contents,
+# so a caller there is wiped on the next publish; its build comes from
+# oat-content, which has its own caller.
+SKIP_REPOS=" oat-web "
 
 for repo in "$@"; do
+  case "$SKIP_REPOS" in *" $repo "*) echo "$repo: skipped (see SKIP_REPOS)"; continue ;; esac
   # Names to watch. GitHub's Pages workflow is listed as "pages-build-deployment"
   # but its runs are named "pages build and deployment"; watch both.
   mapfile -t names < <(gh api "repos/$OWNER/$repo/actions/workflows" -q '.workflows[]
       | select(.path | startswith("dynamic/dependabot") | not)
-      | select(.path != ".github/workflows/fix-failed-build.yml")
+      | select(.path != ".github/workflows/fix-failed-build.yml" and .path != ".github/workflows/ci-fixer.yml")
       | select(.name != "CI fixer")
       | .name' | sort -u)
   if printf '%s\n' "${names[@]}" | grep -qx 'pages-build-deployment'; then
@@ -32,7 +39,7 @@ for repo in "$@"; do
 # CI fixer: when a workflow below fails, check whether a commit broke it. If
 # so, fix it (or revert the commit) straight on the branch and open an issue;
 # if not, open an issue with a diagnosis. The logic lives in
-# owencorpening/oat-tools (.github/workflows/fix-failed-build.yml and
+# owencorpening/oat-tools (.github/workflows/ci-fixer.yml and
 # tools/ci-fixer/). Written by tools/ci-fixer/install-callers.sh; rerun that
 # after adding or renaming a workflow here.
 name: Fix failed build
@@ -51,7 +58,7 @@ permissions:
 jobs:
   fix:
     if: github.event.workflow_run.conclusion == 'failure'
-    uses: owencorpening/oat-tools/.github/workflows/fix-failed-build.yml@main
+    uses: owencorpening/oat-tools/.github/workflows/ci-fixer.yml@main
     with:
       run_id: \${{ github.event.workflow_run.id }}
       head_branch: \${{ github.event.workflow_run.head_branch }}
