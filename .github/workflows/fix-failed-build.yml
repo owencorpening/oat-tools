@@ -1,7 +1,7 @@
 # CI fixer: when a workflow below fails, check whether a commit broke it. If
 # so, fix it (or revert the commit) straight on the branch and open an issue;
 # if not, open an issue with a diagnosis. The logic lives in
-# owencorpening/oat-tools (.github/workflows/fix-failed-build.yml and
+# owencorpening/oat-tools (.github/workflows/ci-fixer.yml and
 # tools/ci-fixer/). Written by tools/ci-fixer/install-callers.sh; rerun that
 # after adding or renaming a workflow here.
 name: Fix failed build
@@ -20,7 +20,7 @@ permissions:
 jobs:
   fix:
     if: github.event.workflow_run.conclusion == 'failure'
-    uses: owencorpening/oat-tools/.github/workflows/fix-failed-build.yml@main
+    uses: owencorpening/oat-tools/.github/workflows/ci-fixer.yml@main
     with:
       run_id: ${{ github.event.workflow_run.id }}
       head_branch: ${{ github.event.workflow_run.head_branch }}
