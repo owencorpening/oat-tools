@@ -211,6 +211,66 @@ const CHEATSHEETS_BODY = `<div class="about">
 <p>Found a bug or have a question? <a href="${CHEATSHEETS_REPO}/issues">Open an issue on GitHub</a>. It's a free side project, so replies may take a few days.</p>
 <p><a href="${CHEATSHEETS_REPO}">Source code (MIT)</a></p>
 </div>`;
+// Home page and privacy policy for Draftsman (owencorpening/Draftsman), whose
+// Google OAuth client asks for drive.file. Google's brand verification needs
+// both pages on a domain Owen owns, and the consent screen links to them, so
+// their URLs must not change. Not in FREE_TOOLS until the first release.
+const DRAFTSMAN_REPO = 'https://github.com/owencorpening/Draftsman';
+const DRAFTSMAN_ISSUES = `${DRAFTSMAN_REPO}/issues`;
+const DRAFTSMAN_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+const DRAFTSMAN_BODY = `<div class="about">
+<h1>Draftsman</h1>
+<p class="meta">A free, open-source tool by Owen Corpening · First release January 2027</p>
+<p class="lede">Draftsman takes a markdown draft to a publish-ready post. You talk to the AI app you already use, and Draftsman does the layout work: images found, licensed and credited, tables turned into figures, pull quotes picked and styled, figures numbered, weak lists fixed and a carousel built from the summary.</p>
+<h2>What it does</h2>
+<ul>
+<li><strong>Images.</strong> It searches the image sources you turn on, passes a photo only when its license clearly allows commercial use and changes, saves it beside your article with its credit, and keeps a record of where it came from.</li>
+<li><strong>Tables.</strong> It turns a markdown table into a styled image with a numbered caption. If you sign in to Google, the table's data also goes into a new Google Sheet in your own Drive, and the image links to it.</li>
+<li><strong>Pull quotes, figures and lists.</strong> It styles pull quotes taken word for word from your article, keeps figure numbers in order, and finds lists that would read better as a table or a paragraph.</li>
+<li><strong>Carousels.</strong> It builds a LinkedIn-sized slide deck and PDF from the article's summary.</li>
+</ul>
+<p>Your AI app suggests each change and you accept it or not. Every change can be undone.</p>
+<h2>How it runs</h2>
+<p>Draftsman is a local MCP server: it runs on your own computer, inside AI apps such as VS Code, Claude Code, Claude Desktop or Cursor. It calls no AI model of its own and has no server of its own. It sends nothing to me.</p>
+<h2>Google sign-in</h2>
+<p>Signing in to Google is optional and only needed to link table images to sheets. Draftsman asks for one permission, to see, edit, create and delete only the Google Drive files it creates, and nothing else in your Drive. Without it you get the table image alone.</p>
+<p><a href="privacy/">Privacy policy</a> · <a href="${DRAFTSMAN_REPO}">Source code (MIT)</a> · <a href="${DRAFTSMAN_ISSUES}">Contact</a></p>
+</div>`;
+const DRAFTSMAN_PRIVACY_BODY = `<div class="about">
+<h1>Privacy policy</h1>
+<p class="meta">Draftsman · Effective November 27, 2026</p>
+<p class="lede">Draftsman runs on your computer and sends nothing to me. I don't collect, receive or store any of your information.</p>
+<h2>What Draftsman accesses</h2>
+<ul>
+<li><strong>Your articles.</strong> It reads and edits the markdown files you point it at, on your computer.</li>
+<li><strong>Google Drive, only if you sign in.</strong> One permission, which Google shows as "See, edit, create, and delete only the specific Google Drive files you use with this app" (<code>${DRAFTSMAN_SCOPE}</code>). Draftsman uses it to create a new Google Sheet for each table you turn into a figure, write that table's rows into it, and share it so anyone with the link can view it, which lets readers of your post open it from the table image. It can't see or open any other file in your Drive, and it doesn't ask for or read your name, email address or contacts.</li>
+<li><strong>Image sources you turn on.</strong> When you search for an image, your search words go from your computer straight to that source (for example Pixabay, Openverse or Wikimedia Commons), under that source's own terms. Your own API key for a source goes only to that source.</li>
+</ul>
+<h2>How it's used</h2>
+<p>Only to do what you ask: lay out your article and, if you choose, make its table sheets. Nothing is used for advertising, sold, or used to train AI models. Draftsman has no analytics and no telemetry.</p>
+<h2>Where it's stored</h2>
+<ul>
+<li>Your Google sign-in and any API keys are kept in your operating system's keychain, or in environment variables you set. Draftsman never writes them to a file and sends them only to Google or the image source they belong to.</li>
+<li>Images, credits and provenance records are saved beside your article. A search cache, undo history and batch plans are kept in Draftsman's cache folder on your computer (<code>~/.cache/draftsman</code> on Linux and macOS).</li>
+<li>Table sheets live in your own Google Drive, and you own them.</li>
+</ul>
+<h2>Sharing</h2>
+<p>I receive nothing, so I share nothing. Each table sheet Draftsman makes is viewable by anyone who has its link, because that's what lets your readers open it; Draftsman warns you of this before it makes one. Nothing else from Google's APIs is shared with or transferred to anyone.</p>
+<p>Draftsman's use and transfer of information received from Google APIs adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
+<h2>Your AI app</h2>
+<p>Draftsman's results go to the AI app you run it in, which handles them under its own privacy policy.</p>
+<h2>Revoking access and deleting data</h2>
+<ul>
+<li>Remove Draftsman's Google access at any time at <a href="https://myaccount.google.com/connections">myaccount.google.com/connections</a>. After that it can't reach your Drive.</li>
+<li>Delete any table sheet in Google Drive, like any other file.</li>
+<li>Delete the cache folder, or uninstall Draftsman, to remove everything else it kept on your computer.</li>
+</ul>
+<h2>Changes</h2>
+<p>If this ever changes, this page will be updated first, with a new effective date.</p>
+<h2>Contact</h2>
+<p><a href="${DRAFTSMAN_ISSUES}">Open an issue on GitHub</a>.</p>
+<p><a href="../">Back to the Draftsman page</a></p>
+</div>`;
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
   'August', 'September', 'October', 'November', 'December'];
 
@@ -700,6 +760,29 @@ async function writeSite(articles, outDir, options = {}) {
     current: 'tools',
     crumbs: [['OAT', '../../../'], ['Free tools', '../../'], ['OAT stats', '../'], ['Privacy', null]],
     body: OAT_STATS_PRIVACY_BODY
+  }));
+
+  // Draftsman: home page and privacy policy of its Google OAuth client (fixed
+  // URLs, linked from Google's consent-screen Branding). Not in Free tools yet.
+  writeFile(outDir, 'tools/draftsman/index.html', page({
+    title: `Draftsman · ${SITE_NAME}`,
+    description: 'Draftsman: a free, open-source tool that takes a markdown draft to a publish-ready post.',
+    canonical: canonical('tools/draftsman/'),
+    pixel: pixel('tools/draftsman/'),
+    rootPrefix: '../../',
+    current: 'tools',
+    crumbs: [['OAT', '../../'], ['Free tools', '../'], ['Draftsman', null]],
+    body: DRAFTSMAN_BODY
+  }));
+  writeFile(outDir, 'tools/draftsman/privacy/index.html', page({
+    title: `Privacy policy · Draftsman · ${SITE_NAME}`,
+    description: 'Privacy policy for Draftsman.',
+    canonical: canonical('tools/draftsman/privacy/'),
+    pixel: pixel('tools/draftsman/privacy/'),
+    rootPrefix: '../../../',
+    current: 'tools',
+    crumbs: [['OAT', '../../../'], ['Free tools', '../../'], ['Draftsman', '../'], ['Privacy', null]],
+    body: DRAFTSMAN_PRIVACY_BODY
   }));
 
   // Cheatsheets extension page (fixed URL: the extension's homepage).

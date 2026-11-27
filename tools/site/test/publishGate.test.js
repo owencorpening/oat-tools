@@ -158,7 +158,7 @@ test('only tagged, published articles reach the output; drafts never do', async 
   const out = path.join(tmpDir('oat-gate-out-'), 'site');
   await writeSite(articles, out, { series: new Map([['vectors', { id: 'vectors', name: 'Vectors', description: 'd', order: 2 }], ['water', { id: 'water', name: 'Water', description: 'd', order: 1 }]]), fetchImpl: noFetch });
   const files = allFiles(out).map((f) => path.relative(out, f)).sort();
-  assert.deepStrictEqual(files, ['404.html', 'about/index.html', 'brand/apple-touch-icon.png', 'brand/cheatsheets-icon.png', 'brand/cornerstone.jpg', 'brand/favicon-32.png', 'brand/oat-mark.png', 'brand/search-grid-icon.png', 'index.html', 'products/index.html', 'standalone/b-essay/index.html', 'standalone/index.html', 'style.css', 'tools/cheatsheets/index.html', 'tools/index.html', 'tools/oat-stats/index.html', 'tools/oat-stats/privacy/index.html', 'tools/search-grid/index.html', 'tools/search-grid/privacy/index.html', 'vectors/b-essay/index.html', 'vectors/index.html', 'water/index.html', 'water/part-01/index.html',
+  assert.deepStrictEqual(files, ['404.html', 'about/index.html', 'brand/apple-touch-icon.png', 'brand/cheatsheets-icon.png', 'brand/cornerstone.jpg', 'brand/favicon-32.png', 'brand/oat-mark.png', 'brand/search-grid-icon.png', 'index.html', 'products/index.html', 'standalone/b-essay/index.html', 'standalone/index.html', 'style.css', 'tools/cheatsheets/index.html', 'tools/draftsman/index.html', 'tools/draftsman/privacy/index.html', 'tools/index.html', 'tools/oat-stats/index.html', 'tools/oat-stats/privacy/index.html', 'tools/search-grid/index.html', 'tools/search-grid/privacy/index.html', 'vectors/b-essay/index.html', 'vectors/index.html', 'water/index.html', 'water/part-01/index.html',
     'writing/index.html', 'writing/vectors/b-essay/index.html', 'writing/vectors/index.html', 'writing/water/index.html', 'writing/water/part-01/index.html']);
   assertNoCanary(out);
   const page = fs.readFileSync(path.join(out, 'writing/water/part-01/index.html'), 'utf8');
@@ -356,7 +356,7 @@ test('a moved article builds once, in its new series, with redirects from the ol
   assert.deepStrictEqual(files, ['404.html', 'about/index.html', 'family/genome/index.html', 'family/index.html', 'index.html', 'products/index.html',
     'science/code/index.html', 'science/genome/index.html', 'science/index.html',
     'standalone/code/index.html', 'standalone/index.html', 'standalone/stays/index.html', 'style.css',
-    'tools/cheatsheets/index.html', 'tools/index.html', 'tools/oat-stats/index.html', 'tools/oat-stats/privacy/index.html', 'tools/search-grid/index.html', 'tools/search-grid/privacy/index.html',
+    'tools/cheatsheets/index.html', 'tools/draftsman/index.html', 'tools/draftsman/privacy/index.html', 'tools/index.html', 'tools/oat-stats/index.html', 'tools/oat-stats/privacy/index.html', 'tools/search-grid/index.html', 'tools/search-grid/privacy/index.html',
     'vectors/code/index.html', 'vectors/index.html', 'vectors/stays/index.html',
     'writing/index.html', 'writing/science/code/index.html', 'writing/science/genome/index.html', 'writing/science/index.html',
     'writing/vectors/index.html', 'writing/vectors/stays/index.html']);

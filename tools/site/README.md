@@ -56,6 +56,10 @@ The site is OAT with three parts under it (2026-11-22):
   home page and privacy policy of the "OAT stats" Google OAuth app (used by
   `stats-scraper/cws_stats.py`); Google's consent-screen Branding links to
   them, so they keep their URLs too. They aren't in the Free tools list.
+  `/tools/draftsman/` and its `privacy/` page are the home page and privacy
+  policy of Draftsman's Google OAuth client (`drive.file`), needed for Google's
+  brand verification; fixed URLs, not in the Free tools list until the first
+  release.
 - Products (`/products/`): "Coming soon" until a product is ready.
 - About (`/about/`) and `404.html`.
 

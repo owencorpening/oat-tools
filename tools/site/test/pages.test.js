@@ -107,7 +107,7 @@ test('builds home, series, article and not-found pages with no JavaScript when n
     const htmlFiles = files.filter((f) => f.endsWith('.html')).sort();
     assert.deepStrictEqual(htmlFiles, [
       '404.html', 'about/index.html', 'index.html', 'products/index.html', 'standalone/essay/index.html', 'standalone/index.html',
-      'tools/cheatsheets/index.html', 'tools/index.html', 'tools/oat-stats/index.html', 'tools/oat-stats/privacy/index.html', 'tools/search-grid/index.html', 'tools/search-grid/privacy/index.html',
+      'tools/cheatsheets/index.html', 'tools/draftsman/index.html', 'tools/draftsman/privacy/index.html', 'tools/index.html', 'tools/oat-stats/index.html', 'tools/oat-stats/privacy/index.html', 'tools/search-grid/index.html', 'tools/search-grid/privacy/index.html',
       'vectors/essay/index.html', 'vectors/index.html', 'water/index.html', 'water/manifesto/index.html', 'water/part-01/index.html', 'water/part-02/index.html',
       'writing/index.html', 'writing/vectors/essay/index.html', 'writing/vectors/index.html',
       'writing/water/index.html', 'writing/water/manifesto/index.html', 'writing/water/part-01/index.html', 'writing/water/part-02/index.html'
@@ -145,6 +145,13 @@ test('builds home, series, article and not-found pages with no JavaScript when n
     const statsPrivacy = read(out, 'tools/oat-stats/privacy/index.html');
     assert.ok(statsPrivacy.includes('chromewebstore.readonly') && statsPrivacy.includes('Limited Use requirements'), 'names the scope and the Limited Use statement');
     assert.ok(!read(out, 'tools/index.html').includes('oat-stats'), 'not listed as a free tool');
+    // Draftsman OAuth client pages: Google's brand verification needs these fixed URLs.
+    const dm = read(out, 'tools/draftsman/index.html');
+    assert.ok(dm.includes('<h1>Draftsman</h1>') && dm.includes('href="privacy/"'), 'home page links its privacy policy');
+    assert.ok(dm.includes('<link rel="canonical" href="https://owencorpening.github.io/oat-web/tools/draftsman/">'));
+    const dmPrivacy = read(out, 'tools/draftsman/privacy/index.html');
+    assert.ok(dmPrivacy.includes('auth/drive.file') && dmPrivacy.includes('Limited Use requirements'), 'names the scope and the Limited Use statement');
+    assert.ok(!read(out, 'tools/index.html').includes('draftsman'), 'not listed as a free tool yet');
     const writing = read(out, 'writing/index.html');
     assert.ok(writing.indexOf('Water Resilience') < writing.indexOf('Vectors'), 'series in order, vectors last');
     assert.ok(writing.includes('href="water/"') && writing.includes('href="vectors/"'));
