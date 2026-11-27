@@ -13,7 +13,8 @@ One-time setup (see README.md, "Chrome Web Store"):
   - python3 cws_stats.py sign-in    (opens the browser once; the refresh
     token goes to the keyring, account cws-refresh-token)
 
-Each run (python3 cws_stats.py, from the Sunday timer) writes, under
+Each run (python3 cws_stats.py, daily from the 04:00 dashboard job and the
+Sunday 03:00 pull) writes, under
 ~/oat-data/stats/cws/ (override with --out):
   cws-YYYY-MM-DD-daily.csv       date + every metric, all countries
   cws-YYYY-MM-DD-country.csv     date, country, installs, uninstalls, users, users_7d
@@ -24,10 +25,10 @@ YYYY-MM-DD is the day of the pull; each file holds the full history the API
 returns. Credentials never touch a file: the client secret and refresh token
 are read from the keyring, and nothing here prints or logs them.
 
-Guard (pull_guard.py, shared with the LinkedIn/Substack pull): a run less
-than 3 days after cws.lastRun does nothing. --force ignores the guard and
-records cws.lastForcedRun instead, so a manual forced pull never makes the
-scheduled Sunday run a no-op. --dry-run shows what a run would do (guard
+Guard (pull_guard.py, shared with the LinkedIn/Substack pull): a run on the
+same day as cws.lastRun does nothing (1-day guard; LinkedIn keeps 3 days).
+--force ignores the guard and records cws.lastForcedRun instead, so a manual
+forced pull never makes the scheduled run a no-op. --dry-run shows what a run would do (guard
 decision, queries, files) without signing in, calling the API or writing;
 --today pretends it's another date.
 """

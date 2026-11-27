@@ -5,9 +5,14 @@ Two pulls, two clocks in config.local.json:
   linkedin  top-level lastRun        (LinkedIn + Substack, prompt-template.md)
   cws       cws.lastRun              (Chrome Web Store, cws_stats.py)
 
-Rule: a pull proceeds when its clock is empty or GUARD_DAYS or more days old.
-The Sunday timer is the normal caller, so last Sunday's pull (7 days back)
-never blocks it, and neither does a manual pull from Thursday or earlier.
+Rule: a pull proceeds when its clock is empty or GUARD_DAYS[pull] or more
+days old:
+  linkedin  3 days. The Sunday timer is the normal caller, so last Sunday's
+            pull (7 days back) never blocks it, and neither does a manual
+            pull from Thursday or earlier.
+  cws       1 day. The nightly 04:00 job and the Sunday 03:00 job both call
+            it, so it pulls once a day: Sunday's 04:00 call skips because
+            03:00 already pulled.
 
 Forced pulls (manual, guard ignored) don't move the clock: they're recorded
 as lastForcedRun for the record, and the guard never reads that. So a manual
@@ -28,7 +33,10 @@ import sys
 from pathlib import Path
 
 CONFIG = Path(__file__).resolve().parent / "config.local.json"
-GUARD_DAYS = 3
+# Days a pull must wait after the last unforced one. LinkedIn stays at 3
+# (account safety, see prompt-template.md "Cadence"); the Chrome Web Store
+# API is official and free, so it runs daily.
+GUARD_DAYS = {"linkedin": 3, "cws": 1}
 SKIP = 3  # exit code for "guard says skip"
 PULLS = ("linkedin", "cws")
 
@@ -49,10 +57,11 @@ def check(cfg, pull, today):
     last = _section(cfg, pull).get("lastRun")
     if not last:
         return True, f"{pull}: no previous pull on record; go."
+    days = GUARD_DAYS[pull]
     gap = (today - dt.date.fromisoformat(last)).days
-    if gap >= GUARD_DAYS:
-        return True, f"{pull}: last pull {last}, {gap} day(s) ago (guard {GUARD_DAYS}); go."
-    nxt = dt.date.fromisoformat(last) + dt.timedelta(days=GUARD_DAYS)
+    if gap >= days:
+        return True, f"{pull}: last pull {last}, {gap} day(s) ago (guard {days}); go."
+    nxt = dt.date.fromisoformat(last) + dt.timedelta(days=days)
     return False, f"{pull}: last pull {last}, {gap} day(s) ago; next allowed {nxt}. Nothing to do."
 
 

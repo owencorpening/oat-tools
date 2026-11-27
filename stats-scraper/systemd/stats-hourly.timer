@@ -1,0 +1,11 @@
+[Unit]
+Description=Hourly stats refresh (GitHub traffic, GoatCounter) — replaces the daily github-traffic.timer
+
+[Timer]
+OnCalendar=hourly
+# spread the start over the first 10 minutes of the hour
+RandomizedDelaySec=600
+Persistent=true
+
+[Install]
+WantedBy=timers.target

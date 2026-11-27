@@ -27,6 +27,19 @@ class Check(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("next allowed 2026-11-30", msg)
 
+    def test_cws_runs_daily(self):
+        self.assertTrue(pull_guard.check({"cws": {"lastRun": "2026-11-28"}}, "cws", SUNDAY)[0])
+
+    def test_cws_twice_same_day_skips(self):
+        # Sunday 03:00 (weekly job) pulled; the 04:00 nightly call skips.
+        ok, msg = pull_guard.check({"cws": {"lastRun": "2026-11-29"}}, "cws", SUNDAY)
+        self.assertFalse(ok)
+        self.assertIn("next allowed 2026-11-30", msg)
+
+    def test_linkedin_still_three_days(self):
+        self.assertFalse(pull_guard.check({"lastRun": "2026-11-28"}, "linkedin", SUNDAY)[0])
+        self.assertTrue(pull_guard.check({"lastRun": "2026-11-26"}, "linkedin", SUNDAY)[0])
+
     def test_forced_date_is_ignored(self):
         cfg = {"cws": {"lastRun": "2026-11-22", "lastForcedRun": "2026-11-28"}}
         self.assertTrue(pull_guard.check(cfg, "cws", SUNDAY)[0])
@@ -50,6 +63,12 @@ class Record(unittest.TestCase):
         pull_guard.record("cws", D("2026-11-26"), True, self.cfg)
         cfg = json.loads(self.cfg.read_text())
         self.assertEqual(cfg["cws"], {"lastRun": "2026-11-22", "lastForcedRun": "2026-11-26"})
+        self.assertTrue(pull_guard.check(cfg, "cws", SUNDAY)[0])
+
+    def test_forced_cws_pull_today_leaves_nightly_run_alone(self):
+        pull_guard.record("cws", SUNDAY, True, self.cfg)   # manual --force on Sunday
+        cfg = json.loads(self.cfg.read_text())
+        self.assertEqual(cfg["cws"]["lastRun"], "2026-11-22")
         self.assertTrue(pull_guard.check(cfg, "cws", SUNDAY)[0])
 
     def test_unforced_pull_moves_only_its_clock(self):

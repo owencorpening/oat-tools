@@ -19,7 +19,7 @@ Run with -I; no third-party deps.
 import csv, json, os, re, html, subprocess
 from zoneinfo import ZoneInfo
 from collections import defaultdict, OrderedDict
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 
 HOME = os.path.expanduser("~")
 STATS = os.path.join(HOME, "oat-data/stats/stats-log.csv")
@@ -31,6 +31,7 @@ PV_STATE = os.environ.get("OAT_PAGEVIEWS_STATE") or os.path.join(HOME, "dev/oat-
 PV_FROM_REMOTE = os.environ.get("OAT_PAGEVIEWS_SOURCE") == "remote"
 ACTIONS = os.path.join(HOME, "oat-data/stats/github-actions-clones.csv")
 CWS_DIR = os.environ.get("OAT_CWS_DIR") or os.path.join(HOME, "oat-data/stats/cws")
+GC_RECENT = os.environ.get("OAT_GC_RECENT") or os.path.join(HOME, "oat-data/stats/goatcounter-recent.json")
 FAILURES = os.path.join(HOME, ".local/state/stats-scraper/logs/failures.log")
 OUT = os.environ.get("OAT_DASHBOARD_OUT") or os.path.join(HOME, "oat-data/stats/dashboard.html")
 # GoatCounter reports days in the site's time zone; bucket the same way.
@@ -38,6 +39,15 @@ SITE_TZ = ZoneInfo("America/Chicago")
 # Clean-slate reset of pageviews.csv (oat-analytics README, 2026-11-23 20:43
 # CST). Nov 23 is only partly covered, so full days start the day after.
 SITE_FULL_DAYS_FROM = "2026-11-24"
+
+def updated_at(*paths):
+    """When the newest of these files was last written, UTC ISO; None if none exist.
+    Each source rewrites its file only on a successful pull, so this is when
+    that panel's data was last refreshed."""
+    ts = [os.path.getmtime(p) for p in paths if p and os.path.exists(p)]
+    if not ts:
+        return None
+    return datetime.fromtimestamp(max(ts), timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 def num(x):
     try: return int(str(x).replace(",", ""))
@@ -206,6 +216,7 @@ def load_stats():
             tiles["open"] = round(sum(ors)/len(ors), 1) if ors else None
             tiles["eng"] = round(sum(ers)/len(ers), 1) if ers else None
         result = {"trend": trend, "top": top, "tiles": tiles, "latest": latest,
+                  "updated": updated_at(STATS),
                   "failedSince": _failed_pulls_since(latest)}
         if plat == "LinkedIn":
             result["weekly"] = _weekly_from_snapshots([(t["x"], t["y"]) for t in trend])
@@ -260,7 +271,7 @@ def load_github():
         "span": f"{days[0]} → {days[-1]}" if days else "",
         "latest": days[-1] if days else "",
     }
-    return {"trend": trend, "top": top, "tiles": tiles,
+    return {"trend": trend, "top": top, "tiles": tiles, "updated": updated_at(GH),
             "viewsWeekly": _weekly_from_daily({d: by_day[d]["views"] for d in days})}
 
 # ---------- OAT site (GoatCounter) ----------
@@ -310,7 +321,17 @@ def load_site():
     return {"trend": trend, "top": top, "tiles": tiles, "empty": views == 0,
             "weekly": weekly,
             "coveredTo": covered_to.strftime("%Y-%m-%d %H:%M") if covered_to else None,
-            "fromLocalClone": not PV_FROM_REMOTE}
+            "fromLocalClone": not PV_FROM_REMOTE,
+            "updated": (last_run[:19] + "Z") if last_run else None,
+            "live": load_live()}
+
+def load_live():
+    """Hourly visitor counts from goatcounter_recent.py (stats API)."""
+    try:
+        with open(GC_RECENT) as f:
+            return json.load(f)
+    except Exception:
+        return None
 
 # ---------- Chrome Web Store (cws_stats.py, official API) ----------
 # Romania is my own VPN testing, not real users: it comes out of every figure
@@ -396,6 +417,7 @@ def load_cws():
         "sources": by_dim("utm-source", "utm_source"),
         "mediums": by_dim("utm-medium", "utm_medium"),
         "failedSince": _failed_pulls_since(pulled, "cws pull FAILED"),
+        "updated": updated_at(*files.values()),
     }
 
 # ---------- Work: open items from GitHub Project "OAT" (number 2) ----------
@@ -450,7 +472,8 @@ def load_work():
             "priority": it.get("priority") or "",
             "target": it.get("target date") or "",
         })
-    return {"items": out, "cachedAt": cached_at}
+    return {"items": out, "cachedAt": cached_at,
+            "updated": None if cached_at else datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
 
 DATA = {
     "github": load_github(),
@@ -463,8 +486,9 @@ DATA = {
 DATA["linkedin"], DATA["substack"] = load_stats()
 
 # "Data through" = the freshest date across all sources, NOT wall-clock time.
-# This makes generation deterministic: a rebuild with no new data produces a
-# byte-identical file (no spurious git commit when run nightly).
+# The per-panel "updated" times are when each source last refreshed (file
+# mtimes, the export's last_run), so the file changes whenever a source does;
+# only the 04:00 run commits it, so that's at most one backup commit a day.
 _dates = [t["x"] for t in DATA["github"]["trend"]] + [t["x"] for t in DATA["site"]["trend"] if t["y"]]
 for _p in ("linkedin", "substack"):
     _lt = DATA[_p].get("latest")
@@ -622,6 +646,16 @@ function freshLine(html, days, oldAfter){
   return d; }
 function warnLine(text){ const d=document.createElement('div'); d.className='warn'; d.textContent='⚠ '+text; return d; }
 function noteLine(html){ const d=document.createElement('div'); d.className='tnote'; d.innerHTML=html; return d; }
+// "Updated" line: when this panel's source last refreshed, and how long ago
+// (counted when the page is opened). Red once older than its cadence allows.
+function updatedLine(iso, cadence, staleHours){
+  const d=document.createElement('div'); d.className='fresh upd';
+  if(!iso){ d.textContent=`updated: unknown · ${cadence}`; return d; }
+  const t=new Date(iso), mins=Math.max(0,Math.round((Date.now()-t)/60000));
+  const ago=mins<1?'just now':mins<60?mins+' min ago':mins<48*60?Math.round(mins/60)+' h ago':Math.round(mins/1440)+' days ago';
+  const when=t.toLocaleString([], {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'});
+  d.innerHTML=`updated ${when} · <span class="age${mins>staleHours*60?' old':''}">${ago}</span> · ${cadence}`;
+  return d; }
 function nextSunday(){ const d=new Date(); d.setDate(d.getDate()+((7-d.getDay())%7||7)); return fmtDate(d.toISOString().slice(0,10)); }
 
 function workPanel(work){
@@ -629,6 +663,7 @@ function workPanel(work){
   const c=document.createElement('div'); c.className='card wide';
   c.innerHTML=`<h2><span class="dot" style="background:var(--brass)"></span>Work</h2>`+
     `<div class="meta">In progress &amp; Next · from GitHub Project “OAT” · ${items.length} item${items.length===1?'':'s'}</div>`;
+  if(!work.cachedAt) c.appendChild(updatedLine(work.updated, 'read at each rebuild (hourly)', 2));
   if(work.cachedAt) c.appendChild(warnLine(`gh couldn't reach the Project at build time — showing the cached list from ${work.cachedAt}`));
   if(!items.length){ const e=document.createElement('div'); e.className='empty'; e.textContent='Nothing in progress or queued.'; c.appendChild(e); return c; }
   const wrap=document.createElement('div'); wrap.className='work';
@@ -796,10 +831,11 @@ function recentBlock(r){
   box.appendChild(list); return box;
 }
 
-function card({name,color,meta,pre,tileDefs,post,series,seriesLabelFmt,chartOpts,top,topValFmt,empty,emptyMsg,extra,after}){
+function card({name,color,meta,updated,pre,tileDefs,post,series,seriesLabelFmt,chartOpts,top,topValFmt,empty,emptyMsg,extra,after}){
   const c=document.createElement('div'); c.className='card';
   c.innerHTML=`<h2><span class="dot" style="background:${color}"></span>${name}</h2>`+
               (meta?`<div class="meta">${meta}</div>`:'');
+  (updated||[]).forEach(n=>c.appendChild(n));
   (pre||[]).forEach(n=>c.appendChild(n));
   c.appendChild(tiles(tileDefs));
   (post||[]).forEach(n=>c.appendChild(n));
@@ -829,6 +865,7 @@ const gPost=[];
 if(gt.ownClones!=null) gPost.push(noteLine(`Clones are mostly automated: <b>${fmt(gt.ownClones)}</b> from my own GitHub Actions (identified per run), <b>${fmt(gt.otherClones)}</b> from elsewhere — bots, mirrors and other people's CI. Views are people loading the repo pages.`));
 else gPost.push(noteLine('Clones are mostly automated (bots, CI, my own workflows); views are people loading the repo pages.'));
 grid.appendChild(card({name:'GitHub traffic',color:C.github,meta:(gt.span||'')+' · daily views',
+  updated:[updatedLine(g.updated, 'hourly', 2)],
   pre:gt.latest?[freshLine(`latest day ${fmtDate(gt.latest)}`, daysAgo(gt.latest), 2)]:[],
   tileDefs:[{l:'Views',v:fmt(gt.views||0)},{l:'Unique visitors',v:fmt(gt.uv||0)},{l:'Clones · mostly automated',v:fmt(gt.clones||0)}],
   post:gPost,
@@ -846,24 +883,33 @@ const li=DATA.linkedin;
 const liExtra=document.createElement('div');
 liExtra.appendChild(weeklyBlock(li.weekly, C.linkedin, 'impressions gained', 'impressions'));
 liExtra.appendChild(recentBlock(li.recent));
-grid.appendChild(card({name:'LinkedIn',color:C.linkedin,meta:'25-post cohort',pre:capturePre(li),
+grid.appendChild(card({name:'LinkedIn',color:C.linkedin,meta:'25-post cohort',
+  updated:[updatedLine(li.updated, 'weekly, Sunday 3am', 8*24)],pre:capturePre(li),
   tileDefs:[{l:'Impressions',v:fmt(li.tiles.total||0)},{l:'Comments',v:fmt(li.tiles.comments||0)},{l:'Posts',v:li.tiles.posts||0}],
   series:li.trend,seriesLabelFmt:fmt,chartOpts:{baseline:'auto',area:false},top:li.top,extra:liExtra}));
 
 const sb=DATA.substack;
-grid.appendChild(card({name:'Substack',color:C.substack,meta:'25-post cohort',pre:capturePre(sb),
+grid.appendChild(card({name:'Substack',color:C.substack,meta:'25-post cohort',
+  updated:[updatedLine(sb.updated, 'weekly, Sunday 3am', 8*24)],pre:capturePre(sb),
   tileDefs:[{l:'Views',v:fmt(sb.tiles.total||0)},{l:'Avg open',v:sb.tiles.open!=null?sb.tiles.open+'%':null},
             {l:'Avg engage',v:sb.tiles.eng!=null?sb.tiles.eng+'%':null},{l:'Posts',v:sb.tiles.posts||0}],
   series:sb.trend,seriesLabelFmt:fmt,chartOpts:{baseline:'auto',area:false},top:sb.top}));
 
-const st=DATA.site;
+const st=DATA.site, lv=st.live;
 const sPre=[];
+const sUpd=[updatedLine(st.updated, 'pageview log: daily export (oat-analytics CI)', 30)];
+if(lv && lv.status!=='no-key') sUpd.push(updatedLine(lv.fetched, 'live visitor counts: hourly', 2));
+if(lv && lv.status==='error') sPre.push(warnLine(`live counts: last hourly fetch failed (${lv.error}) — showing the last good ones`));
+if(!lv || lv.status==='no-key') sPre.push(noteLine('Live hourly visitor counts are off: no GoatCounter API key in the keyring. Add one with <code>secret-tool store --label="OAT stats GoatCounter API key" service oat-stats account goatcounter-api-key</code>.'));
+const lvDays=(lv&&lv.days)||[];
 if(st.coveredTo) sPre.push(freshLine(`exported through ${fmtDate(st.coveredTo.slice(0,10))} ${st.coveredTo.slice(11)} Central`, daysAgo(st.coveredTo), 1));
 if(st.fromLocalClone) sPre.push(warnLine("couldn't fetch oat-analytics at build time — using the local clone, which may be behind"));
 grid.appendChild(card({name:'OAT site (owensappliedthinking.com)',color:C.site,
   meta:'GoatCounter · counted from the clean-slate reset, Nov 23 8:43pm Central',
-  pre:sPre,
-  tileDefs:[{l:'Pageviews since reset',v:fmt(st.tiles.views||0)},{l:'First visits',v:fmt(st.tiles.visitors||0)}],
+  updated:sUpd, pre:sPre,
+  tileDefs:[{l:'Pageviews since reset',v:fmt(st.tiles.views||0)},{l:'First visits',v:fmt(st.tiles.visitors||0)}]
+    .concat(lvDays.length?[{l:'Visitors today · live',v:fmt(lvDays[lvDays.length-1].visitors)},
+                           {l:'Visitors, last 7 days · live',v:fmt(lvDays.reduce((a,d)=>a+d.visitors,0))}]:[]),
   post:[noteLine("GoatCounter's own totals run higher: they still include the 24 self-test pageviews from Nov 22–23 that the reset dropped from this log. Days are Central time, like GoatCounter.")],
   extra:weeklyBlock(st.weekly, C.site, 'pageviews', 'pageviews'),
   series:st.trend,seriesLabelFmt:fmt,chartOpts:{baseline:'zero',area:true},top:st.top,
@@ -871,12 +917,12 @@ grid.appendChild(card({name:'OAT site (owensappliedthinking.com)',color:C.site,
 
 const cw=DATA.cws||{empty:true};
 if(cw.empty){
-  grid.appendChild(card({name:'Search Grid (Chrome Web Store)',color:C.cws,meta:'official Chrome Web Store API · weekly',
+  grid.appendChild(card({name:'Search Grid (Chrome Web Store)',color:C.cws,meta:'official Chrome Web Store API · daily',
     tileDefs:[],empty:true,emptyMsg:'No pull yet — run cws_stats.py (see the stats-scraper README).'}));
 } else {
   const ct=cw.tiles, cPre=[];
-  cPre.push(freshLine(`pulled ${fmtDate(cw.pulled)} · data through ${fmtDate(cw.through)} · next scheduled pull Sun ${nextSunday()}`, daysAgo(cw.pulled), 8));
-  if(cw.failedSince && cw.failedSince.length) cPre.push(warnLine(`weekly pull failed on ${cw.failedSince.map(fmtDate).join(', ')} — numbers are from ${fmtDate(cw.pulled)}; see ~/.local/state/stats-scraper/logs/failures.log`));
+  cPre.push(freshLine(`pulled ${fmtDate(cw.pulled)} · data through ${fmtDate(cw.through)}`, daysAgo(cw.pulled), 1));
+  if(cw.failedSince && cw.failedSince.length) cPre.push(warnLine(`daily pull failed on ${cw.failedSince.map(fmtDate).join(', ')} — numbers are from ${fmtDate(cw.pulled)}; see ~/.local/state/stats-scraper/logs/failures.log`));
   const cPost=[];
   const rm=cw.removed||{}, cl=cw.cleaned||[];
   if(!cw.hasCountry) cPost.push(warnLine("no country split in this pull, so Romania (my VPN testing) couldn't be removed — every figure includes it"));
@@ -892,7 +938,7 @@ if(cw.empty){
   lists.appendChild(topList(cw.mediums||[], C.cws));
   grid.appendChild(card({name:'Search Grid (Chrome Web Store)',color:C.cws,
     meta:`official Chrome Web Store API · ${cw.span} · daily listing page views (incl. my testing)`,
-    pre:cPre,
+    updated:[updatedLine(cw.updated, 'daily, 4am', 30)], pre:cPre,
     tileDefs:[{l:'Installs',v:fmt(ct.installs||0)},{l:'Active users (latest day)',v:fmt(ct.users||0)},
               {l:'7-day users',v:fmt(ct.users7||0)},{l:'Listing page views · incl. my testing',v:fmt(ct.pageViews||0)}],
     post:cPost, after:lists,
@@ -900,7 +946,7 @@ if(cw.empty){
 }
 
 document.getElementById('foot').textContent=
-  'Self-contained snapshot — rebuilt nightly at 4am and after each weekly LinkedIn/Substack/Chrome Web Store pull. Ages are measured from when you open the page. Data stays on this machine.';
+  'Self-contained snapshot — rebuilt hourly (GitHub, live site counts), at 4am (Chrome Web Store, plus a backup commit) and after the Sunday LinkedIn/Substack pull. Ages are measured from when you open the page. Data stays on this machine.';
 
 // Font-size control: scales the whole page via CSS zoom; remembered per viewer.
 (function(){

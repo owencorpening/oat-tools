@@ -1,0 +1,8 @@
+[Unit]
+Description=Hourly GitHub traffic + GoatCounter refresh and dashboard rebuild (no scraping, no Claude)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/dev/oat-tools/stats-scraper/bin/stats-hourly.sh
