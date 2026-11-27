@@ -255,7 +255,7 @@ const DRAFTSMAN_PRIVACY_BODY = `<div class="about">
 <li>Table sheets live in your own Google Drive, and you own them.</li>
 </ul>
 <h2>Sharing</h2>
-<p>I receive nothing, so I share nothing. Each table sheet Draftsman makes is viewable by anyone who has its link, because that's what lets your readers open it; Draftsman warns you of this before it makes one. Nothing else from Google's APIs is shared with or transferred to anyone.</p>
+<p>I receive nothing, so I share nothing. Each table sheet Draftsman makes is viewable by anyone who has its link, because that's what lets your readers open it. Your AI app asks before each table is turned into a sheet, unless you've turned on automatic changes for tables yourself. Nothing else from Google's APIs is shared with or transferred to anyone.</p>
 <p>Draftsman's use and transfer of information received from Google APIs adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
 <h2>Your AI app</h2>
 <p>Draftsman's results go to the AI app you run it in, which handles them under its own privacy policy.</p>
