@@ -14,7 +14,7 @@
 #                                                backs it up once a day
 #   stats-weekly-pull.sh (Sun)      (no flags)   rebuild, commit
 set -uo pipefail
-WITH_CWS=0; COMMIT=1
+WITH_CWS=0; COMMIT=1; RC=0
 for arg in "$@"; do
   case "$arg" in
     --with-cws) WITH_CWS=1 ;;
@@ -46,6 +46,7 @@ LOG="$LOG_DIR/dashboard-$(date +%Y-%m-%d).log"
     python3 -I "$HOME/dev/oat-tools/stats-scraper/cws_stats.py"
     cws_rc=$?
     if [ $cws_rc -ne 0 ]; then
+      RC=1   # finish the rebuild and backup, but report failure to systemd
       echo "[$(date -Is)] cws pull FAILED rc=$cws_rc — $LOG" >>"$LOG_DIR/failures.log"
       command -v notify-send >/dev/null 2>&1 && notify-send -u critical "Chrome Web Store stats pull failed" "rc=$cws_rc — see $LOG" 2>/dev/null || true
     fi
@@ -81,3 +82,4 @@ LOG="$LOG_DIR/dashboard-$(date +%Y-%m-%d).log"
 
 # prune dashboard logs older than 120 days
 find "$LOG_DIR" -name 'dashboard-*.log' -mtime +120 -delete 2>/dev/null || true
+exit $RC
