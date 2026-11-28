@@ -120,6 +120,6 @@ if [ ! -s "$CTX/suspects.txt" ]; then
 fi
 note "Suspect commits (since the last pass, oldest first):"
 while read -r s; do note "- $(git log -1 --format='%h %an: %s' "$s")"; done <"$CTX/suspects.txt"
-{ for s in $(cat "$CTX/suspects.txt"); do git show --stat --patch --format='commit %H%nAuthor: %an%nDate: %ad%n%n%B' "$s"; done; } \
+while read -r s; do git show --stat --patch --format='commit %H%nAuthor: %an%nDate: %ad%n%n%B' "$s"; done <"$CTX/suspects.txt" \
   | head -c 300000 >"$CTX/suspects.patch"
 out mode fix
