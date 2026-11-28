@@ -66,6 +66,32 @@ CI-fixer: revert
 EOF
 }
 
+# Has the failed workflow passed since? Either a re-run of the failed run
+# itself (same run id, a later attempt) or a later run on the branch. Checked
+# just before reverting: Claude takes minutes, and a flake can go green
+# meanwhile (2026-11-28: Draftsman's extension job hung once, its re-run
+# passed, and the fixer reverted two good commits anyway).
+passed_since() {
+  local now later
+  now=$(gh api "repos/$REPO/actions/runs/$RUN_ID" -q '.status + " " + (.conclusion // "")' 2>/dev/null || true)
+  if [ "$now" = "completed success" ]; then echo "a re-run of the failed run passed"; return 0; fi
+  later=$(gh api -X GET "repos/$REPO/actions/workflows/$WF_ID/runs" -f branch="$BRANCH" -f status=success -F per_page=20 \
+    -q "[.workflow_runs[] | select(.id > $RUN_ID) | .id][0] // empty" 2>/dev/null || true)
+  if [ -n "$later" ]; then echo "a later run ($later) passed"; return 0; fi
+  return 1
+}
+
+# Nothing reverted, because the workflow has passed since: say so in the issue.
+skip_revert() { # why-it-would-have-reverted, what-passed
+  git reset -q --hard "$TIP"; git clean -qfd
+  issue "CI failure: $WF_NAME" "$(body_common)
+
+**Not reverted:** $2 before the fixer acted, so the failure didn't hold. Nothing was changed.
+(It would have reverted $(short "${offending[@]}"): $1)
+
+**Claude's summary:** $(r .summary)"
+}
+
 body_common() {
   printf '%s\n\n' "$(cat "$CTX/triage.md")"
   printf -- '- Fixer run: %s\n' "$SELF_URL"
@@ -95,6 +121,21 @@ fix)
   mapfile -t suspects <"$CTX/suspects.txt"
   verdict=$(r .verdict); mapfile -t offending < <(r '.offending[]?')
   [ ${#offending[@]} -gt 0 ] || offending=("${suspects[@]}")
+
+  # Claude reproduced the job and found the code isn't at fault (a flake, a
+  # service, a token): like diagnose mode, report it and change nothing.
+  if [ "$verdict" = not_regression ]; then
+    git reset -q --hard "$TIP"; git clean -qfd
+    issue "CI failure: $WF_NAME" "$(body_common)
+
+**Verdict:** not a regression. Claude ran the failing job's commands on the current code and couldn't put the failure on the suspect commits ($(short "${suspects[@]}")).
+
+**Summary:** $(r .summary)
+**Checked by:** $(r .verified_by)
+
+Nothing was changed. If it was a flake, re-run the workflow; if it keeps failing, look at the run."
+    exit 0
+  fi
   # Claude must not commit: if it did, keep its changes but drop the commits.
   [ "$(git rev-parse HEAD)" = "$TIP" ] || git reset -q --soft "$TIP"
   git add -A
@@ -141,6 +182,7 @@ If the re-run fails, the fixer reverts $fixsha and $(short "${offending[@]}") on
   fi
 
   echo "Not fixing: $why Reverting instead."
+  if passed=$(passed_since); then echo "Not reverting: $passed."; skip_revert "$why" "$passed"; exit 0; fi
   if revert "$why
 
 $(r .summary)" "${offending[@]}" && push; then
@@ -166,6 +208,8 @@ $why The revert of $(short "${offending[@]}") didn't apply cleanly (or the push 
 
 revert-fix)
   mapfile -t suspects <"$CTX/suspects.txt"
+  offending=("${suspects[@]}")
+  if passed=$(passed_since); then echo "Not reverting: $passed."; skip_revert "the fixer's own fix ($(short "$SHA")) failed $WF_NAME" "$passed"; exit 0; fi
   if revert "The fixer's own fix ($(short "$SHA")) failed $WF_NAME, so it and the commits it fixed are reverted." "${suspects[@]}" && push; then
     rsha=$(git rev-parse HEAD)
     rerun_note=$(rerun || true)

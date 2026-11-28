@@ -51,6 +51,10 @@ fi
 CREATED=$(j .created_at)
 LATER=$(gh api -X GET "repos/$REPO/actions/workflows/$WF_ID/runs" -f branch="$BRANCH" -f status=success \
   -f created=">=$CREATED" -F per_page=20 -q "[.workflow_runs[] | select(.id > $RUN_ID) | .id][0] // empty")
+# A re-run of this same run (same id, a later attempt) that passed counts too.
+if [ -z "$LATER" ] && [ "$(gh api "repos/$REPO/actions/runs/$RUN_ID" -q '.status + " " + (.conclusion // "")' 2>/dev/null || true)" = "completed success" ]; then
+  LATER="$RUN_ID, re-run"
+fi
 if [ -z "${TRIAGE_IGNORE_LATER:-}" ] && [ -n "$LATER" ]; then
   note "Skipped: a later run ($LATER) already passed."
   out mode skip; exit 0

@@ -15,7 +15,8 @@ verified fix. Either way, open an issue saying what happened.
 
 1. **Triage** (`triage.sh`, plain git, no AI). Skips runs on other branches
    (the watched branch is the default branch, or the Pages source branch for
-   a Pages build) and runs that a later run already fixed. Then compares the
+   a Pages build) and runs that a later run, or a re-run of the same run,
+   already fixed. Then compares the
    failed commit with the last commit that passed the same workflow, before
    the failure:
    - same commit, never passed, rewritten history, or only bot commits since:
@@ -31,8 +32,13 @@ verified fix. Either way, open an issue saying what happened.
    - a verified fix that changes 20 files or fewer and nothing under
      `.github/` is committed (trailers `CI-fixer: fix` and
      `CI-fixer-suspects:`) and pushed straight to the branch;
+   - a `not_regression` verdict (Claude ran the job on the current code and
+     the suspects aren't at fault: a flake, a service, a token) changes
+     nothing and opens a diagnosis issue, as diagnose mode does;
    - otherwise the offending commits are reverted in one commit
-     (`CI-fixer: revert`) and pushed;
+     (`CI-fixer: revert`) and pushed, unless the workflow has passed since
+     (a re-run of the failed run, or a later run): then nothing is reverted
+     and the issue says so;
    - then it re-runs the workflow (`workflow_dispatch`) or requests a Pages
      build, because pushes made with the workflow token don't start CI;
    - and opens an issue labelled `ci-fixer` (or comments on the open one with
@@ -75,3 +81,7 @@ Apply locally, with your own git credentials and a hand-written
 Tested 2026-11-27 in a throwaway repo (ci-fixer-sandbox): a code regression
 fixed and pushed, with CI re-run green; a broken Pages build fixed and
 rebuilt; and the revert path, with a forced "cannot fix" verdict.
+
+Tested 2026-11-28 against a scratch repo with a stub `gh`: `not_regression`,
+and `cannot_fix` or `revert-fix` after a re-run or a later run passed, change
+nothing; `cannot_fix` on a still-failing run still reverts.
